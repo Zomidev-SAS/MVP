@@ -5,6 +5,25 @@ import type { DashboardData, EntradaSalidaDia, MovimientoReciente } from '@/lib/
 
 const STOCK_BAJO_THRESHOLD = 2
 
+// Colombia does not observe DST — a fixed UTC-5 offset is always correct,
+// so day boundaries below are computed deterministically regardless of the
+// server process's ambient timezone (most deploy environments default to
+// UTC, not America/Bogota).
+const BOGOTA_OFFSET_MS = -5 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function bogotaDateKey(isoString: string): string {
+  const bogotaMs = new Date(isoString).getTime() + BOGOTA_OFFSET_MS
+  return new Date(bogotaMs).toISOString().slice(0, 10)
+}
+
+// The UTC instant corresponding to today's midnight in Bogota time.
+function getBogotaTodayStart(): Date {
+  const bogotaMs = Date.now() + BOGOTA_OFFSET_MS
+  const bogotaDateStr = new Date(bogotaMs).toISOString().slice(0, 10)
+  return new Date(`${bogotaDateStr}T00:00:00-05:00`)
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   if (isDevBypassActive()) {
     return getDevPreviewDashboardData()
@@ -12,12 +31,8 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const supabase = await createClient()
 
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
-
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-  sevenDaysAgo.setHours(0, 0, 0, 0)
+  const todayStart = getBogotaTodayStart()
+  const sevenDaysAgo = new Date(todayStart.getTime() - 6 * DAY_MS)
 
   const [inventarioResult, movimientosHoyResult, entradasSalidasResult, ultimosResult] =
     await Promise.all([
@@ -36,6 +51,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       supabase
         .from('vista_movimientos_recientes')
         .select('id, vin, tipo_movimiento, cantidad, actor_nombre, created_at')
+        .order('created_at', { ascending: false })
         .limit(10),
     ])
 
@@ -79,18 +95,17 @@ export async function getDashboardData(): Promise<DashboardData> {
 }
 
 function buildEntradasVsSalidasSeries(
-  rows: { tipo_movimiento: string; created_at: string }[],
+  rows: (Pick<MovimientoReciente, 'tipo_movimiento'> & { created_at: string })[],
   startDate: Date
 ): EntradaSalidaDia[] {
   const days: EntradaSalidaDia[] = []
   for (let i = 0; i < 7; i++) {
-    const d = new Date(startDate)
-    d.setDate(d.getDate() + i)
-    days.push({ fecha: d.toISOString().slice(0, 10), entradas: 0, salidas: 0 })
+    const instant = new Date(startDate.getTime() + i * DAY_MS)
+    days.push({ fecha: bogotaDateKey(instant.toISOString()), entradas: 0, salidas: 0 })
   }
 
   for (const row of rows) {
-    const fecha = row.created_at.slice(0, 10)
+    const fecha = bogotaDateKey(row.created_at)
     const day = days.find((d) => d.fecha === fecha)
     if (!day) continue
     if (row.tipo_movimiento === 'entrada') day.entradas += 1
