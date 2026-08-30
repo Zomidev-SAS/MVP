@@ -1,7 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 
 export async function middleware(request: NextRequest) {
+  if (isDevBypassActive()) {
+    return NextResponse.next()
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
