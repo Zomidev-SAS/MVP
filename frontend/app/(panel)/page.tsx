@@ -1,35 +1,30 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { getSessionUser } from '@/lib/supabase/get-session-user'
-import type { Profile } from '@/lib/types/database'
+import { RoleGuard } from '@/components/shared/RoleGuard'
+import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
+import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 
-export default async function DashboardPlaceholderPage() {
-  const user = await getSessionUser()
+export default function DashboardPlaceholderPage() {
+  return (
+    <RoleGuard allowed={ROUTE_PERMISSIONS.dashboard}>
+      <DashboardContent />
+    </RoleGuard>
+  )
+}
 
-  if (!user) {
-    redirect('/login')
-  }
+async function DashboardContent() {
+  const result = await getCurrentProfile()
 
-  const supabase = await createClient()
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, role')
-    .eq('id', user.id)
-    .single<Profile>()
-
-  if (error || !profile) {
-    console.error('Failed to load profile:', error)
-    return (
-      <p>No se pudo cargar tu perfil. Contacta a un administrador.</p>
-    )
+  if (!result) {
+    // Unreachable in practice — RoleGuard already redirected before this
+    // renders if there's no session. Guards against the type being nullable.
+    return null
   }
 
   return (
     <div>
       <h1 className="text-2xl font-semibold">
-        Bienvenido, {profile.full_name ?? user.email}
+        Bienvenido, {result.profile.full_name ?? result.user.email}
       </h1>
-      <p className="text-muted-foreground">Rol: {profile.role}</p>
+      <p className="text-muted-foreground">Rol: {result.profile.role}</p>
     </div>
   )
 }
