@@ -14,13 +14,15 @@ export function Sidebar({ role }: { role: Role }) {
   return (
     <aside className="flex w-64 flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex items-center justify-center border-b border-sidebar-border p-4">
-        <Image
-          src="/logo.jpeg"
-          alt="Carrera Arango"
-          width={140}
-          height={80}
-          className="h-auto w-full max-w-[140px]"
-        />
+        <div className="flex h-16 w-full items-center justify-center rounded-md bg-white p-2">
+          <Image
+            src="/logo.jpeg"
+            alt="Carrera Arango"
+            width={553}
+            height={781}
+            className="h-full w-auto object-contain"
+          />
+        </div>
       </div>
       <nav className="flex-1 space-y-1 p-3">
         {items.map((item) => {
