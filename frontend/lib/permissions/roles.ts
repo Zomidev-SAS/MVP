@@ -8,7 +8,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import type { Role } from '@/lib/types/database'
+import { ALL_ROLES, type Role } from '@/lib/types/database'
 
 export type RouteKey =
   | 'dashboard'
@@ -19,24 +19,14 @@ export type RouteKey =
   | 'importar'
   | 'usuarios'
 
-const ALL_ROLES: Role[] = [
-  'supervisor',
-  'comercial',
-  'ingenieria',
-  'produccion',
-  'compras',
-  'auditoria',
-  'lectura',
-]
-
-export const ROUTE_PERMISSIONS: Record<RouteKey, Role[]> = {
+export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   dashboard: ALL_ROLES,
   inventario: ALL_ROLES,
-  movimientos: ['supervisor', 'ingenieria', 'auditoria'],
-  entradas: ['supervisor', 'produccion', 'compras'],
-  ajustes: ['supervisor', 'produccion', 'compras'],
-  importar: ['supervisor', 'compras'],
-  usuarios: ['supervisor'],
+  movimientos: ['supervisor', 'ingenieria', 'auditoria'] as const,
+  entradas: ['supervisor', 'produccion', 'compras'] as const,
+  ajustes: ['supervisor', 'produccion', 'compras'] as const,
+  importar: ['supervisor', 'compras'] as const,
+  usuarios: ['supervisor'] as const,
 }
 
 export const NAV_ITEMS: {

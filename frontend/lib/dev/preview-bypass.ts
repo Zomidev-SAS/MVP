@@ -1,15 +1,5 @@
 import type { User } from '@supabase/supabase-js'
-import type { Profile, Role } from '@/lib/types/database'
-
-const VALID_ROLES: Role[] = [
-  'supervisor',
-  'comercial',
-  'ingenieria',
-  'produccion',
-  'compras',
-  'auditoria',
-  'lectura',
-]
+import { ALL_ROLES, type Profile, type Role } from '@/lib/types/database'
 
 export function isDevBypassActive(): boolean {
   return process.env.NODE_ENV !== 'production' && process.env.DEV_SKIP_AUTH === 'true'
@@ -31,6 +21,12 @@ export function getDevPreviewUser(): User {
 
 export function getDevPreviewProfile(): Profile {
   const envRole = process.env.DEV_SKIP_AUTH_ROLE
-  const role: Role = VALID_ROLES.includes(envRole as Role) ? (envRole as Role) : 'supervisor'
+  const isValid = ALL_ROLES.includes(envRole as Role)
+  if (envRole && !isValid) {
+    console.warn(
+      `DEV_SKIP_AUTH_ROLE="${envRole}" is not a valid role, falling back to "supervisor"`
+    )
+  }
+  const role: Role = isValid ? (envRole as Role) : 'supervisor'
   return { id: 'dev-preview-user', full_name: 'Vista Previa Dev', role }
 }
