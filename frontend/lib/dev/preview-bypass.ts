@@ -27,6 +27,6 @@ export function getDevPreviewProfile(): Profile {
       `DEV_SKIP_AUTH_ROLE="${envRole}" is not a valid role, falling back to "supervisor"`
     )
   }
-  const role: Role = isValid ? (envRole as Role) : 'supervisor'
-  return { id: 'dev-preview-user', full_name: 'Vista Previa Dev', role }
+  const rol: Role = isValid ? (envRole as Role) : 'supervisor'
+  return { id: 'dev-preview-user', nombre: 'Vista Previa Dev', rol }
 }

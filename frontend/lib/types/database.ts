@@ -21,6 +21,6 @@ export const ALL_ROLES: readonly Role[] = Object.keys(ROLE_SET) as Role[]
 
 export interface Profile {
   id: string
-  full_name: string | null
-  role: Role
+  nombre: string | null
+  rol: Role
 }

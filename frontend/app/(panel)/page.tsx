@@ -22,9 +22,9 @@ async function DashboardContent() {
   return (
     <div>
       <h1 className="text-2xl font-semibold">
-        Bienvenido, {result.profile.full_name ?? result.user.email}
+        Bienvenido, {result.profile.nombre ?? result.user.email}
       </h1>
-      <p className="text-muted-foreground">Rol: {result.profile.role}</p>
+      <p className="text-muted-foreground">Rol: {result.profile.rol}</p>
     </div>
   )
 }

@@ -15,7 +15,7 @@ export async function RoleGuard({
     redirect('/login')
   }
 
-  if (result.status === 'no-profile' || !allowed.includes(result.profile.role)) {
+  if (result.status === 'no-profile' || !allowed.includes(result.profile.rol)) {
     redirect('/acceso-denegado')
   }
 

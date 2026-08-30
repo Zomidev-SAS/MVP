@@ -26,11 +26,11 @@ export function NavUser({ profile }: { profile: Profile }) {
     <DropdownMenu>
       <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent">
         <Avatar className="h-8 w-8">
-          <AvatarFallback>{getInitials(profile.full_name)}</AvatarFallback>
+          <AvatarFallback>{getInitials(profile.nombre)}</AvatarFallback>
         </Avatar>
         <span className="text-left text-sm">
-          <span className="block font-medium leading-none">{profile.full_name ?? 'Usuario'}</span>
-          <span className="block text-xs capitalize text-muted-foreground">{profile.role}</span>
+          <span className="block font-medium leading-none">{profile.nombre ?? 'Usuario'}</span>
+          <span className="block text-xs capitalize text-muted-foreground">{profile.rol}</span>
         </span>
         <ChevronDown className="h-4 w-4 text-muted-foreground" />
       </DropdownMenuTrigger>
