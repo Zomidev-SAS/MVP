@@ -10,7 +10,7 @@ import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChar
 import { UltimosMovimientosTable } from '@/components/dashboard/UltimosMovimientosTable'
 import { RealtimeRefresher } from '@/components/dashboard/RealtimeRefresher'
 
-export default function DashboardPlaceholderPage() {
+export default function DashboardPage() {
   return (
     <RoleGuard allowed={ROUTE_PERMISSIONS.dashboard}>
       <DashboardContent />

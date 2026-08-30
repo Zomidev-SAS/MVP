@@ -21,7 +21,7 @@ export function RealtimeRefresher() {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      void supabase.removeChannel(channel)
     }
   }, [router])
 

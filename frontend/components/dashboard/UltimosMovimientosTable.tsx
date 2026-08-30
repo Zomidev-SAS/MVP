@@ -33,15 +33,23 @@ export function UltimosMovimientosTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {movimientos.map((mov) => (
-          <TableRow key={mov.id}>
-            <TableCell>{new Date(mov.created_at).toLocaleString('es-CO')}</TableCell>
-            <TableCell>{TIPO_LABELS[mov.tipo_movimiento]}</TableCell>
-            <TableCell>{mov.vin}</TableCell>
-            <TableCell className="text-right">{formatNumber(mov.cantidad)}</TableCell>
-            <TableCell>{mov.actor_nombre ?? '—'}</TableCell>
+        {movimientos.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={5} className="text-center text-muted-foreground">
+              Sin movimientos registrados.
+            </TableCell>
           </TableRow>
-        ))}
+        ) : (
+          movimientos.map((mov) => (
+            <TableRow key={mov.id}>
+              <TableCell>{new Date(mov.created_at).toLocaleString('es-CO')}</TableCell>
+              <TableCell>{TIPO_LABELS[mov.tipo_movimiento]}</TableCell>
+              <TableCell>{mov.vin}</TableCell>
+              <TableCell className="text-right">{formatNumber(mov.cantidad)}</TableCell>
+              <TableCell>{mov.actor_nombre ?? '—'}</TableCell>
+            </TableRow>
+          ))
+        )}
       </TableBody>
     </Table>
   )
