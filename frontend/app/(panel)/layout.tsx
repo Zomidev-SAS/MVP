@@ -1,20 +1,26 @@
 import { redirect } from 'next/navigation'
-import { getSessionUser } from '@/lib/supabase/get-session-user'
+import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
+import { Sidebar } from '@/components/layout/Sidebar'
+import { Header } from '@/components/layout/Header'
 
 export default async function PanelLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const user = await getSessionUser()
+  const result = await getCurrentProfile()
 
-  if (!user) {
+  if (!result) {
     redirect('/login')
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <main className="p-6">{children}</main>
+    <div className="flex min-h-screen bg-background text-foreground">
+      <Sidebar role={result.profile.role} />
+      <div className="flex flex-1 flex-col">
+        <Header profile={result.profile} />
+        <main className="flex-1 p-6">{children}</main>
+      </div>
     </div>
   )
 }
