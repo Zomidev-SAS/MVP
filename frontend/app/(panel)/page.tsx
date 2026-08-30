@@ -13,9 +13,9 @@ export default function DashboardPlaceholderPage() {
 async function DashboardContent() {
   const result = await getCurrentProfile()
 
-  if (!result) {
+  if (result.status !== 'authenticated') {
     // Unreachable in practice — RoleGuard already redirected before this
-    // renders if there's no session. Guards against the type being nullable.
+    // renders if there's no session or no profile.
     return null
   }
 

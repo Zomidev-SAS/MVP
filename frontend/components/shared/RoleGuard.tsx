@@ -6,12 +6,16 @@ export async function RoleGuard({
   allowed,
   children,
 }: {
-  allowed: Role[]
+  allowed: readonly Role[]
   children: React.ReactNode
 }) {
   const result = await getCurrentProfile()
 
-  if (!result || !allowed.includes(result.profile.role)) {
+  if (result.status === 'no-session') {
+    redirect('/login')
+  }
+
+  if (result.status === 'no-profile' || !allowed.includes(result.profile.role)) {
     redirect('/acceso-denegado')
   }
 
