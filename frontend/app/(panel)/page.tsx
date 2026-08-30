@@ -1,23 +1,16 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getSessionUser } from '@/lib/supabase/get-session-user'
 import type { Profile } from '@/lib/types/database'
 
 export default async function DashboardPlaceholderPage() {
-  const supabase = await createClient()
-
-  let user = null
-  try {
-    const {
-      data: { user: fetchedUser },
-    } = await supabase.auth.getUser()
-    user = fetchedUser
-  } catch {
-    user = null
-  }
+  const user = await getSessionUser()
 
   if (!user) {
-    return null
+    redirect('/login')
   }
 
+  const supabase = await createClient()
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('id, full_name, role')
@@ -25,10 +18,9 @@ export default async function DashboardPlaceholderPage() {
     .single<Profile>()
 
   if (error || !profile) {
+    console.error('Failed to load profile:', error)
     return (
-      <p>
-        No se pudo cargar tu perfil ({error?.message ?? 'perfil no encontrado'}).
-      </p>
+      <p>No se pudo cargar tu perfil. Contacta a un administrador.</p>
     )
   }
 

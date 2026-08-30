@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
     user = null
   }
 
-  const isLoginPage = request.nextUrl.pathname.startsWith('/login')
+  const isLoginPage = request.nextUrl.pathname === '/login'
 
   if (!user && !isLoginPage) {
     const url = request.nextUrl.clone()
