@@ -9,7 +9,13 @@ import { useLogout } from '@/lib/hooks/use-logout'
 import { cn, getInitials } from '@/lib/utils'
 import type { Profile } from '@/lib/types/database'
 
-export function Sidebar({ profile }: { profile: Profile }) {
+export function Sidebar({
+  profile,
+  ajustesPendientes,
+}: {
+  profile: Profile
+  ajustesPendientes?: number
+}) {
   const pathname = usePathname()
   const { logout, loading } = useLogout()
   const items = NAV_ITEMS.filter((item) => ROUTE_PERMISSIONS[item.key].includes(profile.rol))
@@ -43,6 +49,11 @@ export function Sidebar({ profile }: { profile: Profile }) {
             >
               <Icon className="h-4 w-4" />
               {item.label}
+              {item.key === 'ajustes' && !!ajustesPendientes && ajustesPendientes > 0 && (
+                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-medium text-primary-foreground">
+                  {ajustesPendientes}
+                </span>
+              )}
             </Link>
           )
         })}
