@@ -52,7 +52,7 @@ export default function LoginPage() {
             alt="Carrera Arango"
             width={160}
             height={226}
-            className="h-32 w-auto rounded-md object-contain"
+            className="h-40 w-auto rounded-md object-contain"
             priority
           />
           <div className="space-y-1">
