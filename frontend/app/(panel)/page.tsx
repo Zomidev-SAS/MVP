@@ -6,6 +6,7 @@ import { getDashboardData } from '@/lib/supabase/get-dashboard-data'
 import { formatCOP, formatNumber } from '@/lib/format'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
+import { CalendarWidget } from '@/components/dashboard/CalendarWidget'
 import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChart'
 import { UltimosMovimientosTable } from '@/components/dashboard/UltimosMovimientosTable'
 import { RealtimeRefresher } from '@/components/dashboard/RealtimeRefresher'
@@ -31,6 +32,8 @@ async function DashboardContent() {
 
   return (
     <div className="space-y-6">
+      <CalendarWidget />
+
       <div>
         <h1 className="text-2xl font-semibold">
           Bienvenido, {result.profile.nombre ?? result.user.email}
