@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -43,10 +44,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Iniciar sesión</CardTitle>
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background to-muted/40 px-4">
+      <Card className="w-full max-w-sm shadow-lg">
+        <CardHeader className="flex flex-col items-center space-y-3 pb-2 text-center">
+          <Image
+            src="/logo_fondo.jpeg"
+            alt="Carrera Arango"
+            width={160}
+            height={226}
+            className="h-20 w-auto rounded-md object-contain"
+            priority
+          />
+          <div className="space-y-1">
+            <CardTitle className="text-xl">Iniciar sesión</CardTitle>
+            <p className="text-sm text-muted-foreground">Panel de Inventario</p>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
