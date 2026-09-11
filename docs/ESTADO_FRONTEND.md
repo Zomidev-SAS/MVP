@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-09-08
 
-Frontend completo hasta donde es posible sin el proyecto Supabase real. Todo el trabajo de esta etapa vive en la rama `frontend`.
+Frontend completo hasta donde es posible sin el proyecto Supabase real. El trabajo original vive en la rama `frontend`; la rama `main` une frontend + backend (migraciones y Edge Functions). Ver `docs/ESTADO_INTEGRACION.md`.
 
 ## Completado
 
