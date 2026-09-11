@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { createClient } from '@/lib/supabase/client'
 
 export function useLogout() {
@@ -11,6 +12,12 @@ export function useLogout() {
   async function logout() {
     setLoading(true)
     try {
+      if (isDevBypassActive()) {
+        router.push('/login')
+        router.refresh()
+        return
+      }
+
       const supabase = createClient()
       const { error } = await supabase.auth.signOut()
       if (error) {

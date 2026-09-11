@@ -1,8 +1,16 @@
 import type { User } from '@supabase/supabase-js'
 import { ALL_ROLES, type Profile, type Role } from '@/lib/types/database'
 
+function isTruthyEnv(value: string | undefined): boolean {
+  return value === 'true' || value === '1'
+}
+
 export function isDevBypassActive(): boolean {
-  return process.env.NODE_ENV !== 'production' && process.env.DEV_SKIP_AUTH === 'true'
+  if (process.env.NODE_ENV === 'production') return false
+  return (
+    isTruthyEnv(process.env.DEV_SKIP_AUTH) ||
+    isTruthyEnv(process.env.NEXT_PUBLIC_DEV_SKIP_AUTH)
+  )
 }
 
 export function getDevPreviewUser(): User {
@@ -20,7 +28,7 @@ export function getDevPreviewUser(): User {
 }
 
 export function getDevPreviewProfile(): Profile {
-  const envRole = process.env.DEV_SKIP_AUTH_ROLE
+  const envRole = process.env.DEV_SKIP_AUTH_ROLE ?? process.env.NEXT_PUBLIC_DEV_SKIP_AUTH_ROLE
   const isValid = ALL_ROLES.includes(envRole as Role)
   if (envRole && !isValid) {
     console.warn(

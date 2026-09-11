@@ -2,12 +2,15 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { createClient } from '@/lib/supabase/client'
 
 export function RealtimeRefresher() {
   const router = useRouter()
 
   useEffect(() => {
+    if (isDevBypassActive()) return
+
     const supabase = createClient()
     const channel = supabase
       .channel('movimientos-inventario-dashboard')
