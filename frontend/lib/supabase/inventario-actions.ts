@@ -1,5 +1,8 @@
 'use server'
 
+import { filtrarInventarioLocal } from '@/lib/inventario/filtros-local'
+import { obtenerInventarioLocal } from '@/lib/inventario/cache-local'
+import { fetchInventarioSaldosNube } from '@/lib/supabase/inventario-saldos-actions'
 import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { getDevPreviewInventarioData } from '@/lib/dev/preview-inventario-data'
@@ -10,10 +13,53 @@ export async function fetchInventario(
   filtros: InventarioFiltros,
   pagina: number
 ): Promise<InventarioPagina> {
+  const nube = await fetchInventarioSaldosNube(filtros, pagina)
+  if (nube) return nube
+
+  const local = obtenerInventarioLocal()
+  if (local) {
+    return fetchInventarioExcelLocal(local.filas, local.fechaCorte, local.archivo, filtros, pagina)
+  }
+
   if (isDevBypassActive()) {
     return fetchInventarioPreview(filtros, pagina)
   }
 
+  return {
+    filas: [],
+    total: 0,
+    fuente: 'excel',
+    origen: 'nube',
+    fechaCorte: null,
+  }
+}
+
+function fetchInventarioExcelLocal(
+  todas: InventarioItem[],
+  fechaCorte: string | null,
+  archivo: string,
+  filtros: InventarioFiltros,
+  pagina: number
+): InventarioPagina {
+  const filtradas = filtrarInventarioLocal(todas, filtros)
+  const from = (pagina - 1) * INVENTARIO_PAGE_SIZE
+  const to = from + INVENTARIO_PAGE_SIZE
+
+  return {
+    filas: filtradas.slice(from, to),
+    total: filtradas.length,
+    fuente: 'excel',
+    origen: 'local',
+    fechaCorte,
+    archivoLocal: archivo,
+  }
+}
+
+/** Inventario de vehículos (VIN) — vista legacy, no usada en /inventario por defecto */
+export async function fetchInventarioVehiculos(
+  filtros: InventarioFiltros,
+  pagina: number
+): Promise<InventarioPagina> {
   const supabase = await createClient()
 
   const from = (pagina - 1) * INVENTARIO_PAGE_SIZE
@@ -26,60 +72,58 @@ export async function fetchInventario(
       { count: 'exact' }
     )
 
-  if (filtros.vin) {
-    query = query.eq('vin', filtros.vin)
-  }
-  if (filtros.marca) {
-    query = query.ilike('marca', `%${filtros.marca}%`)
-  }
-  if (filtros.categoria) {
-    query = query.ilike('categoria', `%${filtros.categoria}%`)
-  }
-  if (filtros.estado === 'activo') {
-    query = query.gt('saldo', 0)
-  } else if (filtros.estado === 'agotado') {
-    query = query.lte('saldo', 0)
-  }
-  if (filtros.desde) {
-    query = query.gte('ultimo_movimiento', filtros.desde)
-  }
-  if (filtros.hasta) {
-    query = query.lte('ultimo_movimiento', filtros.hasta)
-  }
+  if (filtros.vin) query = query.eq('vin', filtros.vin)
+  if (filtros.marca) query = query.ilike('marca', `%${filtros.marca}%`)
+  if (filtros.categoria) query = query.ilike('categoria', `%${filtros.categoria}%`)
+  if (filtros.ubicacion) query = query.ilike('ubicacion', `%${filtros.ubicacion}%`)
+  if (filtros.estado === 'activo') query = query.gt('saldo', 0)
+  else if (filtros.estado === 'agotado') query = query.lte('saldo', 0)
+  if (filtros.desde) query = query.gte('ultimo_movimiento', filtros.desde)
+  if (filtros.hasta) query = query.lte('ultimo_movimiento', filtros.hasta)
 
   const { data, error, count } = await query.range(from, to)
 
   if (error) {
     console.error('Failed to load vista_inventario_actual:', error)
-    return { filas: [], total: 0 }
+    return { filas: [], total: 0, fuente: 'supabase' }
   }
 
-  return { filas: (data ?? []) as InventarioItem[], total: count ?? 0 }
+  const filas: InventarioItem[] = (data ?? []).map((row) => ({
+    codigo: row.vin,
+    nombre: null,
+    vin: row.vin,
+    marca: row.marca,
+    categoria: row.categoria,
+    ubicacion: row.ubicacion,
+    unidad: null,
+    saldo: row.saldo,
+    valor_unitario: row.valor_unitario,
+    valor_total: row.valor_total,
+    ultimo_movimiento: row.ultimo_movimiento,
+  }))
+
+  const filtradas = filtros.busqueda.trim()
+    ? filtrarInventarioLocal(filas, filtros)
+    : filas
+
+  return {
+    filas: filtradas,
+    total: filtros.busqueda.trim() ? filtradas.length : (count ?? 0),
+    fuente: 'supabase',
+  }
 }
 
 function fetchInventarioPreview(filtros: InventarioFiltros, pagina: number): InventarioPagina {
   const todas = getDevPreviewInventarioData()
-
-  const filtradas = todas.filter((item) => {
-    if (filtros.vin && item.vin !== filtros.vin) return false
-    if (filtros.marca && !(item.marca ?? '').toLowerCase().includes(filtros.marca.toLowerCase())) {
-      return false
-    }
-    if (
-      filtros.categoria &&
-      !(item.categoria ?? '').toLowerCase().includes(filtros.categoria.toLowerCase())
-    ) {
-      return false
-    }
-    if (filtros.estado === 'activo' && item.saldo <= 0) return false
-    if (filtros.estado === 'agotado' && item.saldo > 0) return false
-    if (filtros.desde && item.ultimo_movimiento < filtros.desde) return false
-    if (filtros.hasta && item.ultimo_movimiento > filtros.hasta) return false
-    return true
-  })
+  const filtradas = filtrarInventarioLocal(todas, filtros)
 
   const from = (pagina - 1) * INVENTARIO_PAGE_SIZE
   const to = from + INVENTARIO_PAGE_SIZE
 
-  return { filas: filtradas.slice(from, to), total: filtradas.length }
+  return {
+    filas: filtradas.slice(from, to),
+    total: filtradas.length,
+    fuente: 'excel',
+    origen: 'nube',
+  }
 }

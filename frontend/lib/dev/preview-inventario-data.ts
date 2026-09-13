@@ -8,6 +8,7 @@ export function getDevPreviewInventarioData(): InventarioItem[] {
   const baseDate = new Date('2026-08-01T00:00:00Z')
 
   return Array.from({ length: 120 }, (_, i) => {
+    const vin = `VIN-${(2000 + i).toString()}`
     const marca = MARCAS[i % MARCAS.length]
     const categoria = CATEGORIAS[i % CATEGORIAS.length]
     const ubicacion = UBICACIONES[i % UBICACIONES.length]
@@ -16,10 +17,13 @@ export function getDevPreviewInventarioData(): InventarioItem[] {
     const ultimoMovimiento = new Date(baseDate.getTime() + i * 6 * 60 * 60 * 1000).toISOString()
 
     return {
-      vin: `VIN-${(2000 + i).toString()}`,
+      codigo: vin,
+      nombre: null,
+      vin,
       marca,
       categoria,
       ubicacion,
+      unidad: null,
       saldo,
       valor_unitario: valorUnitario,
       valor_total: saldo * valorUnitario,
