@@ -6,6 +6,7 @@ import {
   SlidersHorizontal,
   Upload,
   Users,
+  ClipboardList,
   type LucideIcon,
 } from 'lucide-react'
 import { ALL_ROLES, type Role } from '@/lib/types/database'
@@ -14,6 +15,7 @@ export type RouteKey =
   | 'dashboard'
   | 'inventario'
   | 'movimientos'
+  | 'formularios'
   | 'entradas'
   | 'ajustes'
   | 'importar'
@@ -23,6 +25,7 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   dashboard: ALL_ROLES,
   inventario: ALL_ROLES,
   movimientos: ['supervisor', 'ingenieria', 'auditoria'] as const,
+  formularios: ALL_ROLES,
   entradas: ['supervisor', 'produccion', 'compras'] as const,
   ajustes: ['supervisor', 'produccion', 'compras'] as const,
   importar: ['supervisor', 'compras'] as const,
@@ -38,6 +41,7 @@ export const NAV_ITEMS: {
   { key: 'dashboard', label: 'Dashboard', href: '/', icon: LayoutDashboard },
   { key: 'inventario', label: 'Inventario', href: '/inventario', icon: Package },
   { key: 'movimientos', label: 'Movimientos', href: '/movimientos', icon: ArrowLeftRight },
+  { key: 'formularios', label: 'Formularios', href: '/formularios', icon: ClipboardList },
   { key: 'entradas', label: 'Entradas', href: '/entradas', icon: FilePlus },
   { key: 'ajustes', label: 'Ajustes', href: '/ajustes', icon: SlidersHorizontal },
   { key: 'importar', label: 'Importar CSV', href: '/importar', icon: Upload },

@@ -1,0 +1,1 @@
+export const FORMULARIOS_PAGE_SIZE = 20
