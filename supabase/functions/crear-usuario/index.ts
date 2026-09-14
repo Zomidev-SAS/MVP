@@ -9,6 +9,8 @@ const VALID_ROLES = [
   'compras',
   'auditoria',
   'lectura',
+  'metalmecanica',
+  'instalacion',
 ] as const
 
 type Role = (typeof VALID_ROLES)[number]

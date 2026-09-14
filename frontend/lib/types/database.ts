@@ -6,6 +6,8 @@ export type Role =
   | 'compras'
   | 'auditoria'
   | 'lectura'
+  | 'metalmecanica'
+  | 'instalacion'
 
 const ROLE_SET: Record<Role, true> = {
   supervisor: true,
@@ -15,6 +17,20 @@ const ROLE_SET: Record<Role, true> = {
   compras: true,
   auditoria: true,
   lectura: true,
+  metalmecanica: true,
+  instalacion: true,
+}
+
+export const ROLE_LABELS: Record<Role, string> = {
+  supervisor: 'Supervisor',
+  comercial: 'Comercial',
+  ingenieria: 'Ingeniería',
+  produccion: 'Producción',
+  compras: 'Compras',
+  auditoria: 'Auditoría',
+  lectura: 'Solo lectura',
+  metalmecanica: 'Metalmecánica',
+  instalacion: 'Instalación',
 }
 
 export const ALL_ROLES: readonly Role[] = Object.keys(ROLE_SET) as Role[]

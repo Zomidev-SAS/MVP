@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { ALL_ROLES, type Role } from '@/lib/types/database'
+import { ALL_ROLES, ROLE_LABELS, type Role } from '@/lib/types/database'
 import {
   fetchUsuarios,
   actualizarRolUsuario,
@@ -90,7 +90,7 @@ export function UsersTable() {
                 >
                   {ALL_ROLES.map((rol) => (
                     <option key={rol} value={rol}>
-                      {rol}
+                      {ROLE_LABELS[rol]}
                     </option>
                   ))}
                 </select>

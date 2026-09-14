@@ -16,7 +16,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { ALL_ROLES, type Role } from '@/lib/types/database'
+import { ALL_ROLES, ROLE_LABELS, type Role } from '@/lib/types/database'
 import { crearUsuarioSchema, type CrearUsuarioInput } from '@/lib/types/usuarios'
 import { crearUsuario } from '@/lib/supabase/usuarios-actions'
 
@@ -112,7 +112,7 @@ export function CreateUserDialog() {
                       >
                         {ALL_ROLES.map((rol: Role) => (
                           <option key={rol} value={rol}>
-                            {rol}
+                            {ROLE_LABELS[rol]}
                           </option>
                         ))}
                       </select>
