@@ -55,7 +55,7 @@ function fetchInventarioExcelLocal(
   }
 }
 
-/** Inventario de vehículos (VIN) — vista legacy, no usada en /inventario por defecto */
+/** Inventario de vehículos (VIN), usado por la ruta /vehiculos. */
 export async function fetchInventarioVehiculos(
   filtros: InventarioFiltros,
   pagina: number

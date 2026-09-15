@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { InventoryFilters } from '@/components/inventario/InventoryFilters'
 import { fetchInventario, INVENTARIO_PAGE_SIZE } from '@/lib/supabase/get-inventario'
 import { formatCOP, formatNumber } from '@/lib/format'
-import type { InventarioFiltros, InventarioItem } from '@/lib/types/inventario'
+import type { InventarioFiltros, InventarioItem, InventarioPagina } from '@/lib/types/inventario'
 
 const STOCK_BAJO_THRESHOLD = 2
 
@@ -29,7 +29,13 @@ const FILTROS_INICIALES: InventarioFiltros = {
   hasta: '',
 }
 
-export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) {
+export function InventoryTable({
+  puedeVerCostos,
+  fetchFn = fetchInventario,
+}: {
+  puedeVerCostos: boolean
+  fetchFn?: (filtros: InventarioFiltros, pagina: number) => Promise<InventarioPagina>
+}) {
   const [filtros, setFiltros] = useState<InventarioFiltros>(FILTROS_INICIALES)
   const [pagina, setPagina] = useState(1)
   const [filas, setFilas] = useState<InventarioItem[]>([])
@@ -42,7 +48,7 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
   useEffect(() => {
     const timeout = setTimeout(() => {
       setLoading(true)
-      fetchInventario(filtros, pagina)
+      fetchFn(filtros, pagina)
         .then((resultado) => {
           setFilas(resultado.filas)
           setTotal(resultado.total)
