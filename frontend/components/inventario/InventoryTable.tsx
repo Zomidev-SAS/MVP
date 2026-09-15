@@ -29,7 +29,7 @@ const FILTROS_INICIALES: InventarioFiltros = {
   hasta: '',
 }
 
-export function InventoryTable() {
+export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) {
   const [filtros, setFiltros] = useState<InventarioFiltros>(FILTROS_INICIALES)
   const [pagina, setPagina] = useState(1)
   const [filas, setFilas] = useState<InventarioItem[]>([])
@@ -68,11 +68,13 @@ export function InventoryTable() {
 
   function handleExportarCsv() {
     const esExcel = fuente === 'excel'
+    const encabezadosCosto = puedeVerCostos ? ['Valor Unitario', 'Valor Total'] : []
     const encabezados = esExcel
-      ? ['Código', 'Nombre', 'Categoría', 'Ubicación', 'Unidad', 'Saldo', 'Valor Unitario', 'Valor Total']
-      : ['VIN', 'Marca', 'Categoría', 'Ubicación', 'Saldo', 'Valor Unitario', 'Valor Total', 'Último Movimiento']
+      ? ['Código', 'Nombre', 'Categoría', 'Ubicación', 'Unidad', 'Saldo', ...encabezadosCosto]
+      : ['VIN', 'Marca', 'Categoría', 'Ubicación', 'Saldo', ...encabezadosCosto, 'Último Movimiento']
 
     const filasCsv = filas.map((item) => {
+      const valoresCosto = puedeVerCostos ? [item.valor_unitario ?? '', item.valor_total] : []
       const base = esExcel
         ? [
             item.codigo,
@@ -81,8 +83,7 @@ export function InventoryTable() {
             item.ubicacion ?? '',
             item.unidad ?? '',
             item.saldo,
-            item.valor_unitario ?? '',
-            item.valor_total,
+            ...valoresCosto,
           ]
         : [
             item.vin ?? item.codigo,
@@ -90,8 +91,7 @@ export function InventoryTable() {
             item.categoria ?? '',
             item.ubicacion ?? '',
             item.saldo,
-            item.valor_unitario ?? '',
-            item.valor_total,
+            ...valoresCosto,
             item.ultimo_movimiento ?? '',
           ]
       return base.map((valor) => `"${String(valor).replace(/"/g, '""')}"`).join(',')
@@ -156,15 +156,22 @@ export function InventoryTable() {
               <TableHead className="whitespace-nowrap">Ubicación</TableHead>
               {esExcel && <TableHead className="whitespace-nowrap">Unidad</TableHead>}
               <TableHead className="whitespace-nowrap text-right">Saldo</TableHead>
-              <TableHead className="whitespace-nowrap text-right">Valor unit.</TableHead>
-              <TableHead className="whitespace-nowrap text-right">Valor total</TableHead>
+              {puedeVerCostos && (
+                <>
+                  <TableHead className="whitespace-nowrap text-right">Valor unit.</TableHead>
+                  <TableHead className="whitespace-nowrap text-right">Valor total</TableHead>
+                </>
+              )}
               {!esExcel && <TableHead className="whitespace-nowrap">Último mov.</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {filas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={esExcel ? 8 : 8} className="text-center text-muted-foreground">
+                <TableCell
+                  colSpan={puedeVerCostos ? 8 : 6}
+                  className="text-center text-muted-foreground"
+                >
                   {loading ? 'Cargando...' : 'Sin resultados.'}
                 </TableCell>
               </TableRow>
@@ -189,10 +196,14 @@ export function InventoryTable() {
                       {formatNumber(item.saldo)}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right">
-                    {item.valor_unitario != null ? formatCOP(item.valor_unitario) : '—'}
-                  </TableCell>
-                  <TableCell className="text-right">{formatCOP(item.valor_total)}</TableCell>
+                  {puedeVerCostos && (
+                    <>
+                      <TableCell className="text-right">
+                        {item.valor_unitario != null ? formatCOP(item.valor_unitario) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right">{formatCOP(item.valor_total)}</TableCell>
+                    </>
+                  )}
                   {!esExcel && (
                     <TableCell>
                       {item.ultimo_movimiento

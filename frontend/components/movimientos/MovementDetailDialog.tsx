@@ -21,10 +21,12 @@ export function MovementDetailDialog({
   movimiento,
   open,
   onOpenChange,
+  puedeVerCostos,
 }: {
   movimiento: MovimientoDetalle | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  puedeVerCostos: boolean
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -42,8 +44,12 @@ export function MovementDetailDialog({
             <dd>{ESTADO_LABELS[movimiento.estado]}</dd>
             <dt className="text-muted-foreground">Cantidad</dt>
             <dd>{formatNumber(movimiento.cantidad)}</dd>
-            <dt className="text-muted-foreground">Valor Unitario</dt>
-            <dd>{movimiento.valor_unitario ? formatCOP(movimiento.valor_unitario) : '—'}</dd>
+            {puedeVerCostos && (
+              <>
+                <dt className="text-muted-foreground">Valor Unitario</dt>
+                <dd>{movimiento.valor_unitario ? formatCOP(movimiento.valor_unitario) : '—'}</dd>
+              </>
+            )}
             <dt className="text-muted-foreground">Ubicación</dt>
             <dd>{movimiento.ubicacion ?? '—'}</dd>
             <dt className="text-muted-foreground">Usuario</dt>

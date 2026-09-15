@@ -24,7 +24,7 @@ const FILTROS_INICIALES: MovimientosFiltros = {
   hasta: '',
 }
 
-export function MovementsTable() {
+export function MovementsTable({ puedeVerCostos }: { puedeVerCostos: boolean }) {
   const [filtros, setFiltros] = useState<MovimientosFiltros>(FILTROS_INICIALES)
   const [pagina, setPagina] = useState(1)
   const [filas, setFilas] = useState<MovimientoDetalle[]>([])
@@ -137,6 +137,7 @@ export function MovementsTable() {
         movimiento={seleccionado}
         open={dialogAbierto}
         onOpenChange={setDialogAbierto}
+        puedeVerCostos={puedeVerCostos}
       />
     </div>
   )

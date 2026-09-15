@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowLeftRight, DollarSign, Package } from 'lucide-react'
 import { RoleGuard } from '@/components/shared/RoleGuard'
 import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
+import { CAN_VIEW_COSTS } from '@/lib/permissions/roles'
 import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { getDashboardData } from '@/lib/supabase/get-dashboard-data'
 import { formatCOP, formatNumber } from '@/lib/format'
@@ -29,6 +30,7 @@ async function DashboardContent() {
   }
 
   const data = await getDashboardData()
+  const puedeVerCostos = CAN_VIEW_COSTS.includes(result.profile.rol)
 
   return (
     <div className="space-y-6">
@@ -47,11 +49,13 @@ async function DashboardContent() {
           value={formatNumber(data.totalUnidades)}
           icon={Package}
         />
-        <KpiCard
-          label="Valor Total del Inventario"
-          value={formatCOP(data.valorTotal)}
-          icon={DollarSign}
-        />
+        {puedeVerCostos && (
+          <KpiCard
+            label="Valor Total del Inventario"
+            value={formatCOP(data.valorTotal)}
+            icon={DollarSign}
+          />
+        )}
         <KpiCard
           label="Movimientos del Día"
           value={formatNumber(data.movimientosHoy)}
