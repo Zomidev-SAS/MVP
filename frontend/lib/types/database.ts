@@ -39,4 +39,5 @@ export interface Profile {
   id: string
   nombre: string | null
   rol: Role
+  activo: boolean
 }

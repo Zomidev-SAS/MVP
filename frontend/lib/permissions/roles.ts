@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Package,
+  Car,
   ArrowLeftRight,
   FilePlus,
   SlidersHorizontal,
@@ -14,6 +15,7 @@ import { ALL_ROLES, type Role } from '@/lib/types/database'
 export type RouteKey =
   | 'dashboard'
   | 'inventario'
+  | 'vehiculos'
   | 'movimientos'
   | 'formularios'
   | 'entradas'
@@ -24,6 +26,7 @@ export type RouteKey =
 export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   dashboard: ALL_ROLES,
   inventario: ALL_ROLES,
+  vehiculos: ALL_ROLES,
   movimientos: ['supervisor', 'ingenieria', 'auditoria'] as const,
   formularios: ALL_ROLES,
   entradas: ['supervisor', 'produccion', 'compras'] as const,
@@ -31,6 +34,9 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   importar: ['supervisor', 'compras'] as const,
   usuarios: ['supervisor'] as const,
 }
+
+/** Roles que pueden ver valor_unitario/valor_total en cualquier pantalla. */
+export const CAN_VIEW_COSTS: readonly Role[] = ['supervisor', 'compras', 'auditoria']
 
 export const NAV_ITEMS: {
   key: RouteKey
@@ -40,6 +46,7 @@ export const NAV_ITEMS: {
 }[] = [
   { key: 'dashboard', label: 'Dashboard', href: '/', icon: LayoutDashboard },
   { key: 'inventario', label: 'Inventario', href: '/inventario', icon: Package },
+  { key: 'vehiculos', label: 'Vehículos (VIN)', href: '/vehiculos', icon: Car },
   { key: 'movimientos', label: 'Movimientos', href: '/movimientos', icon: ArrowLeftRight },
   { key: 'formularios', label: 'Formularios', href: '/formularios', icon: ClipboardList },
   { key: 'entradas', label: 'Entradas', href: '/entradas', icon: FilePlus },
@@ -47,3 +54,9 @@ export const NAV_ITEMS: {
   { key: 'importar', label: 'Importar CSV', href: '/importar', icon: Upload },
   { key: 'usuarios', label: 'Usuarios', href: '/usuarios', icon: Users },
 ]
+
+/** Resuelve un pathname exacto a su RouteKey, o null si no es una ruta controlada por ROUTE_PERMISSIONS (ej. /login, /acceso-denegado). */
+export function getRouteKeyForPath(pathname: string): RouteKey | null {
+  const item = NAV_ITEMS.find((i) => i.href === pathname)
+  return item ? item.key : null
+}

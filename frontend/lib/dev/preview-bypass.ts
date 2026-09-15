@@ -36,5 +36,5 @@ export function getDevPreviewProfile(): Profile {
     )
   }
   const rol: Role = isValid ? (envRole as Role) : 'supervisor'
-  return { id: 'dev-preview-user', nombre: 'Vista Previa Dev', rol }
+  return { id: 'dev-preview-user', nombre: 'Vista Previa Dev', rol, activo: true }
 }
