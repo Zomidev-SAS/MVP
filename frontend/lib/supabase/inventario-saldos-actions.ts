@@ -214,3 +214,32 @@ export async function fetchStockBajoCount(): Promise<number> {
 
   return count ?? 0
 }
+
+export async function fetchProductosBajoStock(
+  limite: number
+): Promise<{ codigo: string; nombre: string | null; saldo: number }[]> {
+  if (isDevBypassActive()) {
+    return Array.from({ length: Math.min(limite, 5) }, (_, i) => ({
+      codigo: `PRD-${1000 + i}`,
+      nombre: `Producto de ejemplo ${i + 1}`,
+      saldo: i + 1,
+    }))
+  }
+
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('inventario_saldos')
+    .select('codigo, nombre, saldo')
+    .gt('saldo', 0)
+    .lte('saldo', STOCK_BAJO_THRESHOLD)
+    .order('saldo', { ascending: true })
+    .limit(limite)
+
+  if (error) {
+    console.error('Failed to load productos bajo stock:', error)
+    return []
+  }
+
+  return data ?? []
+}

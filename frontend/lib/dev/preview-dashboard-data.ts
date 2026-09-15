@@ -10,7 +10,7 @@ const TIPOS: MovimientoReciente['tipo_movimiento'][] = [
 
 const ACTORES = ['Juan Pérez', 'María Gómez', 'Carlos Ruiz']
 
-export function getDevPreviewDashboardData(): DashboardData {
+export function getDevPreviewDashboardData(limiteMovimientos: number = 10): DashboardData {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -24,7 +24,7 @@ export function getDevPreviewDashboardData(): DashboardData {
     }
   })
 
-  const ultimosMovimientos: MovimientoReciente[] = Array.from({ length: 10 }, (_, i) => ({
+  const ultimosMovimientos: MovimientoReciente[] = Array.from({ length: limiteMovimientos }, (_, i) => ({
     id: i + 1,
     vin: `VIN-${(1000 + i).toString()}`,
     tipo_movimiento: TIPOS[i % TIPOS.length],

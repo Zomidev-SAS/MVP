@@ -24,9 +24,9 @@ function getBogotaTodayStart(): Date {
   return new Date(`${bogotaDateStr}T00:00:00-05:00`)
 }
 
-export async function getDashboardData(): Promise<DashboardData> {
+export async function getDashboardData(limiteMovimientos: number = 10): Promise<DashboardData> {
   if (isDevBypassActive()) {
-    return getDevPreviewDashboardData()
+    return getDevPreviewDashboardData(limiteMovimientos)
   }
 
   const supabase = await createClient()
@@ -52,7 +52,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         .from('vista_movimientos_recientes')
         .select('id, vin, tipo_movimiento, cantidad, actor_nombre, created_at')
         .order('created_at', { ascending: false })
-        .limit(10),
+        .limit(limiteMovimientos),
     ])
 
   if (inventarioResult.error) {
