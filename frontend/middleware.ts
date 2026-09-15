@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
+import { getRouteKeyForPath, ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
+import type { Role } from '@/lib/types/database'
 
 export async function middleware(request: NextRequest) {
   if (isDevBypassActive()) {
@@ -52,6 +54,27 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
+  }
+
+  if (user) {
+    const routeKey = getRouteKeyForPath(request.nextUrl.pathname)
+
+    if (routeKey) {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('rol, activo')
+        .eq('id', user.id)
+        .single<{ rol: Role; activo: boolean }>()
+
+      const permitido =
+        !error && !!profile && profile.activo && ROUTE_PERMISSIONS[routeKey].includes(profile.rol)
+
+      if (!permitido) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/acceso-denegado'
+        return NextResponse.redirect(url)
+      }
+    }
   }
 
   return supabaseResponse
