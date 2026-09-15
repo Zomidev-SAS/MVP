@@ -5,6 +5,7 @@ import { parsearInventarioExcelBuffer } from '@/lib/inventario/parse-excel'
 import { createClient } from '@/lib/supabase/server'
 import { getSessionUser } from '@/lib/supabase/get-session-user'
 import { INVENTARIO_PAGE_SIZE } from '@/lib/supabase/inventario-page-size'
+import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import type { InventarioFiltros, InventarioItem, InventarioPagina } from '@/lib/types/inventario'
 
 const BATCH_SIZE = 400
@@ -189,4 +190,27 @@ function mapearFilaNube(row: Record<string, unknown>): InventarioItem {
 
 function esTablaInexistente(error: { code?: string; message?: string }): boolean {
   return error.code === '42P01' || (error.message ?? '').includes('does not exist')
+}
+
+const STOCK_BAJO_THRESHOLD = 2
+
+export async function fetchStockBajoCount(): Promise<number> {
+  if (isDevBypassActive()) {
+    return 3
+  }
+
+  const supabase = await createClient()
+
+  const { count, error } = await supabase
+    .from('inventario_saldos')
+    .select('codigo', { count: 'exact', head: true })
+    .gt('saldo', 0)
+    .lte('saldo', STOCK_BAJO_THRESHOLD)
+
+  if (error) {
+    console.error('Failed to count stock bajo:', error)
+    return 0
+  }
+
+  return count ?? 0
 }

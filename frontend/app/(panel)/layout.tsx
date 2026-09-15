@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { fetchAjustesPendientesCount } from '@/lib/supabase/ajustes-actions'
+import { fetchStockBajoCount } from '@/lib/supabase/inventario-saldos-actions'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 
@@ -27,12 +28,13 @@ export default async function PanelLayout({
 
   const ajustesPendientes =
     result.profile.rol === 'supervisor' ? await fetchAjustesPendientesCount() : undefined
+  const stockBajo = await fetchStockBajoCount()
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar profile={result.profile} ajustesPendientes={ajustesPendientes} />
       <div className="flex flex-1 flex-col">
-        <Header />
+        <Header ajustesPendientes={ajustesPendientes} stockBajo={stockBajo} />
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
