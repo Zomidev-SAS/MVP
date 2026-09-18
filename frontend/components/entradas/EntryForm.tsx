@@ -17,14 +17,27 @@ import {
 import { entradaSchema, type EntradaInput } from '@/lib/types/entradas'
 import { crearEntrada } from '@/lib/supabase/entradas-actions'
 
+const SELECT_CLASS =
+  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs'
+
+const BODEGAS_REALES = [
+  'Sin Asignar',
+  'ALMACEN NIVEL 1',
+  'ALMACEN NIVEL 2',
+  'ALMACEN NIVEL 3',
+  'METALMECANICA',
+  'PRODUCTO TERMINADO',
+  'MADERAS',
+  'DESCANSABRAZOS',
+  'AUDIO Y VIDEO',
+]
+
 const VALORES_INICIALES: EntradaInput = {
-  vin: '',
-  marca: '',
-  categoria: '',
+  codigo_producto: '',
+  bodega: '',
   cantidad: 0,
   valor_unitario: undefined,
-  ubicacion: '',
-  notas: '',
+  motivo: '',
 }
 
 export function EntryForm() {
@@ -48,10 +61,10 @@ export function EntryForm() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-xl space-y-4">
         <FormField
           control={form.control}
-          name="vin"
+          name="codigo_producto"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>VIN</FormLabel>
+              <FormLabel>Código de producto</FormLabel>
               <FormControl>
                 <Input {...field} />
               </FormControl>
@@ -61,25 +74,19 @@ export function EntryForm() {
         />
         <FormField
           control={form.control}
-          name="marca"
+          name="bodega"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Marca</FormLabel>
+              <FormLabel>Bodega</FormLabel>
               <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="categoria"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Categoría</FormLabel>
-              <FormControl>
-                <Input {...field} />
+                <select {...field} className={SELECT_CLASS}>
+                  <option value="">Selecciona una bodega</option>
+                  {BODEGAS_REALES.map((bodega) => (
+                    <option key={bodega} value={bodega}>
+                      {bodega}
+                    </option>
+                  ))}
+                </select>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -117,23 +124,10 @@ export function EntryForm() {
         />
         <FormField
           control={form.control}
-          name="ubicacion"
+          name="motivo"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Ubicación</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="notas"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Notas</FormLabel>
+              <FormLabel>Motivo / Notas</FormLabel>
               <FormControl>
                 <Textarea {...field} />
               </FormControl>

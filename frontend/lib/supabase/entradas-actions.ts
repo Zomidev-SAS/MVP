@@ -24,15 +24,13 @@ export async function crearEntrada(datos: EntradaInput): Promise<EntradaResultad
   const supabase = await createClient()
 
   const { error } = await supabase.from('movimientos_inventario').insert({
-    vin: parsed.data.vin,
-    marca: parsed.data.marca,
-    categoria: parsed.data.categoria,
-    cantidad: parsed.data.cantidad,
-    valor_unitario: parsed.data.valor_unitario ?? null,
-    ubicacion: parsed.data.ubicacion,
-    motivo: parsed.data.notas ?? null,
+    codigo_producto: parsed.data.codigo_producto,
     tipo_movimiento: 'entrada',
     estado: 'aplicado',
+    cantidad: parsed.data.cantidad,
+    valor_unitario: parsed.data.valor_unitario ?? null,
+    bodega: parsed.data.bodega,
+    motivo: parsed.data.motivo ?? null,
     actor_id: user.id,
   })
 
