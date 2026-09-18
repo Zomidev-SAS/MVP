@@ -1,96 +1,86 @@
-import { corsHeaders } from '../_shared/cors.ts'
-import { assertSupervisor, createAdminClient } from '../_shared/supabase-admin.ts'
-
-const VALID_ROLES = [
-  'supervisor',
-  'comercial',
-  'ingenieria',
-  'produccion',
-  'compras',
-  'auditoria',
-  'lectura',
-  'metalmecanica',
-  'instalacion',
-] as const
-
-type Role = (typeof VALID_ROLES)[number]
-
-// URL del frontend donde el usuario termina de crear su contraseña. Ajustar
-// la variable de entorno SITE_URL en Supabase (Edge Functions > Secrets)
-// cuando exista un dominio de producción real.
-const SITE_URL = Deno.env.get('SITE_URL') ?? 'http://localhost:3000'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 })
   }
 
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+  }
+
+  // Cliente en CONTEXTO del usuario que llama, para verificar que es supervisor
+  const supabaseUser = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('MI_ANON_KEY')!,
+    { global: { headers: { Authorization: authHeader } } }
+  )
+
+  const token = authHeader.replace('Bearer ', '')
+  const { data: userData } = await supabaseUser.auth.getUser(token)
+  if (!userData?.user) {
+    return new Response(JSON.stringify({ error: 'Token inválido' }), { status: 401 })
+  }
+
+  const { data: perfil } = await supabaseUser
+    .from('profiles')
+    .select('rol, activo')
+    .eq('id', userData.user.id)
+    .maybeSingle()
+
+  // B8: solo supervisor
+  if (!perfil?.activo || perfil.rol !== 'supervisor') {
+    return new Response(JSON.stringify({ error: 'Forbidden: solo supervisor puede crear usuarios' }), { status: 403 })
+  }
+
+  let body: { email?: string; nombre?: string; rol?: string }
   try {
-    await assertSupervisor(req.headers.get('Authorization'))
-    const { nombre, email, rol } = await req.json()
-
-    if (!nombre?.trim() || !email?.trim() || !rol) {
-      return new Response(JSON.stringify({ error: 'nombre, email y rol son requeridos' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    if (!VALID_ROLES.includes(rol as Role)) {
-      return new Response(JSON.stringify({ error: 'Rol inválido' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const admin = createAdminClient()
-
-    const { data: created, error: createError } = await admin.auth.admin.inviteUserByEmail(
-      email.trim(),
-      {
-        data: { nombre: nombre.trim() },
-        redirectTo: `${SITE_URL}/establecer-password`,
-      }
-    )
-
-    if (createError || !created.user) {
-      const message =
-        createError?.message?.toLowerCase().includes('already') ||
-        createError?.message?.toLowerCase().includes('registered')
-          ? 'El correo ya está registrado'
-          : 'No se pudo invitar al usuario'
-      return new Response(JSON.stringify({ error: message }), {
-        status: 409,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const { error: profileError } = await admin.from('profiles').upsert({
-      id: created.user.id,
-      nombre: nombre.trim(),
-      rol,
-      activo: true,
-    })
-
-    if (profileError) {
-      console.error('Failed to upsert profile:', profileError)
-      await admin.auth.admin.deleteUser(created.user.id)
-      return new Response(JSON.stringify({ error: 'Usuario invitado pero falló el perfil' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    return new Response(JSON.stringify({ ok: true, id: created.user.id }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  } catch (response) {
-    if (response instanceof Response) return response
-    console.error('crear-usuario error:', response)
-    return new Response(JSON.stringify({ error: 'Error interno' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    body = await req.json()
+  } catch {
+    return new Response(JSON.stringify({ error: 'Body inválido, se esperaba JSON' }), { status: 400 })
   }
+
+  const { email, nombre, rol } = body
+
+  if (!email || !nombre || !rol) {
+    return new Response(JSON.stringify({ error: 'email, nombre y rol son obligatorios' }), { status: 400 })
+  }
+
+  const rolesValidos = ['supervisor', 'comercial', 'metalmecanica', 'produccion', 'instalacion', 'compras', 'auditoria', 'lectura']
+  if (!rolesValidos.includes(rol)) {
+    return new Response(JSON.stringify({ error: `rol inválido, debe ser uno de: ${rolesValidos.join(', ')}` }), { status: 400 })
+  }
+
+  // Cliente ADMIN, con service_role, para usar auth.admin.*
+  const supabaseAdmin = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('MI_SERVICE_ROLE_KEY')!
+  )
+
+  // B8: flujo por invitación — email_confirm: true, SIN password en el body
+  const { data: nuevoUsuario, error: errorCreacion } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+    email,
+    { data: { nombre } }
+  )
+
+  if (errorCreacion) {
+    return new Response(JSON.stringify({ error: errorCreacion.message }), { status: 500 })
+  }
+
+  // El trigger handle_new_user ya creó el perfil con rol 'lectura' por defecto.
+  // Lo actualizamos al rol real que pidió el supervisor.
+  const { error: errorRol } = await supabaseAdmin
+    .from('profiles')
+    .update({ rol })
+    .eq('id', nuevoUsuario.user.id)
+
+  if (errorRol) {
+    return new Response(JSON.stringify({ error: 'Usuario invitado pero falló asignar rol: ' + errorRol.message }), { status: 500 })
+  }
+
+  return new Response(JSON.stringify({
+    ok: true,
+    usuario: { id: nuevoUsuario.user.id, email: nuevoUsuario.user.email, nombre, rol }
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 })

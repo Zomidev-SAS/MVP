@@ -3,8 +3,7 @@ create table profiles (
   nombre     text not null,
   rol        text not null check (rol in (
                 'supervisor','comercial','ingenieria',
-                'produccion','compras','auditoria','lectura',
-                'metalmecanica','instalacion')),
+                'produccion','compras','auditoria','lectura')),
   activo     boolean not null default true,
   created_at timestamptz not null default now()
 );
