@@ -8,6 +8,7 @@ import {
   Upload,
   Users,
   ClipboardList,
+  Settings,
   type LucideIcon,
 } from 'lucide-react'
 import { ALL_ROLES, type Role } from '@/lib/types/database'
@@ -22,6 +23,7 @@ export type RouteKey =
   | 'ajustes'
   | 'importar'
   | 'usuarios'
+  | 'configuracion'
 
 export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   dashboard: ALL_ROLES,
@@ -33,6 +35,7 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   ajustes: ['supervisor', 'produccion', 'compras'] as const,
   importar: ['supervisor', 'compras'] as const,
   usuarios: ['supervisor'] as const,
+  configuracion: ['supervisor'] as const,
 }
 
 /** Roles que pueden ver valor_unitario/valor_total en cualquier pantalla. */
@@ -53,6 +56,7 @@ export const NAV_ITEMS: {
   { key: 'ajustes', label: 'Ajustes', href: '/ajustes', icon: SlidersHorizontal },
   { key: 'importar', label: 'Importar CSV', href: '/importar', icon: Upload },
   { key: 'usuarios', label: 'Usuarios', href: '/usuarios', icon: Users },
+  { key: 'configuracion', label: 'Configuración', href: '/configuracion', icon: Settings },
 ]
 
 /** Resuelve un pathname exacto a su RouteKey, o null si no es una ruta controlada por ROUTE_PERMISSIONS (ej. /login, /acceso-denegado). */
