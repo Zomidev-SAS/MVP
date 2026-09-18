@@ -55,11 +55,25 @@ export async function actualizarEstadoUsuario(
 
   const supabase = await createClient()
 
-  const { error } = await supabase.from('profiles').update({ activo }).eq('id', id)
+  if (!activo) {
+    const { error } = await supabase.functions.invoke('desactivar-usuario', {
+      body: { user_id: id },
+    })
+    if (error) {
+      console.error('Failed to invoke desactivar-usuario:', error)
+      return { ok: false, error: 'No se pudo desactivar el usuario. Intenta de nuevo.' }
+    }
+    return { ok: true }
+  }
+
+  // Reactivar SÍ sigue siendo un update directo — no hay Edge Function de
+  // "reactivar" en el schema real, y RLS (profiles_update_supervisor)
+  // permite que el supervisor lo haga directo.
+  const { error } = await supabase.from('profiles').update({ activo: true }).eq('id', id)
 
   if (error) {
-    console.error('Failed to update activo:', error)
-    return { ok: false, error: 'No se pudo actualizar el estado. Intenta de nuevo.' }
+    console.error('Failed to reactivate usuario:', error)
+    return { ok: false, error: 'No se pudo reactivar el usuario. Intenta de nuevo.' }
   }
 
   return { ok: true }

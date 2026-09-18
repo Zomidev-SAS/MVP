@@ -19,7 +19,7 @@ export function getDevPreviewUsuariosData(): UsuarioListado[] {
     {
       id: 'a0000000-0000-0000-0000-000000000003',
       nombre: 'Diana Gómez',
-      rol: 'ingenieria',
+      rol: 'metalmecanica',
       activo: true,
       created_at: '2026-02-01T08:00:00.000Z',
     },
