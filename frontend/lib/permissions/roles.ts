@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   Package,
-  Car,
   ArrowLeftRight,
   FilePlus,
   SlidersHorizontal,
@@ -16,7 +15,6 @@ import { ALL_ROLES, type Role } from '@/lib/types/database'
 export type RouteKey =
   | 'dashboard'
   | 'inventario'
-  | 'vehiculos'
   | 'movimientos'
   | 'formularios'
   | 'entradas'
@@ -27,18 +25,25 @@ export type RouteKey =
 
 export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   dashboard: ALL_ROLES,
+  // RLS real: productos_select/mov_select_autenticados permiten leer a
+  // cualquier rol activo — no hay restricción de lectura por rol.
   inventario: ALL_ROLES,
-  vehiculos: ALL_ROLES,
-  movimientos: ['supervisor', 'ingenieria', 'auditoria'] as const,
+  // RLS real (mov_select_autenticados) permite leer a cualquier activo,
+  // pero mantenemos la bitácora completa reservada a supervisor/auditoria
+  // (el rol "ingenieria" que la usaba ya no existe en el schema real).
+  movimientos: ['supervisor', 'auditoria'] as const,
   formularios: ALL_ROLES,
-  entradas: ['supervisor', 'produccion', 'compras'] as const,
-  ajustes: ['supervisor', 'produccion', 'compras'] as const,
+  // Alineado a la policy real mov_insert_roles_autorizados.
+  entradas: ['supervisor', 'metalmecanica', 'produccion', 'instalacion', 'compras'] as const,
+  // Alineado a la policy real ajustes_insert_roles.
+  ajustes: ['supervisor', 'produccion', 'metalmecanica', 'instalacion', 'compras'] as const,
+  // Alineado al chequeo de rol real en la Edge Function importar-inventario-csv.
   importar: ['supervisor', 'compras'] as const,
   usuarios: ['supervisor'] as const,
   configuracion: ['supervisor'] as const,
 }
 
-/** Roles que pueden ver valor_unitario/valor_total en cualquier pantalla. */
+/** Roles que pueden ver valor_unitario/valor_total en cualquier pantalla — igual a la matriz real de las vistas de Supabase. */
 export const CAN_VIEW_COSTS: readonly Role[] = ['supervisor', 'compras', 'auditoria']
 
 export const NAV_ITEMS: {
@@ -49,7 +54,6 @@ export const NAV_ITEMS: {
 }[] = [
   { key: 'dashboard', label: 'Dashboard', href: '/', icon: LayoutDashboard },
   { key: 'inventario', label: 'Inventario', href: '/inventario', icon: Package },
-  { key: 'vehiculos', label: 'Vehículos (VIN)', href: '/vehiculos', icon: Car },
   { key: 'movimientos', label: 'Movimientos', href: '/movimientos', icon: ArrowLeftRight },
   { key: 'formularios', label: 'Formularios', href: '/formularios', icon: ClipboardList },
   { key: 'entradas', label: 'Entradas', href: '/entradas', icon: FilePlus },
