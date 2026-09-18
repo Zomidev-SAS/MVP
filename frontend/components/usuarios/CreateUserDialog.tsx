@@ -23,7 +23,6 @@ import { crearUsuario } from '@/lib/supabase/usuarios-actions'
 const VALORES_INICIALES: CrearUsuarioInput = {
   nombre: '',
   email: '',
-  password: '',
   rol: 'lectura',
 }
 
@@ -86,19 +85,9 @@ export function CreateUserDialog() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Contraseña</FormLabel>
-                    <FormControl>
-                      <Input type="password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <p className="text-xs text-muted-foreground">
+                El usuario recibirá un correo para crear su propia contraseña.
+              </p>
               <FormField
                 control={form.control}
                 name="rol"

@@ -15,6 +15,11 @@ const VALID_ROLES = [
 
 type Role = (typeof VALID_ROLES)[number]
 
+// URL del frontend donde el usuario termina de crear su contraseña. Ajustar
+// la variable de entorno SITE_URL en Supabase (Edge Functions > Secrets)
+// cuando exista un dominio de producción real.
+const SITE_URL = Deno.env.get('SITE_URL') ?? 'http://localhost:3000'
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -22,17 +27,10 @@ Deno.serve(async (req) => {
 
   try {
     await assertSupervisor(req.headers.get('Authorization'))
-    const { nombre, email, password, rol } = await req.json()
+    const { nombre, email, rol } = await req.json()
 
-    if (!nombre?.trim() || !email?.trim() || !password || !rol) {
-      return new Response(JSON.stringify({ error: 'nombre, email, password y rol son requeridos' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    if (password.length < 8) {
-      return new Response(JSON.stringify({ error: 'La contraseña debe tener al menos 8 caracteres' }), {
+    if (!nombre?.trim() || !email?.trim() || !rol) {
+      return new Response(JSON.stringify({ error: 'nombre, email y rol son requeridos' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -47,19 +45,20 @@ Deno.serve(async (req) => {
 
     const admin = createAdminClient()
 
-    const { data: created, error: createError } = await admin.auth.admin.createUser({
-      email: email.trim(),
-      password,
-      email_confirm: true,
-      user_metadata: { nombre: nombre.trim() },
-    })
+    const { data: created, error: createError } = await admin.auth.admin.inviteUserByEmail(
+      email.trim(),
+      {
+        data: { nombre: nombre.trim() },
+        redirectTo: `${SITE_URL}/establecer-password`,
+      }
+    )
 
     if (createError || !created.user) {
       const message =
         createError?.message?.toLowerCase().includes('already') ||
         createError?.message?.toLowerCase().includes('registered')
           ? 'El correo ya está registrado'
-          : 'No se pudo crear el usuario'
+          : 'No se pudo invitar al usuario'
       return new Response(JSON.stringify({ error: message }), {
         status: 409,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -76,7 +75,7 @@ Deno.serve(async (req) => {
     if (profileError) {
       console.error('Failed to upsert profile:', profileError)
       await admin.auth.admin.deleteUser(created.user.id)
-      return new Response(JSON.stringify({ error: 'Usuario creado pero falló el perfil' }), {
+      return new Response(JSON.stringify({ error: 'Usuario invitado pero falló el perfil' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })

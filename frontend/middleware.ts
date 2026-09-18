@@ -43,8 +43,12 @@ export async function middleware(request: NextRequest) {
   }
 
   const isLoginPage = request.nextUrl.pathname === '/login'
+  // El enlace de invitación establece la sesión del lado del navegador (token
+  // en la URL) — el middleware todavía no ve cookie de sesión en esa primera
+  // carga, así que esta ruta debe ser pública igual que /login.
+  const isEstablecerPasswordPage = request.nextUrl.pathname === '/establecer-password'
 
-  if (!user && !isLoginPage) {
+  if (!user && !isLoginPage && !isEstablecerPasswordPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
