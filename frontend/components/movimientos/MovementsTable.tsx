@@ -18,7 +18,8 @@ const TIPO_LABELS: Record<MovimientoDetalle['tipo_movimiento'], string> = {
 }
 
 const FILTROS_INICIALES: MovimientosFiltros = {
-  vin: '',
+  codigoProducto: '',
+  bodega: '',
   tipo: 'todos',
   desde: '',
   hasta: '',
@@ -72,44 +73,53 @@ export function MovementsTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
         {loading ? 'Cargando...' : `Mostrando ${filas.length} de ${total} resultados`}
       </p>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Fecha</TableHead>
-            <TableHead>Tipo</TableHead>
-            <TableHead>VIN</TableHead>
-            <TableHead className="text-right">Cantidad</TableHead>
-            <TableHead>Ubicación</TableHead>
-            <TableHead>Usuario</TableHead>
-            <TableHead>Estado</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filas.length === 0 ? (
+      <div className="overflow-x-auto rounded-md border">
+        <Table className="min-w-[880px]">
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
-                {loading ? 'Cargando...' : 'Sin resultados.'}
-              </TableCell>
+              <TableHead>Fecha</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Producto</TableHead>
+              <TableHead className="text-right">Cantidad</TableHead>
+              <TableHead>Bodega</TableHead>
+              <TableHead>Usuario</TableHead>
+              <TableHead>Estado</TableHead>
             </TableRow>
-          ) : (
-            filas.map((item) => (
-              <TableRow
-                key={item.id}
-                onClick={() => handleRowClick(item)}
-                className="cursor-pointer hover:bg-accent"
-              >
-                <TableCell>{new Date(item.created_at).toLocaleDateString('es-CO')}</TableCell>
-                <TableCell>{TIPO_LABELS[item.tipo_movimiento]}</TableCell>
-                <TableCell className="font-medium">{item.vin}</TableCell>
-                <TableCell className="text-right">{formatNumber(item.cantidad)}</TableCell>
-                <TableCell>{item.ubicacion ?? '—'}</TableCell>
-                <TableCell>{item.actor_nombre ?? '—'}</TableCell>
-                <TableCell>{item.estado}</TableCell>
+          </TableHeader>
+          <TableBody>
+            {filas.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  {loading ? 'Cargando...' : 'Sin resultados.'}
+                </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            ) : (
+              filas.map((item) => (
+                <TableRow
+                  key={item.id}
+                  onClick={() => handleRowClick(item)}
+                  className="cursor-pointer hover:bg-accent"
+                >
+                  <TableCell>{new Date(item.created_at).toLocaleDateString('es-CO')}</TableCell>
+                  <TableCell>{TIPO_LABELS[item.tipo_movimiento]}</TableCell>
+                  <TableCell className="font-medium">
+                    <span className="font-mono text-sm">{item.codigo_producto}</span>
+                    {item.producto_nombre && (
+                      <span className="block text-xs text-muted-foreground">
+                        {item.producto_nombre}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">{formatNumber(item.cantidad)}</TableCell>
+                  <TableCell>{item.bodega ?? '—'}</TableCell>
+                  <TableCell>{item.actor_nombre ?? '—'}</TableCell>
+                  <TableCell>{item.estado}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       <div className="flex items-center justify-between">
         <Button

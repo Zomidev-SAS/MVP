@@ -26,12 +26,15 @@ export async function fetchMovimientos(
   let query = supabase
     .from('vista_movimientos_recientes')
     .select(
-      'id, vin, tipo_movimiento, cantidad, valor_unitario, marca, categoria, ubicacion, formulario_id, motivo, actor_nombre, aprobado_por, estado, created_at',
+      'id, codigo_producto, producto_nombre, tipo_movimiento, cantidad, valor_unitario, bodega, formulario_id, motivo, actor_id, actor_nombre, aprobado_por, estado, created_at',
       { count: 'exact' }
     )
 
-  if (filtros.vin) {
-    query = query.eq('vin', filtros.vin)
+  if (filtros.codigoProducto) {
+    query = query.eq('codigo_producto', filtros.codigoProducto)
+  }
+  if (filtros.bodega) {
+    query = query.eq('bodega', filtros.bodega)
   }
   if (filtros.tipo !== 'todos') {
     query = query.eq('tipo_movimiento', filtros.tipo)
@@ -62,7 +65,8 @@ function fetchMovimientosPreview(
   const todas = getDevPreviewMovimientosData()
 
   const filtradas = todas.filter((item) => {
-    if (filtros.vin && item.vin !== filtros.vin) return false
+    if (filtros.codigoProducto && item.codigo_producto !== filtros.codigoProducto) return false
+    if (filtros.bodega && item.bodega !== filtros.bodega) return false
     if (filtros.tipo !== 'todos' && item.tipo_movimiento !== filtros.tipo) return false
     if (filtros.desde && item.created_at < filtros.desde) return false
     if (filtros.hasta && item.created_at > filtros.hasta) return false

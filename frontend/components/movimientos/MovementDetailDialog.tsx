@@ -36,8 +36,14 @@ export function MovementDetailDialog({
         </DialogHeader>
         {movimiento && (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <dt className="text-muted-foreground">VIN</dt>
-            <dd>{movimiento.vin}</dd>
+            <dt className="text-muted-foreground">Código producto</dt>
+            <dd className="font-mono">{movimiento.codigo_producto}</dd>
+            {movimiento.producto_nombre && (
+              <>
+                <dt className="text-muted-foreground">Producto</dt>
+                <dd>{movimiento.producto_nombre}</dd>
+              </>
+            )}
             <dt className="text-muted-foreground">Tipo</dt>
             <dd>{TIPO_LABELS[movimiento.tipo_movimiento]}</dd>
             <dt className="text-muted-foreground">Estado</dt>
@@ -50,8 +56,8 @@ export function MovementDetailDialog({
                 <dd>{movimiento.valor_unitario ? formatCOP(movimiento.valor_unitario) : '—'}</dd>
               </>
             )}
-            <dt className="text-muted-foreground">Ubicación</dt>
-            <dd>{movimiento.ubicacion ?? '—'}</dd>
+            <dt className="text-muted-foreground">Bodega</dt>
+            <dd>{movimiento.bodega ?? '—'}</dd>
             <dt className="text-muted-foreground">Usuario</dt>
             <dd>{movimiento.actor_nombre ?? '—'}</dd>
             <dt className="text-muted-foreground">Aprobado por</dt>

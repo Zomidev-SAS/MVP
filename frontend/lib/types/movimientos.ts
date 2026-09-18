@@ -1,14 +1,14 @@
 export interface MovimientoDetalle {
   id: number
-  vin: string
+  codigo_producto: string
+  producto_nombre: string | null
   tipo_movimiento: 'entrada' | 'salida_vin' | 'ajuste' | 'reverso'
   cantidad: number
   valor_unitario: number | null
-  marca: string | null
-  categoria: string | null
-  ubicacion: string | null
+  bodega: string | null
   formulario_id: string | null
   motivo: string | null
+  actor_id: string
   actor_nombre: string | null
   aprobado_por: string | null
   estado: 'pendiente' | 'aplicado' | 'rechazado'
@@ -16,7 +16,8 @@ export interface MovimientoDetalle {
 }
 
 export interface MovimientosFiltros {
-  vin: string
+  codigoProducto: string
+  bodega: string
   tipo: 'todos' | 'entrada' | 'salida_vin' | 'ajuste' | 'reverso'
   desde: string
   hasta: string
