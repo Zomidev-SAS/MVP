@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { fetchAjustesPendientesCount } from '@/lib/supabase/ajustes-actions'
-import { fetchStockBajoCount } from '@/lib/supabase/inventario-saldos-actions'
+import { fetchStockBajoCount } from '@/lib/supabase/inventario-actions'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 

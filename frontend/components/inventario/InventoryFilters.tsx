@@ -7,17 +7,33 @@ import type { InventarioFiltros } from '@/lib/types/inventario'
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs'
 
+const CATEGORIAS_REALES = [
+  'TORNILLERIA',
+  'Productos',
+  'MECANIZADOS',
+  'PERFILERIA',
+  'TELAS Y TAPICERIA',
+  'DESCANSABRAZOS',
+  'PRODUCTO TERMINADO',
+  'Productos CA',
+  'Otro CA',
+  'INSUMOS VARIOS',
+  'FIBRA',
+  'ELECTRICOS',
+  'CORTE LASER',
+  'PEGANTES E INFLAMABLES',
+  'AUDIO Y VIDEO',
+  'CA IMPORTACIONES',
+  'Servicios',
+]
+
 export function InventoryFilters({
   filtros,
-  fuente,
   onChange,
 }: {
   filtros: InventarioFiltros
-  fuente: 'excel' | 'supabase'
   onChange: (filtros: InventarioFiltros) => void
 }) {
-  const esExcel = fuente === 'excel'
-
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
       <div className="space-y-1 lg:col-span-2">
@@ -26,31 +42,25 @@ export function InventoryFilters({
           id="filtro-busqueda"
           value={filtros.busqueda}
           onChange={(e) => onChange({ ...filtros, busqueda: e.target.value })}
-          placeholder={
-            esExcel
-              ? 'Código, nombre, categoría, ubicación...'
-              : 'VIN, marca, categoría...'
-          }
+          placeholder="Código o nombre de producto..."
         />
       </div>
 
       <div className="space-y-1">
         <Label htmlFor="filtro-categoria">Categoría</Label>
-        <Input
+        <select
           id="filtro-categoria"
           value={filtros.categoria}
           onChange={(e) => onChange({ ...filtros, categoria: e.target.value })}
-        />
-      </div>
-
-      <div className="space-y-1">
-        <Label htmlFor="filtro-ubicacion">Ubicación</Label>
-        <Input
-          id="filtro-ubicacion"
-          value={filtros.ubicacion}
-          onChange={(e) => onChange({ ...filtros, ubicacion: e.target.value })}
-          placeholder={esExcel ? 'Ej. ALMACEN NIVEL 2' : ''}
-        />
+          className={SELECT_CLASS}
+        >
+          <option value="">Todas</option>
+          {CATEGORIAS_REALES.map((categoria) => (
+            <option key={categoria} value={categoria}>
+              {categoria}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="space-y-1">
@@ -69,44 +79,24 @@ export function InventoryFilters({
         </select>
       </div>
 
-      {!esExcel && (
-        <>
-          <div className="space-y-1">
-            <Label htmlFor="filtro-vin">VIN exacto</Label>
-            <Input
-              id="filtro-vin"
-              value={filtros.vin}
-              onChange={(e) => onChange({ ...filtros, vin: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="filtro-marca">Marca</Label>
-            <Input
-              id="filtro-marca"
-              value={filtros.marca}
-              onChange={(e) => onChange({ ...filtros, marca: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="filtro-desde">Desde</Label>
-            <Input
-              id="filtro-desde"
-              type="date"
-              value={filtros.desde}
-              onChange={(e) => onChange({ ...filtros, desde: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="filtro-hasta">Hasta</Label>
-            <Input
-              id="filtro-hasta"
-              type="date"
-              value={filtros.hasta}
-              onChange={(e) => onChange({ ...filtros, hasta: e.target.value })}
-            />
-          </div>
-        </>
-      )}
+      <div className="space-y-1">
+        <Label htmlFor="filtro-desde">Desde</Label>
+        <Input
+          id="filtro-desde"
+          type="date"
+          value={filtros.desde}
+          onChange={(e) => onChange({ ...filtros, desde: e.target.value })}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="filtro-hasta">Hasta</Label>
+        <Input
+          id="filtro-hasta"
+          type="date"
+          value={filtros.hasta}
+          onChange={(e) => onChange({ ...filtros, hasta: e.target.value })}
+        />
+      </div>
     </div>
   )
 }

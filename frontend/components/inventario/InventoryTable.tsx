@@ -12,49 +12,36 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { InventoryFilters } from '@/components/inventario/InventoryFilters'
-import { fetchInventario, INVENTARIO_PAGE_SIZE } from '@/lib/supabase/get-inventario'
+import { fetchInventario } from '@/lib/supabase/inventario-actions'
+import { INVENTARIO_PAGE_SIZE } from '@/lib/supabase/inventario-page-size'
 import { formatCOP, formatNumber } from '@/lib/format'
-import type { InventarioFiltros, InventarioItem, InventarioPagina } from '@/lib/types/inventario'
+import type { InventarioFiltros, InventarioItem } from '@/lib/types/inventario'
 
 const STOCK_BAJO_THRESHOLD = 2
 
 const FILTROS_INICIALES: InventarioFiltros = {
   busqueda: '',
-  vin: '',
-  marca: '',
   categoria: '',
-  ubicacion: '',
+  bodega: '',
   estado: 'todos',
   desde: '',
   hasta: '',
 }
 
-export function InventoryTable({
-  puedeVerCostos,
-  fetchFn = fetchInventario,
-}: {
-  puedeVerCostos: boolean
-  fetchFn?: (filtros: InventarioFiltros, pagina: number) => Promise<InventarioPagina>
-}) {
+export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) {
   const [filtros, setFiltros] = useState<InventarioFiltros>(FILTROS_INICIALES)
   const [pagina, setPagina] = useState(1)
   const [filas, setFilas] = useState<InventarioItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [fuente, setFuente] = useState<'excel' | 'supabase'>('excel')
-  const [origen, setOrigen] = useState<'nube' | 'local' | undefined>('nube')
-  const [fechaCorte, setFechaCorte] = useState<string | null>(null)
 
   useEffect(() => {
     const timeout = setTimeout(() => {
       setLoading(true)
-      fetchFn(filtros, pagina)
+      fetchInventario(filtros, pagina)
         .then((resultado) => {
           setFilas(resultado.filas)
           setTotal(resultado.total)
-          setFuente(resultado.fuente)
-          setOrigen(resultado.origen)
-          setFechaCorte(resultado.fechaCorte ?? null)
         })
         .catch((error) => {
           console.error('Failed to fetch inventario:', error)
@@ -73,33 +60,21 @@ export function InventoryTable({
   }
 
   function handleExportarCsv() {
-    const esExcel = fuente === 'excel'
     const encabezadosCosto = puedeVerCostos ? ['Valor Unitario', 'Valor Total'] : []
-    const encabezados = esExcel
-      ? ['Código', 'Nombre', 'Categoría', 'Ubicación', 'Unidad', 'Saldo', ...encabezadosCosto]
-      : ['VIN', 'Marca', 'Categoría', 'Ubicación', 'Saldo', ...encabezadosCosto, 'Último Movimiento']
+    const encabezados = ['Código', 'Nombre', 'Categoría', 'Saldo', ...encabezadosCosto, 'Último Movimiento']
 
     const filasCsv = filas.map((item) => {
-      const valoresCosto = puedeVerCostos ? [item.valor_unitario ?? '', item.valor_total] : []
-      const base = esExcel
-        ? [
-            item.codigo,
-            item.nombre ?? '',
-            item.categoria ?? '',
-            item.ubicacion ?? '',
-            item.unidad ?? '',
-            item.saldo,
-            ...valoresCosto,
-          ]
-        : [
-            item.vin ?? item.codigo,
-            item.marca ?? '',
-            item.categoria ?? '',
-            item.ubicacion ?? '',
-            item.saldo,
-            ...valoresCosto,
-            item.ultimo_movimiento ?? '',
-          ]
+      const valoresCosto = puedeVerCostos
+        ? [item.valor_unitario ?? '', item.valor_total ?? '']
+        : []
+      const base = [
+        item.codigo_producto,
+        item.nombre_producto ?? '',
+        item.categoria ?? '',
+        item.saldo,
+        ...valoresCosto,
+        item.ultimo_movimiento ?? '',
+      ]
       return base.map((valor) => `"${String(valor).replace(/"/g, '""')}"`).join(',')
     })
 
@@ -114,32 +89,15 @@ export function InventoryTable({
   }
 
   const totalPaginas = Math.max(1, Math.ceil(total / INVENTARIO_PAGE_SIZE))
-  const esExcel = fuente === 'excel'
-  const esNube = origen === 'nube'
+  const totalColumnas = puedeVerCostos ? 6 : 4
 
   return (
     <div className="space-y-4">
-      {esExcel && esNube && total === 0 && !loading && (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
-          Aún no hay inventario publicado. Un supervisor puede subir el Excel en{' '}
-          <span className="font-medium">Importar</span>.
-        </p>
-      )}
-
-      {esExcel && fechaCorte && total > 0 && (
-        <p className="rounded-md border border-border/80 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          {esNube ? 'Inventario del equipo' : 'Vista local (solo tu PC)'} · corte:{' '}
-          <span className="font-medium text-foreground">{fechaCorte}</span>
-        </p>
-      )}
-
-      <InventoryFilters filtros={filtros} fuente={fuente} onChange={handleFiltrosChange} />
+      <InventoryFilters filtros={filtros} onChange={handleFiltrosChange} />
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {loading
-            ? 'Cargando...'
-            : `Mostrando ${filas.length} de ${total} productos${esNube ? '' : esExcel ? ' (local)' : ''}`}
+          {loading ? 'Cargando...' : `Mostrando ${filas.length} de ${total} productos`}
         </p>
         <Button
           type="button"
@@ -155,12 +113,9 @@ export function InventoryTable({
         <Table className="min-w-[880px]">
           <TableHeader>
             <TableRow>
-              <TableHead className="whitespace-nowrap">{esExcel ? 'Código' : 'VIN'}</TableHead>
-              {esExcel && <TableHead className="whitespace-nowrap">Nombre</TableHead>}
-              {!esExcel && <TableHead className="whitespace-nowrap">Marca</TableHead>}
+              <TableHead className="whitespace-nowrap">Código</TableHead>
+              <TableHead className="whitespace-nowrap">Nombre</TableHead>
               <TableHead className="whitespace-nowrap">Categoría</TableHead>
-              <TableHead className="whitespace-nowrap">Ubicación</TableHead>
-              {esExcel && <TableHead className="whitespace-nowrap">Unidad</TableHead>}
               <TableHead className="whitespace-nowrap text-right">Saldo</TableHead>
               {puedeVerCostos && (
                 <>
@@ -168,32 +123,27 @@ export function InventoryTable({
                   <TableHead className="whitespace-nowrap text-right">Valor total</TableHead>
                 </>
               )}
-              {!esExcel && <TableHead className="whitespace-nowrap">Último mov.</TableHead>}
+              <TableHead className="whitespace-nowrap">Último mov.</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filas.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={puedeVerCostos ? 8 : 6}
-                  className="text-center text-muted-foreground"
-                >
+                <TableCell colSpan={totalColumnas} className="text-center text-muted-foreground">
                   {loading ? 'Cargando...' : 'Sin resultados.'}
                 </TableCell>
               </TableRow>
             ) : (
               filas.map((item) => (
-                <TableRow key={item.codigo}>
-                  <TableCell className="font-mono text-sm">{item.codigo}</TableCell>
-                  {esExcel && (
-                    <TableCell className="max-w-[240px] truncate" title={item.nombre ?? undefined}>
-                      {item.nombre ?? '—'}
-                    </TableCell>
-                  )}
-                  {!esExcel && <TableCell>{item.marca ?? '—'}</TableCell>}
+                <TableRow key={item.codigo_producto}>
+                  <TableCell className="font-mono text-sm">{item.codigo_producto}</TableCell>
+                  <TableCell
+                    className="max-w-[240px] truncate"
+                    title={item.nombre_producto ?? undefined}
+                  >
+                    {item.nombre_producto ?? '—'}
+                  </TableCell>
                   <TableCell>{item.categoria ?? '—'}</TableCell>
-                  <TableCell>{item.ubicacion ?? '—'}</TableCell>
-                  {esExcel && <TableCell>{item.unidad ?? '—'}</TableCell>}
                   <TableCell className="text-right">
                     <span className="inline-flex items-center gap-1">
                       {item.saldo <= STOCK_BAJO_THRESHOLD && item.saldo > 0 && (
@@ -207,16 +157,16 @@ export function InventoryTable({
                       <TableCell className="text-right">
                         {item.valor_unitario != null ? formatCOP(item.valor_unitario) : '—'}
                       </TableCell>
-                      <TableCell className="text-right">{formatCOP(item.valor_total)}</TableCell>
+                      <TableCell className="text-right">
+                        {item.valor_total != null ? formatCOP(item.valor_total) : '—'}
+                      </TableCell>
                     </>
                   )}
-                  {!esExcel && (
-                    <TableCell>
-                      {item.ultimo_movimiento
-                        ? new Date(item.ultimo_movimiento).toLocaleDateString('es-CO')
-                        : '—'}
-                    </TableCell>
-                  )}
+                  <TableCell>
+                    {item.ultimo_movimiento
+                      ? new Date(item.ultimo_movimiento).toLocaleDateString('es-CO')
+                      : '—'}
+                  </TableCell>
                 </TableRow>
               ))
             )}
