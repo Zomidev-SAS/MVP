@@ -45,7 +45,8 @@ export function MisAjustesList() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>VIN</TableHead>
+            <TableHead>Código producto</TableHead>
+            <TableHead>Bodega</TableHead>
             <TableHead className="text-right">Cantidad</TableHead>
             <TableHead>Motivo</TableHead>
             <TableHead>Estado</TableHead>
@@ -55,14 +56,15 @@ export function MisAjustesList() {
         <TableBody>
           {ajustes.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
                 {loading ? 'Cargando...' : 'No has solicitado ajustes.'}
               </TableCell>
             </TableRow>
           ) : (
             ajustes.map((a) => (
               <TableRow key={a.id}>
-                <TableCell className="font-medium">{a.vin}</TableCell>
+                <TableCell className="font-medium">{a.codigo_producto}</TableCell>
+                <TableCell>{a.bodega}</TableCell>
                 <TableCell className="text-right">{formatNumber(a.cantidad)}</TableCell>
                 <TableCell>{a.motivo}</TableCell>
                 <TableCell>

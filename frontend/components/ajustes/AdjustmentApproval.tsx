@@ -71,7 +71,8 @@ export function AdjustmentApproval() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>VIN</TableHead>
+            <TableHead>Código producto</TableHead>
+            <TableHead>Bodega</TableHead>
             <TableHead className="text-right">Cantidad</TableHead>
             <TableHead>Motivo</TableHead>
             <TableHead>Fecha</TableHead>
@@ -81,14 +82,15 @@ export function AdjustmentApproval() {
         <TableBody>
           {pendientes.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
                 {loading ? 'Cargando...' : 'Sin ajustes pendientes.'}
               </TableCell>
             </TableRow>
           ) : (
             pendientes.map((item) => (
               <TableRow key={item.id}>
-                <TableCell className="font-medium">{item.vin}</TableCell>
+                <TableCell className="font-medium">{item.codigo_producto}</TableCell>
+                <TableCell>{item.bodega}</TableCell>
                 <TableCell className="text-right">{formatNumber(item.cantidad)}</TableCell>
                 <TableCell>{item.motivo}</TableCell>
                 <TableCell>{new Date(item.created_at).toLocaleDateString('es-CO')}</TableCell>

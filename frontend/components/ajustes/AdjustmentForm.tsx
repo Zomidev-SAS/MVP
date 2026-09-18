@@ -17,11 +17,27 @@ import {
 import { solicitarAjusteSchema, type SolicitarAjusteInput } from '@/lib/types/ajustes'
 import { solicitarAjuste } from '@/lib/supabase/ajustes-actions'
 
+const SELECT_CLASS =
+  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs'
+
+const BODEGAS_REALES = [
+  'Sin Asignar',
+  'ALMACEN NIVEL 1',
+  'ALMACEN NIVEL 2',
+  'ALMACEN NIVEL 3',
+  'METALMECANICA',
+  'PRODUCTO TERMINADO',
+  'MADERAS',
+  'DESCANSABRAZOS',
+  'AUDIO Y VIDEO',
+]
+
 const VALORES_INICIALES: SolicitarAjusteInput = {
-  vin: '',
+  codigo_producto: '',
+  bodega: '',
   cantidad: 0,
+  valor_unitario: undefined,
   motivo: '',
-  evidencia: '',
 }
 
 export function AdjustmentForm() {
@@ -45,12 +61,32 @@ export function AdjustmentForm() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-xl space-y-4">
         <FormField
           control={form.control}
-          name="vin"
+          name="codigo_producto"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>VIN</FormLabel>
+              <FormLabel>Código de producto</FormLabel>
               <FormControl>
                 <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="bodega"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Bodega</FormLabel>
+              <FormControl>
+                <select {...field} className={SELECT_CLASS}>
+                  <option value="">Selecciona una bodega</option>
+                  {BODEGAS_REALES.map((bodega) => (
+                    <option key={bodega} value={bodega}>
+                      {bodega}
+                    </option>
+                  ))}
+                </select>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -71,12 +107,16 @@ export function AdjustmentForm() {
         />
         <FormField
           control={form.control}
-          name="motivo"
+          name="valor_unitario"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Motivo</FormLabel>
+              <FormLabel>Valor Unitario</FormLabel>
               <FormControl>
-                <Textarea {...field} />
+                <Input
+                  type="number"
+                  {...field}
+                  value={(field.value as number | undefined) ?? ''}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -84,12 +124,12 @@ export function AdjustmentForm() {
         />
         <FormField
           control={form.control}
-          name="evidencia"
+          name="motivo"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Evidencia</FormLabel>
+              <FormLabel>Motivo</FormLabel>
               <FormControl>
-                <Textarea {...field} placeholder="Descripción de la evidencia" />
+                <Textarea {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

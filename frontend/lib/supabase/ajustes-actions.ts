@@ -32,10 +32,11 @@ export async function solicitarAjuste(datos: SolicitarAjusteInput): Promise<Ajus
 
   const { error } = await supabase.from('ajustes_pendientes').insert({
     movimiento_borrador: {
-      vin: parsed.data.vin,
+      codigo_producto: parsed.data.codigo_producto,
       cantidad: parsed.data.cantidad,
+      bodega: parsed.data.bodega,
+      valor_unitario: parsed.data.valor_unitario ?? null,
       motivo: parsed.data.motivo,
-      evidencia: { descripcion: parsed.data.evidencia ?? '' },
     },
     solicitado_por: user.id,
     estado: 'pendiente',
@@ -47,6 +48,13 @@ export async function solicitarAjuste(datos: SolicitarAjusteInput): Promise<Ajus
   }
 
   return { ok: true }
+}
+
+type MovimientoBorrador = {
+  codigo_producto: string
+  cantidad: number
+  bodega: string
+  motivo: string
 }
 
 export async function fetchAjustesPendientes(): Promise<AjustePendiente[]> {
@@ -68,11 +76,12 @@ export async function fetchAjustesPendientes(): Promise<AjustePendiente[]> {
   }
 
   return (data ?? []).map((row) => {
-    const borrador = row.movimiento_borrador as { vin: string; cantidad: number; motivo: string }
+    const borrador = row.movimiento_borrador as MovimientoBorrador
     return {
       id: row.id,
-      vin: borrador.vin,
+      codigo_producto: borrador.codigo_producto,
       cantidad: borrador.cantidad,
+      bodega: borrador.bodega,
       motivo: borrador.motivo,
       solicitado_por: row.solicitado_por,
       created_at: row.created_at,
@@ -84,11 +93,12 @@ export async function fetchMisAjustes(): Promise<AjusteMio[]> {
   if (isDevBypassActive()) {
     return getDevPreviewAjustesData().map((a, i) => ({
       id: a.id,
-      vin: a.vin,
+      codigo_producto: a.codigo_producto,
       cantidad: a.cantidad,
+      bodega: a.bodega,
       motivo: a.motivo,
       estado: i % 3 === 0 ? 'aprobado' : i % 3 === 1 ? 'rechazado' : 'pendiente',
-      motivo_rechazo: i % 3 === 1 ? 'VIN no coincide con el inventario físico.' : null,
+      motivo_rechazo: i % 3 === 1 ? 'El código de producto no coincide con el inventario físico.' : null,
       created_at: a.created_at,
       resuelto_at: i % 3 === 0 ? a.created_at : null,
     }))
@@ -111,11 +121,12 @@ export async function fetchMisAjustes(): Promise<AjusteMio[]> {
   }
 
   return (data ?? []).map((row) => {
-    const borrador = row.movimiento_borrador as { vin: string; cantidad: number; motivo: string }
+    const borrador = row.movimiento_borrador as MovimientoBorrador
     return {
       id: row.id,
-      vin: borrador.vin,
+      codigo_producto: borrador.codigo_producto,
       cantidad: borrador.cantidad,
+      bodega: borrador.bodega,
       motivo: borrador.motivo,
       estado: row.estado as AjusteMio['estado'],
       motivo_rechazo: row.motivo_rechazo,
@@ -153,12 +164,13 @@ export async function aprobarAjuste(id: number): Promise<AjusteResultado> {
 
   const supabase = await createClient()
 
-  const { error } = await supabase.functions.invoke('aprobar-ajuste', {
-    body: { ajuste_id: id },
+  const { error } = await supabase.rpc('resolver_ajuste', {
+    p_ajuste_id: id,
+    p_decision: 'aprobado',
   })
 
   if (error) {
-    console.error('Failed to invoke aprobar-ajuste:', error)
+    console.error('Failed to resolve ajuste (aprobado):', error)
     return { ok: false, error: 'No se pudo aprobar el ajuste. Intenta de nuevo.' }
   }
 
@@ -171,25 +183,16 @@ export async function rechazarAjuste(id: number, motivo: string): Promise<Ajuste
     return { ok: true }
   }
 
-  const user = await getSessionUser()
-  if (!user) {
-    return { ok: false, error: 'Sesión expirada. Vuelve a iniciar sesión.' }
-  }
-
   const supabase = await createClient()
 
-  const { error } = await supabase
-    .from('ajustes_pendientes')
-    .update({
-      estado: 'rechazado',
-      motivo_rechazo: motivo,
-      resuelto_por: user.id,
-      resuelto_at: new Date().toISOString(),
-    })
-    .eq('id', id)
+  const { error } = await supabase.rpc('resolver_ajuste', {
+    p_ajuste_id: id,
+    p_decision: 'rechazado',
+    p_motivo_rechazo: motivo,
+  })
 
   if (error) {
-    console.error('Failed to reject ajuste:', error)
+    console.error('Failed to resolve ajuste (rechazado):', error)
     return { ok: false, error: 'No se pudo rechazar el ajuste. Intenta de nuevo.' }
   }
 
