@@ -6,6 +6,7 @@ import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { getDevPreviewAjustesData } from '@/lib/dev/preview-ajustes-data'
 import {
   solicitarAjusteSchema,
+  type AjusteMio,
   type AjustePendiente,
   type AjusteResultado,
   type SolicitarAjusteInput,
@@ -75,6 +76,51 @@ export async function fetchAjustesPendientes(): Promise<AjustePendiente[]> {
       motivo: borrador.motivo,
       solicitado_por: row.solicitado_por,
       created_at: row.created_at,
+    }
+  })
+}
+
+export async function fetchMisAjustes(): Promise<AjusteMio[]> {
+  if (isDevBypassActive()) {
+    return getDevPreviewAjustesData().map((a, i) => ({
+      id: a.id,
+      vin: a.vin,
+      cantidad: a.cantidad,
+      motivo: a.motivo,
+      estado: i % 3 === 0 ? 'aprobado' : i % 3 === 1 ? 'rechazado' : 'pendiente',
+      motivo_rechazo: i % 3 === 1 ? 'VIN no coincide con el inventario físico.' : null,
+      created_at: a.created_at,
+      resuelto_at: i % 3 === 0 ? a.created_at : null,
+    }))
+  }
+
+  const user = await getSessionUser()
+  if (!user) return []
+
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('ajustes_pendientes')
+    .select('id, movimiento_borrador, estado, motivo_rechazo, created_at, resuelto_at')
+    .eq('solicitado_por', user.id)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Failed to load mis ajustes:', error)
+    return []
+  }
+
+  return (data ?? []).map((row) => {
+    const borrador = row.movimiento_borrador as { vin: string; cantidad: number; motivo: string }
+    return {
+      id: row.id,
+      vin: borrador.vin,
+      cantidad: borrador.cantidad,
+      motivo: borrador.motivo,
+      estado: row.estado as AjusteMio['estado'],
+      motivo_rechazo: row.motivo_rechazo,
+      created_at: row.created_at,
+      resuelto_at: row.resuelto_at,
     }
   })
 }

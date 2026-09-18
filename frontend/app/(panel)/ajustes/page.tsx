@@ -3,6 +3,7 @@ import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { AdjustmentForm } from '@/components/ajustes/AdjustmentForm'
 import { AdjustmentApproval } from '@/components/ajustes/AdjustmentApproval'
+import { MisAjustesList } from '@/components/ajustes/MisAjustesList'
 
 export default function AjustesPage() {
   return (
@@ -31,6 +32,7 @@ async function AjustesContent() {
       </div>
       <AdjustmentForm />
       {esSupervisor && <AdjustmentApproval />}
+      {!esSupervisor && <MisAjustesList />}
     </div>
   )
 }

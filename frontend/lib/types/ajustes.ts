@@ -19,3 +19,14 @@ export interface AjustePendiente {
 }
 
 export type AjusteResultado = { ok: true } | { ok: false; error: string }
+
+export interface AjusteMio {
+  id: number
+  vin: string
+  cantidad: number
+  motivo: string
+  estado: 'pendiente' | 'aprobado' | 'rechazado'
+  motivo_rechazo: string | null
+  created_at: string
+  resuelto_at: string | null
+}
