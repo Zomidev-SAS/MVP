@@ -17,6 +17,5 @@ export const VARIANTE_POR_ROL: Record<Role, DashboardVariante> = {
   metalmecanica: 'taller',
   instalacion: 'instalacion',
   auditoria: 'bitacora',
-  ingenieria: 'bitacora',
   lectura: 'basico',
 }

@@ -1,6 +1,6 @@
 export interface MovimientoReciente {
   id: number
-  vin: string
+  codigo_producto: string
   tipo_movimiento: 'entrada' | 'salida_vin' | 'ajuste' | 'reverso'
   cantidad: number
   actor_nombre: string | null

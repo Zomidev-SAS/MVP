@@ -27,7 +27,7 @@ export function UltimosMovimientosTable({
         <TableRow>
           <TableHead>Fecha</TableHead>
           <TableHead>Tipo</TableHead>
-          <TableHead>VIN</TableHead>
+          <TableHead>Producto</TableHead>
           <TableHead className="text-right">Cantidad</TableHead>
           <TableHead>Usuario</TableHead>
         </TableRow>
@@ -44,7 +44,7 @@ export function UltimosMovimientosTable({
             <TableRow key={mov.id}>
               <TableCell>{new Date(mov.created_at).toLocaleString('es-CO')}</TableCell>
               <TableCell>{TIPO_LABELS[mov.tipo_movimiento]}</TableCell>
-              <TableCell>{mov.vin}</TableCell>
+              <TableCell>{mov.codigo_producto}</TableCell>
               <TableCell className="text-right">{formatNumber(mov.cantidad)}</TableCell>
               <TableCell>{mov.actor_nombre ?? '—'}</TableCell>
             </TableRow>

@@ -1,7 +1,6 @@
 import {
   AlertTriangle,
   ArrowLeftRight,
-  Car,
   ClipboardList,
   DollarSign,
   FilePlus,
@@ -14,7 +13,7 @@ import { ROUTE_PERMISSIONS, CAN_VIEW_COSTS } from '@/lib/permissions/roles'
 import { VARIANTE_POR_ROL } from '@/lib/permissions/dashboard-variante'
 import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { getDashboardData } from '@/lib/supabase/get-dashboard-data'
-import { fetchProductosBajoStock } from '@/lib/supabase/inventario-saldos-actions'
+import { fetchProductosBajoStock } from '@/lib/supabase/inventario-actions'
 import { formatCOP, formatNumber } from '@/lib/format'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
@@ -79,7 +78,7 @@ async function DashboardContent() {
           />
         )}
         <KpiCard
-          label="VINs con Stock Bajo"
+          label="Productos con Stock Bajo"
           value={formatNumber(data.stockBajo)}
           icon={AlertTriangle}
         />
@@ -100,10 +99,7 @@ async function DashboardContent() {
 
       {variante === 'comercial' && (
         <QuickLinksCard
-          enlaces={[
-            { label: 'Vehículos (VIN)', href: '/vehiculos', icon: Car },
-            { label: 'Inventario', href: '/inventario', icon: Package },
-          ]}
+          enlaces={[{ label: 'Inventario', href: '/inventario', icon: Package }]}
         />
       )}
 
@@ -119,7 +115,7 @@ async function DashboardContent() {
       {variante === 'taller' && (
         <QuickLinksCard
           enlaces={[
-            { label: 'Vehículos (VIN)', href: '/vehiculos', icon: Car },
+            { label: 'Inventario', href: '/inventario', icon: Package },
             { label: 'Formularios', href: '/formularios', icon: ClipboardList },
             { label: 'Ajustes', href: '/ajustes', icon: SlidersHorizontal },
           ]}
@@ -127,7 +123,7 @@ async function DashboardContent() {
       )}
 
       {variante === 'instalacion' && (
-        <QuickLinksCard enlaces={[{ label: 'Vehículos (VIN)', href: '/vehiculos', icon: Car }]} />
+        <QuickLinksCard enlaces={[{ label: 'Inventario', href: '/inventario', icon: Package }]} />
       )}
 
       {variante !== 'basico' && (
@@ -137,7 +133,7 @@ async function DashboardContent() {
               {variante === 'bitacora'
                 ? 'Bitácora de actividad'
                 : variante === 'instalacion'
-                  ? 'Vehículos con movimiento reciente'
+                  ? 'Productos con movimiento reciente'
                   : 'Últimos movimientos'}
             </CardTitle>
           </CardHeader>

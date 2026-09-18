@@ -26,7 +26,7 @@ export function getDevPreviewDashboardData(limiteMovimientos: number = 10): Dash
 
   const ultimosMovimientos: MovimientoReciente[] = Array.from({ length: limiteMovimientos }, (_, i) => ({
     id: i + 1,
-    vin: `VIN-${(1000 + i).toString()}`,
+    codigo_producto: `${10024 + i}`,
     tipo_movimiento: TIPOS[i % TIPOS.length],
     cantidad: 5 + i,
     actor_nombre: ACTORES[i % ACTORES.length],

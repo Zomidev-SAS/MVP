@@ -10,8 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatNumber } from '@/lib/format'
 
 export interface ProductoBajoStock {
-  codigo: string
-  nombre: string | null
+  codigo_producto: string
+  nombre_producto: string | null
   saldo: number
 }
 
@@ -39,9 +39,9 @@ export function LowStockList({ productos }: { productos: ProductoBajoStock[] }) 
               </TableRow>
             ) : (
               productos.map((p) => (
-                <TableRow key={p.codigo}>
-                  <TableCell className="font-mono text-sm">{p.codigo}</TableCell>
-                  <TableCell>{p.nombre ?? '—'}</TableCell>
+                <TableRow key={p.codigo_producto}>
+                  <TableCell className="font-mono text-sm">{p.codigo_producto}</TableCell>
+                  <TableCell>{p.nombre_producto ?? '—'}</TableCell>
                   <TableCell className="text-right">{formatNumber(p.saldo)}</TableCell>
                 </TableRow>
               ))

@@ -50,7 +50,7 @@ export async function getDashboardData(limiteMovimientos: number = 10): Promise<
         .gte('created_at', sevenDaysAgo.toISOString()),
       supabase
         .from('vista_movimientos_recientes')
-        .select('id, vin, tipo_movimiento, cantidad, actor_nombre, created_at')
+        .select('id, codigo_producto, tipo_movimiento, cantidad, actor_nombre, created_at')
         .order('created_at', { ascending: false })
         .limit(limiteMovimientos),
     ])

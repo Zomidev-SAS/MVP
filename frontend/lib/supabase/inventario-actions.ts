@@ -100,17 +100,14 @@ export async function fetchStockBajoCount(): Promise<number> {
 
 /**
  * Productos con saldo bajo para el widget del Dashboard (rol compras).
- * Devuelve la forma {codigo, nombre, saldo} que ya consume LowStockList —
- * la Task 8 del plan se encarga de renombrar a codigo_producto/nombre_producto
- * en el componente y en el resto del Dashboard.
  */
 export async function fetchProductosBajoStock(
   limite: number
-): Promise<{ codigo: string; nombre: string | null; saldo: number }[]> {
+): Promise<{ codigo_producto: string; nombre_producto: string | null; saldo: number }[]> {
   if (isDevBypassActive()) {
     return Array.from({ length: Math.min(limite, 5) }, (_, i) => ({
-      codigo: `${10024 + i}`,
-      nombre: `Producto de ejemplo ${i + 1}`,
+      codigo_producto: `${10024 + i}`,
+      nombre_producto: `Producto de ejemplo ${i + 1}`,
       saldo: i + 1,
     }))
   }
@@ -131,8 +128,8 @@ export async function fetchProductosBajoStock(
   }
 
   return (data ?? []).map((row) => ({
-    codigo: row.codigo_producto,
-    nombre: row.nombre_producto,
+    codigo_producto: row.codigo_producto,
+    nombre_producto: row.nombre_producto,
     saldo: row.saldo,
   }))
 }
