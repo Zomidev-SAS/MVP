@@ -1,7 +1,6 @@
 'use client'
 
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
-import Papa from 'papaparse'
 import { toast } from 'sonner'
 import { UploadCloud } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -14,43 +13,25 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { entradaSchema } from '@/lib/types/entradas'
-import { crearEntradasMasivas } from '@/lib/supabase/importar-actions'
-import type { FilaCsv } from '@/lib/types/importar'
+import { importarCsv } from '@/lib/supabase/importar-actions'
+import type { ImportarResultado } from '@/lib/types/importar'
 
 export function CsvImportForm() {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [filas, setFilas] = useState<FilaCsv[]>([])
+  const [archivo, setArchivo] = useState<File | null>(null)
   const [enviando, setEnviando] = useState(false)
-  const [nombreArchivo, setNombreArchivo] = useState<string | null>(null)
   const [arrastrando, setArrastrando] = useState(false)
+  const [resultado, setResultado] = useState<ImportarResultado | null>(null)
 
-  function procesarArchivo(file: File) {
-    setNombreArchivo(file.name)
-
-    Papa.parse<Record<string, string>>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const filasProcesadas: FilaCsv[] = results.data.map((valores, i) => {
-          const parsed = entradaSchema.safeParse(valores)
-          return {
-            numeroFila: i + 1,
-            valores,
-            valida: parsed.success,
-            datos: parsed.success ? parsed.data : undefined,
-            errores: parsed.success ? [] : parsed.error.issues.map((issue) => issue.message),
-          }
-        })
-        setFilas(filasProcesadas)
-      },
-    })
+  function seleccionarArchivo(file: File) {
+    setArchivo(file)
+    setResultado(null)
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
-    procesarArchivo(file)
+    seleccionarArchivo(file)
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
@@ -58,23 +39,31 @@ export function CsvImportForm() {
     setArrastrando(false)
     const file = event.dataTransfer.files?.[0]
     if (!file) return
-    procesarArchivo(file)
+    seleccionarArchivo(file)
   }
 
-  const filasValidas = filas.filter((f) => f.valida && f.datos)
-
   async function handleImportar() {
+    if (!archivo) return
+
     setEnviando(true)
-    const datos = filasValidas.map((f) => f.datos!)
-    const resultado = await crearEntradasMasivas(datos)
+    const formData = new FormData()
+    formData.append('file', archivo)
+
+    const res = await importarCsv(formData)
     setEnviando(false)
-    if (resultado.ok) {
-      toast.success(`${resultado.insertados} entradas importadas.`)
-      setFilas([])
-      setNombreArchivo(null)
+    setResultado(res)
+
+    if (res.abortado) {
+      toast.error(res.motivo_abortado ?? 'La importación fue abortada.')
+      return
+    }
+
+    if (res.exitosas > 0) {
+      toast.success(`${res.exitosas} filas importadas correctamente.`)
+      setArchivo(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
-    } else {
-      toast.error(resultado.error)
+    } else if (res.errores.length > 0) {
+      toast.error('No se importó ninguna fila. Revisa los errores.')
     }
   }
 
@@ -82,8 +71,8 @@ export function CsvImportForm() {
     <div className="space-y-6">
       <div className="space-y-2">
         <p className="text-sm text-muted-foreground">
-          El archivo debe tener las columnas: vin, marca, categoria, cantidad, valor_unitario,
-          ubicacion, notas.
+          El archivo debe tener las columnas: codigo_producto, cantidad, bodega, valor_unitario
+          (bodega y valor_unitario son opcionales).
         </p>
         <div
           role="button"
@@ -109,9 +98,7 @@ export function CsvImportForm() {
             <span className="text-primary">Subir Archivo</span>
           </p>
           <p className="text-xs text-muted-foreground">Solo archivos .csv</p>
-          {nombreArchivo && (
-            <p className="mt-2 text-sm font-medium text-foreground">{nombreArchivo}</p>
-          )}
+          {archivo && <p className="mt-2 text-sm font-medium text-foreground">{archivo.name}</p>}
           <input
             ref={fileInputRef}
             type="file"
@@ -122,42 +109,45 @@ export function CsvImportForm() {
         </div>
       </div>
 
-      {filas.length > 0 && (
-        <>
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fila</TableHead>
-                  <TableHead>VIN</TableHead>
-                  <TableHead>Estado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filas.map((fila) => (
-                  <TableRow key={fila.numeroFila}>
-                    <TableCell>{fila.numeroFila}</TableCell>
-                    <TableCell>{fila.valores.vin ?? '—'}</TableCell>
-                    <TableCell>
-                      {fila.valida ? (
-                        <span className="text-green-600">✓ Válida</span>
-                      ) : (
-                        <span className="text-red-500">✗ {fila.errores.join(', ')}</span>
-                      )}
-                    </TableCell>
+      {archivo && (
+        <Button type="button" onClick={handleImportar} disabled={enviando}>
+          {enviando ? 'Importando...' : 'Importar archivo'}
+        </Button>
+      )}
+
+      {resultado && (
+        <div className="space-y-3">
+          {resultado.abortado ? (
+            <p className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              Importación abortada. {resultado.motivo_abortado}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {resultado.exitosas} filas importadas correctamente.
+            </p>
+          )}
+
+          {resultado.errores.length > 0 && (
+            <div className="overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fila</TableHead>
+                    <TableHead>Motivo</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <Button
-            type="button"
-            onClick={handleImportar}
-            disabled={filasValidas.length === 0 || enviando}
-          >
-            {enviando ? 'Importando...' : `Importar ${filasValidas.length} filas válidas`}
-          </Button>
-        </>
+                </TableHeader>
+                <TableBody>
+                  {resultado.errores.map((err, i) => (
+                    <TableRow key={`${err.fila}-${i}`}>
+                      <TableCell>{err.fila}</TableCell>
+                      <TableCell className="text-red-500">{err.motivo}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

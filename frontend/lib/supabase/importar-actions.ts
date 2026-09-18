@@ -1,49 +1,29 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getSessionUser } from '@/lib/supabase/get-session-user'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
-import { entradaSchema, type EntradaInput } from '@/lib/types/entradas'
 import type { ImportarResultado } from '@/lib/types/importar'
 
-export async function crearEntradasMasivas(filas: EntradaInput[]): Promise<ImportarResultado> {
-  const validas = filas.filter((fila) => entradaSchema.safeParse(fila).success)
-
-  if (validas.length === 0) {
-    return { ok: false, error: 'No hay filas válidas para importar.' }
-  }
-
+export async function importarCsv(formData: FormData): Promise<ImportarResultado> {
   if (isDevBypassActive()) {
     await new Promise((resolve) => setTimeout(resolve, 800))
-    return { ok: true, insertados: validas.length }
-  }
-
-  const user = await getSessionUser()
-  if (!user) {
-    return { ok: false, error: 'Sesión expirada. Vuelve a iniciar sesión.' }
+    return { exitosas: 12, errores: [], abortado: false }
   }
 
   const supabase = await createClient()
 
-  const filasParaInsertar = validas.map((fila) => ({
-    vin: fila.vin,
-    marca: fila.marca,
-    categoria: fila.categoria,
-    cantidad: fila.cantidad,
-    valor_unitario: fila.valor_unitario ?? null,
-    ubicacion: fila.ubicacion,
-    motivo: fila.notas ?? null,
-    tipo_movimiento: 'entrada' as const,
-    estado: 'aplicado' as const,
-    actor_id: user.id,
-  }))
-
-  const { error } = await supabase.from('movimientos_inventario').insert(filasParaInsertar)
+  const { data, error } = await supabase.functions.invoke('importar-inventario-csv', {
+    body: formData,
+  })
 
   if (error) {
-    console.error('Failed to insert entradas masivas:', error)
-    return { ok: false, error: 'No se pudo importar. Intenta de nuevo.' }
+    console.error('Failed to invoke importar-inventario-csv:', error)
+    return {
+      exitosas: 0,
+      errores: [{ fila: 0, motivo: 'No se pudo importar. Intenta de nuevo.' }],
+      abortado: true,
+    }
   }
 
-  return { ok: true, insertados: validas.length }
+  return data as ImportarResultado
 }
