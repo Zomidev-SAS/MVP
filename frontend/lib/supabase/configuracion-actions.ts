@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getSessionUser } from '@/lib/supabase/get-session-user'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import {
   configuracionSchema,
@@ -23,13 +22,13 @@ export async function fetchConfiguracion(): Promise<Configuracion> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('configuracion')
+    .from('config_app')
     .select('bloquear_sin_stock, umbral_stock_bajo')
     .eq('id', 1)
     .maybeSingle()
 
   if (error || !data) {
-    console.error('Failed to load configuracion:', error)
+    console.error('Failed to load config_app:', error)
     return CONFIGURACION_DEFAULT
   }
 
@@ -49,21 +48,18 @@ export async function actualizarConfiguracion(
     return { ok: true }
   }
 
-  const user = await getSessionUser()
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('configuracion')
+    .from('config_app')
     .update({
       bloquear_sin_stock: parsed.data.bloquear_sin_stock,
       umbral_stock_bajo: parsed.data.umbral_stock_bajo,
-      updated_at: new Date().toISOString(),
-      updated_by: user?.id ?? null,
     })
     .eq('id', 1)
 
   if (error) {
-    console.error('Failed to update configuracion:', error)
+    console.error('Failed to update config_app:', error)
     return { ok: false, error: 'No se pudo guardar la configuración. Intenta de nuevo.' }
   }
 
