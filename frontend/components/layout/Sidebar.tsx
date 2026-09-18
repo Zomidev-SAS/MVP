@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronDown, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { NAV_ITEMS, ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { useLogout } from '@/lib/hooks/use-logout'
 import { cn, getInitials } from '@/lib/utils'
@@ -70,7 +70,6 @@ export function Sidebar({
             </p>
             <p className="text-xs capitalize text-sidebar-foreground/70">{profile.rol}</p>
           </div>
-          <ChevronDown className="h-4 w-4 shrink-0 text-sidebar-foreground/70" />
         </div>
         <button
           type="button"
