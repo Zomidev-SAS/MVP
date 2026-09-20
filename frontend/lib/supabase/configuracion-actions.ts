@@ -1,7 +1,9 @@
 'use server'
 
+import { requireRole } from '@/lib/auth/require-role'
 import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
+import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import {
   configuracionSchema,
   type Configuracion,
@@ -46,6 +48,11 @@ export async function actualizarConfiguracion(
   if (isDevBypassActive()) {
     await new Promise((resolve) => setTimeout(resolve, 400))
     return { ok: true }
+  }
+
+  const auth = await requireRole(ROUTE_PERMISSIONS.configuracion)
+  if (!auth.ok) {
+    return { ok: false, error: auth.error }
   }
 
   const supabase = await createClient()

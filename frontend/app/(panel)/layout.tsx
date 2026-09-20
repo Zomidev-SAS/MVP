@@ -25,6 +25,10 @@ export default async function PanelLayout({
     )
   }
 
+  if (!result.profile.activo) {
+    redirect('/login?error=cuenta-inactiva')
+  }
+
   const notificaciones = await fetchNotificaciones(result.profile.rol).catch(() => ({
     alertas: [],
     mensajes: [],

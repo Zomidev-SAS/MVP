@@ -38,7 +38,8 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   // pero mantenemos la bitácora completa reservada a supervisor/auditoria
   // (el rol "ingenieria" que la usaba ya no existe en el schema real).
   movimientos: ['supervisor', 'auditoria'] as const,
-  formularios: ALL_ROLES,
+  // Alineado a RLS formularios_select_panel (023): lectura no ve PII de formularios.
+  formularios: ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[],
   // Alineado a la policy real mov_insert_roles_autorizados.
   entradas: ['supervisor', 'metalmecanica', 'produccion', 'instalacion', 'compras'] as const,
   // Alineado a la policy real ajustes_insert_roles.

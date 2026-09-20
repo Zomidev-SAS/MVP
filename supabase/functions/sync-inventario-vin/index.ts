@@ -1,12 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
+import { isValidServiceRoleRequest } from '../_shared/internal-auth.ts'
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 })
   }
 
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader) {
+  if (!isValidServiceRoleRequest(req)) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 

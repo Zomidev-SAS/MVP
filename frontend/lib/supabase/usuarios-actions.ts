@@ -1,7 +1,9 @@
 'use server'
 
+import { requireRole } from '@/lib/auth/require-role'
 import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
+import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { getDevPreviewUsuariosData } from '@/lib/dev/preview-usuarios-data'
 import type { Role } from '@/lib/types/database'
 import { crearUsuarioSchema, type CrearUsuarioInput, type UsuarioListado, type UsuarioResultado } from '@/lib/types/usuarios'
@@ -10,6 +12,9 @@ export async function fetchUsuarios(): Promise<UsuarioListado[]> {
   if (isDevBypassActive()) {
     return getDevPreviewUsuariosData()
   }
+
+  const auth = await requireRole(ROUTE_PERMISSIONS.usuarios)
+  if (!auth.ok) return []
 
   const supabase = await createClient()
 
@@ -30,6 +35,11 @@ export async function actualizarRolUsuario(id: string, rol: Role): Promise<Usuar
   if (isDevBypassActive()) {
     await new Promise((resolve) => setTimeout(resolve, 400))
     return { ok: true }
+  }
+
+  const auth = await requireRole(ROUTE_PERMISSIONS.usuarios)
+  if (!auth.ok) {
+    return { ok: false, error: auth.error }
   }
 
   const supabase = await createClient()
@@ -53,6 +63,11 @@ export async function actualizarEstadoUsuario(
     return { ok: true }
   }
 
+  const auth = await requireRole(ROUTE_PERMISSIONS.usuarios)
+  if (!auth.ok) {
+    return { ok: false, error: auth.error }
+  }
+
   const supabase = await createClient()
 
   if (!activo) {
@@ -66,13 +81,12 @@ export async function actualizarEstadoUsuario(
     return { ok: true }
   }
 
-  // Reactivar SÍ sigue siendo un update directo — no hay Edge Function de
-  // "reactivar" en el schema real, y RLS (profiles_update_supervisor)
-  // permite que el supervisor lo haga directo.
-  const { error } = await supabase.from('profiles').update({ activo: true }).eq('id', id)
+  const { error } = await supabase.functions.invoke('reactivar-usuario', {
+    body: { user_id: id },
+  })
 
   if (error) {
-    console.error('Failed to reactivate usuario:', error)
+    console.error('Failed to invoke reactivar-usuario:', error)
     return { ok: false, error: 'No se pudo reactivar el usuario. Intenta de nuevo.' }
   }
 
@@ -88,6 +102,11 @@ export async function crearUsuario(datos: CrearUsuarioInput): Promise<UsuarioRes
   if (isDevBypassActive()) {
     await new Promise((resolve) => setTimeout(resolve, 600))
     return { ok: true }
+  }
+
+  const auth = await requireRole(ROUTE_PERMISSIONS.usuarios)
+  if (!auth.ok) {
+    return { ok: false, error: auth.error }
   }
 
   const supabase = await createClient()

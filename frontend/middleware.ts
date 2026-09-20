@@ -96,7 +96,10 @@ export async function middleware(request: NextRequest) {
           return NextResponse.redirect(url)
         }
       } catch {
-        // Supabase temporalmente inaccesible — deja pasar; RoleGuard en la página actúa como respaldo.
+        const url = request.nextUrl.clone()
+        url.pathname = '/login'
+        url.searchParams.set('error', 'servicio-no-disponible')
+        return NextResponse.redirect(url)
       }
     }
   }

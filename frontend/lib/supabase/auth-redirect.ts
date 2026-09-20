@@ -1,3 +1,5 @@
+import { safeRedirectPath } from '@/lib/auth/safe-redirect-path'
+
 /** URL de callback OAuth/recuperación — debe estar en Supabase Auth → Redirect URLs. */
 export function getAuthCallbackUrl(nextPath = '/establecer-password'): string {
   const origin =
@@ -5,5 +7,6 @@ export function getAuthCallbackUrl(nextPath = '/establecer-password'): string {
       ? window.location.origin
       : process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
 
-  return `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`
+  const safeNext = safeRedirectPath(nextPath)
+  return `${origin}/auth/callback?next=${encodeURIComponent(safeNext)}`
 }

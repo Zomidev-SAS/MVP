@@ -1,8 +1,10 @@
 'use server'
 
+import { requireRole } from '@/lib/auth/require-role'
 import { createClient } from '@/lib/supabase/server'
 import { getSessionUser } from '@/lib/supabase/get-session-user'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
+import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { getDevPreviewAjustesData } from '@/lib/dev/preview-ajustes-data'
 import {
   solicitarAjusteSchema,
@@ -23,9 +25,9 @@ export async function solicitarAjuste(datos: SolicitarAjusteInput): Promise<Ajus
     return { ok: true }
   }
 
-  const user = await getSessionUser()
-  if (!user) {
-    return { ok: false, error: 'Sesión expirada. Vuelve a iniciar sesión.' }
+  const auth = await requireRole(ROUTE_PERMISSIONS.ajustes)
+  if (!auth.ok) {
+    return { ok: false, error: auth.error }
   }
 
   const supabase = await createClient()
@@ -38,7 +40,7 @@ export async function solicitarAjuste(datos: SolicitarAjusteInput): Promise<Ajus
       valor_unitario: parsed.data.valor_unitario ?? null,
       motivo: parsed.data.motivo,
     },
-    solicitado_por: user.id,
+    solicitado_por: auth.user.id,
     estado: 'pendiente',
   })
 
@@ -61,6 +63,9 @@ export async function fetchAjustesPendientes(): Promise<AjustePendiente[]> {
   if (isDevBypassActive()) {
     return getDevPreviewAjustesData()
   }
+
+  const auth = await requireRole(['supervisor'])
+  if (!auth.ok) return []
 
   const supabase = await createClient()
 
@@ -141,6 +146,9 @@ export async function fetchAjustesPendientesCount(): Promise<number> {
     return getDevPreviewAjustesData().length
   }
 
+  const auth = await requireRole(['supervisor'])
+  if (!auth.ok) return 0
+
   const supabase = await createClient()
 
   const { count, error } = await supabase
@@ -162,6 +170,11 @@ export async function aprobarAjuste(id: number): Promise<AjusteResultado> {
     return { ok: true }
   }
 
+  const auth = await requireRole(['supervisor'])
+  if (!auth.ok) {
+    return { ok: false, error: auth.error }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('resolver_ajuste', {
@@ -181,6 +194,11 @@ export async function rechazarAjuste(id: number, motivo: string): Promise<Ajuste
   if (isDevBypassActive()) {
     await new Promise((resolve) => setTimeout(resolve, 600))
     return { ok: true }
+  }
+
+  const auth = await requireRole(['supervisor'])
+  if (!auth.ok) {
+    return { ok: false, error: auth.error }
   }
 
   const supabase = await createClient()

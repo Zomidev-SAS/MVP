@@ -1,7 +1,9 @@
 'use server'
 
+import { requireRole } from '@/lib/auth/require-role'
 import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
+import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { getDevPreviewFormulariosData } from '@/lib/dev/preview-formularios-data'
 import { filtrarYOrdenarFormularios, normalizarFormularios } from '@/lib/formularios/normalize'
 import { extraerOpcionesFiltro } from '@/lib/formularios/opciones-filtro'
@@ -16,6 +18,17 @@ export async function fetchFormularios(
 ): Promise<FormulariosPagina> {
   if (isDevBypassActive()) {
     return fetchFormulariosPreview(filtros, pagina)
+  }
+
+  const auth = await requireRole(ROUTE_PERMISSIONS.formularios)
+  if (!auth.ok) {
+    return {
+      filas: [],
+      total: 0,
+      totalDb: 0,
+      opcionesFiltro: [],
+      error: auth.error,
+    }
   }
 
   const supabase = await createClient()

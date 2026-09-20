@@ -1,8 +1,9 @@
 'use server'
 
+import { requireRole } from '@/lib/auth/require-role'
 import { createClient } from '@/lib/supabase/server'
-import { getSessionUser } from '@/lib/supabase/get-session-user'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
+import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { entradaSchema, type EntradaInput, type EntradaResultado } from '@/lib/types/entradas'
 
 export async function crearEntrada(datos: EntradaInput): Promise<EntradaResultado> {
@@ -16,9 +17,9 @@ export async function crearEntrada(datos: EntradaInput): Promise<EntradaResultad
     return { ok: true }
   }
 
-  const user = await getSessionUser()
-  if (!user) {
-    return { ok: false, error: 'Sesión expirada. Vuelve a iniciar sesión.' }
+  const auth = await requireRole(ROUTE_PERMISSIONS.entradas)
+  if (!auth.ok) {
+    return { ok: false, error: auth.error }
   }
 
   const supabase = await createClient()
@@ -31,7 +32,7 @@ export async function crearEntrada(datos: EntradaInput): Promise<EntradaResultad
     valor_unitario: parsed.data.valor_unitario ?? null,
     bodega: parsed.data.bodega,
     motivo: parsed.data.motivo ?? null,
-    actor_id: user.id,
+    actor_id: auth.user.id,
   })
 
   if (error) {
