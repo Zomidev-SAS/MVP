@@ -17,9 +17,12 @@ Proyecto unificado con **frontend** (Next.js) y **backend** (Supabase: migracion
 
 | Rama | Contenido |
 |------|-----------|
-| `main` | Frontend + backend integrados (rama de trabajo principal) |
-| `frontend` | Solo panel Next.js |
+| `main` | Desarrollo diario (frontend + backend integrados) |
+| **`production`** | **Despliegue VPS** (`carrera.zomidev.com`) — ver [docs/DEPLOY-VPS.md](docs/DEPLOY-VPS.md) |
+| `frontend` | Solo panel Next.js (legacy) |
 | `master` | Solo migraciones Supabase originales |
+
+Flujo: trabajar en `main` → merge a `production` → en el VPS `./docker/update.sh`.
 
 ## Requisitos
 
