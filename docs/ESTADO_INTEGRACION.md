@@ -1,54 +1,66 @@
-# Estado de integración — main (frontend + backend)
+# Estado de integración — main (frontend + backend + vehiculosapp)
 
-**Fecha:** 2026-09-10
+**Fecha:** 2026-09-19
 
 ## Completado en `main`
 
-- Rama `main` creada uniendo `frontend` + `master` (historias no relacionadas).
-- Migraciones Supabase del backend (000–004) más:
-  - `005_create_eventos_calendario.sql` — tabla y RLS del calendario personal
-  - `006_enable_rls.sql` — RLS en `profiles`, `movimientos_inventario`, `ajustes_pendientes` + grants en vistas
-- `supabase/seed.sql` — usuarios y movimientos de prueba para desarrollo local
-- Edge Functions:
-  - `aprobar-ajuste` — inserta movimiento y marca ajuste como aprobado
-  - `crear-usuario` — Auth admin + upsert en `profiles`
-- README raíz con pasos para `supabase start` + conectar frontend
+- Frontend adaptado al schema real (`productos` + `bodegas`, 8 roles).
+- Backend Supabase: migraciones `000`–`020`, 5 Edge Functions, RPC `resolver_ajuste`.
+- Panel: dashboard, inventario (con filtro por bodega), movimientos, entradas, ajustes, importar CSV, usuarios, configuración, formularios, calendario.
+- Umbral de stock bajo leído desde `config_app.umbral_stock_bajo`.
+- Seed local: usuarios de prueba + ~800 productos + saldos de apertura + formularios de ejemplo.
 
-## Cómo probar localmente
+## Integración con vehiculosapp (app móvil de registro)
 
-1. `supabase start` (o `supabase db reset` para migraciones + seed)
-2. `supabase functions serve` (en otra terminal)
-3. Configurar `frontend/.env.local` con URL y anon key locales
-4. Desactivar `DEV_SKIP_AUTH`
-5. `cd frontend && npm run dev`
-6. Login: `supervisor@test.local` / `test1234`
+La app móvil **no está en este repo**. Se integra vía Supabase:
+
+| Pieza | Qué hace |
+|-------|----------|
+| Tabla `formularios` | La app escribe JSON con `data.datosGenerales.chasis` (código de producto) |
+| Trigger `on_formulario_ingreso` | Al insertar `tipo = 'ingreso'`, llama `sync-inventario-vin` |
+| Edge `sync-inventario-vin` | Crea movimiento `salida_vin` en `movimientos_inventario` |
+| Edge `consultar-saldo-vin` | Consulta saldo desde la app móvil |
+| Panel `/formularios` | Solo lectura de lo que registró la app |
+
+**Pendiente en cloud:** configurar el trigger con la `service_role_key` real y URL del proyecto (no `host.docker.internal`).
+
+## Cómo probar localmente (sin bypass)
+
+```bash
+# Terminal 1 — base de datos + datos reales
+supabase start
+supabase db reset
+
+# Terminal 2 — Edge Functions
+supabase functions serve
+
+# Frontend: quitar DEV_SKIP_AUTH de .env.local y usar keys de `supabase status`
+cd frontend && npm run dev
+```
+
+Login: `supervisor@test.local` / `test1234`
+
+## Cómo probar contra Supabase Cloud
+
+Tu `.env.local` ya apunta a `https://zkaeptnijqntuefggfru.supabase.co`. Para que todo se muestre:
+
+1. `supabase link --project-ref zkaeptnijqntuefggfru`
+2. `supabase db push` (aplica migraciones 018–020 si faltan)
+3. Cargar catálogo y movimientos (`tests/01_productos_reales.sql`, `02_apertura...`) en el SQL Editor
+4. `supabase functions deploy` + secrets (`MI_SERVICE_ROLE_KEY`, `MI_ANON_KEY`, `SYSTEM_ACTOR_ID`)
+5. Desactivar `DEV_SKIP_AUTH` en `.env.local`
+6. Crear usuarios reales o usar invitación vía panel
 
 ## Pendiente / por verificar
 
 | Área | Notas |
 |------|-------|
-| Supabase Cloud | Crear proyecto remoto, `supabase link`, `db push`, deploy de functions |
-| Realtime | `RealtimeRefresher` en dashboard — confirmar suscripción a cambios |
-| Importar CSV | Probar insert masivo con RLS activo |
-| Ajustes | Flujo completo solicitar → aprobar con Edge Function en local |
-| Usuarios | Crear usuario desde panel con function `crear-usuario` |
-| Calendario | CRUD contra `eventos_calendario` sin bypass |
-| Tests automatizados | Solo hay SQL de prueba en `supabase/tests/` |
-| Deploy VPS (Sprint 8) | Sin empezar |
+| Cloud data | Sin productos/movimientos cargados, inventario y dashboard quedan vacíos |
+| Trigger sync | Placeholder de service role en migración 015 — actualizar en cloud |
+| vehiculosapp | Confirmar que sigue enviando `chasis` como `codigo_producto` |
+| Auth producción | Signups, Site URL, sesión 8h (B10 del PDF backend) |
+| Deploy VPS | Sin empezar |
 
-## Bloqueos resueltos respecto a `ESTADO_FRONTEND.md`
+## Carpeta local `ArchivosAle/`
 
-Lo que antes estaba bloqueado en backend y ahora existe en `main`:
-
-1. Tabla `eventos_calendario` + RLS
-2. Edge Function `aprobar-ajuste`
-3. Edge Function `crear-usuario`
-
-Falta **validar en runtime** cada flujo con Supabase local/cloud (no solo tener el código).
-
-## Próximos pasos sugeridos
-
-1. Correr `supabase db reset` y confirmar que migraciones + seed pasan sin error
-2. Conectar frontend sin bypass y recorrer cada módulo del panel
-3. Anotar errores de RLS o permisos y ajustar `006_enable_rls.sql` si hace falta
-4. Cuando exista proyecto cloud: documentar URL/keys de staging en `.env.example` (sin commitear secretos)
+PDFs de referencia (cronograma, faltantes frontend/backend). Está en `.gitignore` — no se sube a GitHub.

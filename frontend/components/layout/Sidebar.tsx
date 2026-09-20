@@ -60,7 +60,13 @@ export function Sidebar({
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
-        <div className="flex items-center gap-2 px-2 py-2">
+        <Link
+          href="/cuenta"
+          className={cn(
+            'flex items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-sidebar-accent',
+            pathname === '/cuenta' && 'bg-sidebar-accent'
+          )}
+        >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-medium text-sidebar-foreground">
             {getInitials(profile.nombre)}
           </div>
@@ -70,7 +76,7 @@ export function Sidebar({
             </p>
             <p className="text-xs capitalize text-sidebar-foreground/70">{profile.rol}</p>
           </div>
-        </div>
+        </Link>
         <button
           type="button"
           onClick={logout}

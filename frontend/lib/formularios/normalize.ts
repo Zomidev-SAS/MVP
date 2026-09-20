@@ -17,7 +17,7 @@ export function normalizarFormulario(row: Record<string, unknown>): FormularioLi
   const rawData = extraerRawData(row)
   const data = aplanarFilaFormulario(row)
   const tipo =
-    pickPorClaves(dbColumns, ['tipo_formulario']) ??
+    pickPorClaves(dbColumns, ['tipo_formulario', 'tipo']) ??
     extraerTipo(rawData) ??
     extraerTipo(data) ??
     inferirTipo(rawData, dbColumns)
@@ -25,7 +25,6 @@ export function normalizarFormulario(row: Record<string, unknown>): FormularioLi
     valorAString(row.created_at) ??
     valorAString(dbColumns.saved_at) ??
     valorAString(dbColumns.created_at)
-
   return { id, tipo, data, rawData, dbColumns, created_at }
 }
 

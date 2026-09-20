@@ -2,8 +2,10 @@
 .idea/
 *.local
 
-# Datos locales (Excel de inventario, etc.) — no subir a git
+# Datos locales (Excel de inventario, PDFs de referencia, etc.) — no subir a git
 archivos/
+Archivos/
+ArchivosAle/
 
 # Supabase local
 supabase/.branches

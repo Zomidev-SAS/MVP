@@ -92,8 +92,9 @@ export function FormulariosTable() {
           {errorMsg}
           {totalDb === 0 && (
             <p className="mt-1 text-xs opacity-90">
-              Si hay datos en Supabase, corré el SQL de{' '}
-              <code className="rounded bg-black/10 px-1">supabase/sql/formularios-rls.sql</code>
+              Si hay datos en Supabase, aplica la migración{' '}
+              <code className="rounded bg-black/10 px-1">019_formularios_rls.sql</code>{' '}
+              o ejecuta <code className="rounded bg-black/10 px-1">supabase db push</code>
             </p>
           )}
         </div>

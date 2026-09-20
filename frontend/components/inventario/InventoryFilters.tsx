@@ -7,6 +7,18 @@ import type { InventarioFiltros } from '@/lib/types/inventario'
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs'
 
+const BODEGAS_REALES = [
+  'Sin Asignar',
+  'ALMACEN NIVEL 1',
+  'ALMACEN NIVEL 2',
+  'ALMACEN NIVEL 3',
+  'METALMECANICA',
+  'PRODUCTO TERMINADO',
+  'MADERAS',
+  'DESCANSABRAZOS',
+  'AUDIO Y VIDEO',
+]
+
 const CATEGORIAS_REALES = [
   'TORNILLERIA',
   'Productos',
@@ -44,6 +56,23 @@ export function InventoryFilters({
           onChange={(e) => onChange({ ...filtros, busqueda: e.target.value })}
           placeholder="Código o nombre de producto..."
         />
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="filtro-bodega">Bodega</Label>
+        <select
+          id="filtro-bodega"
+          value={filtros.bodega}
+          onChange={(e) => onChange({ ...filtros, bodega: e.target.value })}
+          className={SELECT_CLASS}
+        >
+          <option value="">Todas (total)</option>
+          {BODEGAS_REALES.map((bodega) => (
+            <option key={bodega} value={bodega}>
+              {bodega}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="space-y-1">

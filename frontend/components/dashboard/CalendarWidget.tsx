@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/form'
 import { crearEventoSchema, type CrearEventoInput, type CalendarEvento } from '@/lib/types/calendario'
 import { fetchEventos, crearEvento, eliminarEvento } from '@/lib/supabase/calendario-actions'
+import { NotesPanel } from '@/components/dashboard/NotesPanel'
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -127,7 +128,7 @@ export function CalendarWidget() {
           Agregar evento
         </Button>
       </CardHeader>
-      <CardContent className="grid gap-6 md:grid-cols-2">
+      <CardContent className="grid gap-6 lg:grid-cols-3">
         <div>
           <div className="mb-2 flex items-center justify-between">
             <Button type="button" variant="outline" size="sm" onClick={irMesAnterior}>
@@ -207,6 +208,7 @@ export function CalendarWidget() {
             </ul>
           )}
         </div>
+        <NotesPanel />
       </CardContent>
 
       <Dialog open={dialogoAbierto} onOpenChange={setDialogoAbierto}>

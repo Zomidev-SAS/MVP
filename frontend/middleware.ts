@@ -43,20 +43,30 @@ export async function middleware(request: NextRequest) {
   }
 
   const isLoginPage = request.nextUrl.pathname === '/login'
-  // El enlace de invitación establece la sesión del lado del navegador (token
-  // en la URL) — el middleware todavía no ve cookie de sesión en esa primera
-  // carga, así que esta ruta debe ser pública igual que /login.
   const isEstablecerPasswordPage = request.nextUrl.pathname === '/establecer-password'
+  const isRecuperarPasswordPage = request.nextUrl.pathname === '/recuperar-password'
+  const isAuthCallback = request.nextUrl.pathname.startsWith('/auth/callback')
+  const isPublicAuthPage =
+    isLoginPage || isEstablecerPasswordPage || isRecuperarPasswordPage || isAuthCallback
 
-  if (!user && !isLoginPage && !isEstablecerPasswordPage) {
+  if (!user && !isPublicAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && isLoginPage) {
+  if (user && (isLoginPage || isRecuperarPasswordPage)) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('rol')
+        .eq('id', user.id)
+        .single<{ rol: Role }>()
+      url.pathname = profile?.rol === 'lectura' ? '/visualizacion' : '/'
+    } catch {
+      url.pathname = '/'
+    }
     return NextResponse.redirect(url)
   }
 
@@ -64,19 +74,29 @@ export async function middleware(request: NextRequest) {
     const routeKey = getRouteKeyForPath(request.nextUrl.pathname)
 
     if (routeKey) {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('rol, activo')
-        .eq('id', user.id)
-        .single<{ rol: Role; activo: boolean }>()
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('rol, activo')
+          .eq('id', user.id)
+          .single<{ rol: Role; activo: boolean }>()
 
-      const permitido =
-        !error && !!profile && profile.activo && ROUTE_PERMISSIONS[routeKey].includes(profile.rol)
+        const permitido =
+          !error && !!profile && profile.activo && ROUTE_PERMISSIONS[routeKey].includes(profile.rol)
 
-      if (!permitido) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/acceso-denegado'
-        return NextResponse.redirect(url)
+        if (profile && profile.rol === 'lectura' && routeKey === 'dashboard') {
+          const url = request.nextUrl.clone()
+          url.pathname = '/visualizacion'
+          return NextResponse.redirect(url)
+        }
+
+        if (!permitido) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/acceso-denegado'
+          return NextResponse.redirect(url)
+        }
+      } catch {
+        // Supabase temporalmente inaccesible — deja pasar; RoleGuard en la página actúa como respaldo.
       }
     }
   }

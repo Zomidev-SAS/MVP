@@ -6,7 +6,7 @@ import type { MovimientoDetalle } from '@/lib/types/movimientos'
 
 const TIPO_LABELS: Record<MovimientoDetalle['tipo_movimiento'], string> = {
   entrada: 'Entrada',
-  salida_vin: 'Salida',
+  salida_vin: 'Salida (app móvil)',
   ajuste: 'Ajuste',
   reverso: 'Reverso',
 }

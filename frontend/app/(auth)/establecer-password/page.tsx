@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordRequirementsHint } from '@/components/auth/PasswordRequirementsHint'
+import { isPasswordValid } from '@/lib/auth/password-policy'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function EstablecerPasswordPage() {
@@ -15,25 +17,51 @@ export default function EstablecerPasswordPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [listo, setListo] = useState(false)
+  const [esRecuperacion, setEsRecuperacion] = useState(false)
+  const [verificando, setVerificando] = useState(true)
 
   useEffect(() => {
-    // El enlace de invitación trae el token en la URL; supabase-js lo procesa
-    // automáticamente al cargar y establece la sesión en el navegador.
     const supabase = createClient()
-    supabase.auth.getSession().then(({ data }) => {
-      setListo(!!data.session)
-      if (!data.session) {
-        setError('El enlace no es válido o ya expiró. Pide que te reenvíen la invitación.')
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN')) {
+        setListo(true)
+        setEsRecuperacion(event === 'PASSWORD_RECOVERY')
+        setError(null)
+        setVerificando(false)
       }
     })
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        setListo(true)
+        setVerificando(false)
+        return
+      }
+
+      window.setTimeout(() => {
+        supabase.auth.getSession().then(({ data: retry }) => {
+          setVerificando(false)
+          if (!retry.session) {
+            setError(
+              'El enlace no es válido o ya expiró. Solicita uno nuevo desde "¿Olvidaste tu contraseña?".'
+            )
+          }
+        })
+      }, 800)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
 
-    if (password.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres.')
+    if (!isPasswordValid(password)) {
+      setError('La contraseña no cumple los requisitos de seguridad.')
       return
     }
     if (password !== confirmar) {
@@ -55,15 +83,17 @@ export default function EstablecerPasswordPage() {
     router.push('/login')
   }
 
+  const titulo = esRecuperacion ? 'Nueva contraseña' : 'Crear tu contraseña'
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background to-muted/40 px-4">
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader>
-          <CardTitle>Crear tu contraseña</CardTitle>
+          <CardTitle>{titulo}</CardTitle>
         </CardHeader>
         <CardContent>
-          {!listo && !error && (
-            <p className="text-sm text-muted-foreground">Verificando invitación...</p>
+          {verificando && !error && (
+            <p className="text-sm text-muted-foreground">Verificando enlace...</p>
           )}
           {listo && (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -73,10 +103,10 @@ export default function EstablecerPasswordPage() {
                   id="password"
                   type="password"
                   required
-                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <PasswordRequirementsHint password={password} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmar">Confirmar contraseña</Label>
@@ -90,12 +120,16 @@ export default function EstablecerPasswordPage() {
                 />
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading || !isPasswordValid(password) || password !== confirmar}
+              >
                 {loading ? 'Guardando...' : 'Guardar y continuar'}
               </Button>
             </form>
           )}
-          {!listo && error && <p className="text-sm text-red-500">{error}</p>}
+          {!listo && !verificando && error && <p className="text-sm text-red-500">{error}</p>}
         </CardContent>
       </Card>
     </div>

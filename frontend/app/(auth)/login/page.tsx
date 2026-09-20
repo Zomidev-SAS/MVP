@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -87,13 +88,12 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Ingresando...' : 'Iniciar sesión'}
             </Button>
-            <button
-              type="button"
-              disabled
-              className="w-full cursor-not-allowed text-center text-sm text-muted-foreground opacity-50"
+            <Link
+              href="/recuperar-password"
+              className="block w-full text-center text-sm text-primary underline-offset-4 hover:underline"
             >
               ¿Olvidaste tu contraseña?
-            </button>
+            </Link>
           </form>
         </CardContent>
       </Card>

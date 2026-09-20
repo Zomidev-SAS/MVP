@@ -1,9 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { getDevPreviewDashboardData } from '@/lib/dev/preview-dashboard-data'
+import { getUmbralStockBajo } from '@/lib/supabase/get-stock-threshold'
 import type { DashboardData, EntradaSalidaDia, MovimientoReciente } from '@/lib/types/dashboard'
-
-const STOCK_BAJO_THRESHOLD = 2
 
 // Colombia does not observe DST — a fixed UTC-5 offset is always correct,
 // so day boundaries below are computed deterministically regardless of the
@@ -69,10 +68,11 @@ export async function getDashboardData(limiteMovimientos: number = 10): Promise<
   }
 
   const inventarioRows = inventarioResult.data ?? []
+  const umbralStockBajo = await getUmbralStockBajo()
   const totalUnidades = inventarioRows.reduce((sum, row) => sum + (row.saldo ?? 0), 0)
   const valorTotal = inventarioRows.reduce((sum, row) => sum + (row.valor_total ?? 0), 0)
   const stockBajo = inventarioRows.filter(
-    (row) => (row.saldo ?? 0) <= STOCK_BAJO_THRESHOLD
+    (row) => (row.saldo ?? 0) > 0 && (row.saldo ?? 0) <= umbralStockBajo
   ).length
 
   const movimientosHoy = movimientosHoyResult.count ?? 0

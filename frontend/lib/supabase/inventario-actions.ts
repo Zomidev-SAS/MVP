@@ -3,10 +3,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { getDevPreviewInventarioData } from '@/lib/dev/preview-inventario-data'
+import { getUmbralStockBajo } from '@/lib/supabase/get-stock-threshold'
 import { INVENTARIO_PAGE_SIZE } from '@/lib/supabase/inventario-page-size'
 import type { InventarioFiltros, InventarioItem, InventarioPagina } from '@/lib/types/inventario'
 
-const STOCK_BAJO_THRESHOLD = 2
+const INVENTARIO_SELECT =
+  'codigo_producto, nombre_producto, unidad_medida, categoria, saldo, valor_unitario, valor_total, ultimo_movimiento'
 
 export async function fetchInventario(
   filtros: InventarioFiltros,
@@ -17,14 +19,11 @@ export async function fetchInventario(
   }
 
   const supabase = await createClient()
+  const vista = filtros.bodega ? 'vista_inventario_por_bodega' : 'vista_inventario_actual'
 
-  let query = supabase
-    .from('vista_inventario_actual')
-    .select(
-      'codigo_producto, nombre_producto, unidad_medida, categoria, saldo, valor_unitario, valor_total, ultimo_movimiento',
-      { count: 'exact' }
-    )
+  let query = supabase.from(vista).select(INVENTARIO_SELECT, { count: 'exact' })
 
+  if (filtros.bodega) query = query.eq('bodega', filtros.bodega)
   if (filtros.categoria) query = query.ilike('categoria', `%${filtros.categoria}%`)
   if (filtros.estado === 'activo') query = query.gt('saldo', 0)
   else if (filtros.estado === 'agotado') query = query.lte('saldo', 0)
@@ -42,7 +41,7 @@ export async function fetchInventario(
   const { data, error, count } = await query.range(from, to)
 
   if (error) {
-    console.error('Failed to load vista_inventario_actual:', error)
+    console.error(`Failed to load ${vista}:`, error)
     return { filas: [], total: 0 }
   }
 
@@ -71,24 +70,19 @@ function fetchInventarioPreview(filtros: InventarioFiltros, pagina: number): Inv
   return { filas: filtradas.slice(from, to), total: filtradas.length }
 }
 
-/**
- * Conteo de productos con saldo bajo (0 < saldo <= umbral). Usado por el
- * layout del panel para el indicador de notificaciones (Header/Sidebar).
- * TODO(Task 8 del plan): conectar el umbral a config_app.umbral_stock_bajo
- * en vez de la constante local.
- */
 export async function fetchStockBajoCount(): Promise<number> {
   if (isDevBypassActive()) {
     return 3
   }
 
   const supabase = await createClient()
+  const umbral = await getUmbralStockBajo()
 
   const { count, error } = await supabase
     .from('vista_inventario_actual')
     .select('codigo_producto', { count: 'exact', head: true })
     .gt('saldo', 0)
-    .lte('saldo', STOCK_BAJO_THRESHOLD)
+    .lte('saldo', umbral)
 
   if (error) {
     console.error('Failed to count stock bajo:', error)
@@ -98,9 +92,6 @@ export async function fetchStockBajoCount(): Promise<number> {
   return count ?? 0
 }
 
-/**
- * Productos con saldo bajo para el widget del Dashboard (rol compras).
- */
 export async function fetchProductosBajoStock(
   limite: number
 ): Promise<{ codigo_producto: string; nombre_producto: string | null; saldo: number }[]> {
@@ -113,12 +104,13 @@ export async function fetchProductosBajoStock(
   }
 
   const supabase = await createClient()
+  const umbral = await getUmbralStockBajo()
 
   const { data, error } = await supabase
     .from('vista_inventario_actual')
     .select('codigo_producto, nombre_producto, saldo')
     .gt('saldo', 0)
-    .lte('saldo', STOCK_BAJO_THRESHOLD)
+    .lte('saldo', umbral)
     .order('saldo', { ascending: true })
     .limit(limite)
 

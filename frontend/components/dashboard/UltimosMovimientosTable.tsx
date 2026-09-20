@@ -11,7 +11,7 @@ import type { MovimientoReciente } from '@/lib/types/dashboard'
 
 const TIPO_LABELS: Record<MovimientoReciente['tipo_movimiento'], string> = {
   entrada: 'Entrada',
-  salida_vin: 'Salida',
+  salida_vin: 'Salida (app)',
   ajuste: 'Ajuste',
   reverso: 'Reverso',
 }

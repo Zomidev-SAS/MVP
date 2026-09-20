@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  LayoutGrid,
   Package,
   ArrowLeftRight,
   FilePlus,
@@ -12,8 +13,11 @@ import {
 } from 'lucide-react'
 import { ALL_ROLES, type Role } from '@/lib/types/database'
 
+const ROLES_CON_DASHBOARD = ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[]
+
 export type RouteKey =
   | 'dashboard'
+  | 'visualizacion'
   | 'inventario'
   | 'movimientos'
   | 'formularios'
@@ -22,9 +26,11 @@ export type RouteKey =
   | 'importar'
   | 'usuarios'
   | 'configuracion'
+  | 'cuenta'
 
 export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
-  dashboard: ALL_ROLES,
+  dashboard: ROLES_CON_DASHBOARD,
+  visualizacion: ['lectura'] as const,
   // RLS real: productos_select/mov_select_autenticados permiten leer a
   // cualquier rol activo — no hay restricción de lectura por rol.
   inventario: ALL_ROLES,
@@ -41,6 +47,7 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   importar: ['supervisor', 'compras'] as const,
   usuarios: ['supervisor'] as const,
   configuracion: ['supervisor'] as const,
+  cuenta: ALL_ROLES,
 }
 
 /** Roles que pueden ver valor_unitario/valor_total en cualquier pantalla — igual a la matriz real de las vistas de Supabase. */
@@ -53,6 +60,7 @@ export const NAV_ITEMS: {
   icon: LucideIcon
 }[] = [
   { key: 'dashboard', label: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { key: 'visualizacion', label: 'Visualización', href: '/visualizacion', icon: LayoutGrid },
   { key: 'inventario', label: 'Inventario', href: '/inventario', icon: Package },
   { key: 'movimientos', label: 'Movimientos', href: '/movimientos', icon: ArrowLeftRight },
   { key: 'formularios', label: 'Formularios', href: '/formularios', icon: ClipboardList },
@@ -65,6 +73,8 @@ export const NAV_ITEMS: {
 
 /** Resuelve un pathname exacto a su RouteKey, o null si no es una ruta controlada por ROUTE_PERMISSIONS (ej. /login, /acceso-denegado). */
 export function getRouteKeyForPath(pathname: string): RouteKey | null {
+  if (pathname === '/cuenta') return 'cuenta'
+  if (pathname === '/visualizacion') return 'visualizacion'
   const item = NAV_ITEMS.find((i) => i.href === pathname)
   return item ? item.key : null
 }

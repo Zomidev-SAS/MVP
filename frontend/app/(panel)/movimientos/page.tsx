@@ -19,6 +19,14 @@ async function MovimientosContent() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Movimientos</h1>
+      <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+        <strong className="text-foreground">Bitácora del inventario.</strong> Las{' '}
+        <strong>entradas</strong> suben stock (apertura, CSV, entradas manuales). Las{' '}
+        <strong>salidas (app móvil)</strong> bajan <strong>1 unidad</strong> por cada formulario
+        de ingreso en vehiculosapp — un vehículo registrado = una unidad menos en inventario. El
+        tipo <code className="rounded bg-muted px-1">salida_vin</code> es el nombre técnico
+        heredado del diseño original por VIN/chasis.
+      </div>
       <MovementsTable puedeVerCostos={puedeVerCostos} />
     </div>
   )
