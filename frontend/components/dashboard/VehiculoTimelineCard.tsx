@@ -1,0 +1,167 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { ArrowDownToLine, ArrowUpFromLine, Loader2, ParkingSquare, Search } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { formatearFechaFormulario } from '@/lib/types/formularios'
+import {
+  buscarVehiculosFormulario,
+  fetchLineaTiempoVehiculo,
+} from '@/lib/supabase/vehiculo-timeline-actions'
+import type { EventoLineaTiempo, VehiculoSugerencia } from '@/lib/formularios/linea-tiempo'
+
+function iconoPorTipo(tipoLabel: string) {
+  const t = tipoLabel.toLowerCase()
+  if (t === 'entrada') return ArrowDownToLine
+  if (t === 'salida') return ArrowUpFromLine
+  return ParkingSquare
+}
+
+export function VehiculoTimelineCard() {
+  const [termino, setTermino] = useState('')
+  const [sugerencias, setSugerencias] = useState<VehiculoSugerencia[]>([])
+  const [buscando, setBuscando] = useState(false)
+  const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<VehiculoSugerencia | null>(
+    null
+  )
+  const [eventos, setEventos] = useState<EventoLineaTiempo[]>([])
+  const [cargandoEventos, setCargandoEventos] = useState(false)
+
+  useEffect(() => {
+    if (vehiculoSeleccionado) return
+    const q = termino.trim()
+    if (q.length < 2) return
+
+    const timeout = setTimeout(() => {
+      setBuscando(true)
+      buscarVehiculosFormulario(q)
+        .then(setSugerencias)
+        .catch((error) => {
+          console.error('Failed to search vehiculos:', error)
+          setSugerencias([])
+        })
+        .finally(() => setBuscando(false))
+    }, 400)
+
+    return () => clearTimeout(timeout)
+  }, [termino, vehiculoSeleccionado])
+
+  function seleccionarVehiculo(sugerencia: VehiculoSugerencia) {
+    setVehiculoSeleccionado(sugerencia)
+    setTermino(sugerencia.chasis)
+    setSugerencias([])
+    setCargandoEventos(true)
+    fetchLineaTiempoVehiculo(sugerencia.chasis)
+      .then(setEventos)
+      .catch((error) => {
+        console.error('Failed to load vehicle timeline:', error)
+        setEventos([])
+      })
+      .finally(() => setCargandoEventos(false))
+  }
+
+  function limpiarSeleccion() {
+    setVehiculoSeleccionado(null)
+    setEventos([])
+    setTermino('')
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Línea de tiempo del vehículo</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={termino}
+            onChange={(e) => {
+              setTermino(e.target.value)
+              if (vehiculoSeleccionado) setVehiculoSeleccionado(null)
+            }}
+            placeholder="Buscar por chasis o placa..."
+            className="pl-9"
+          />
+
+          {!vehiculoSeleccionado && termino.trim().length >= 2 && (
+            <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-popover shadow-md">
+              {buscando ? (
+                <p className="px-3 py-2 text-sm text-muted-foreground">Buscando...</p>
+              ) : sugerencias.length === 0 ? (
+                <p className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias.</p>
+              ) : (
+                sugerencias.map((s) => (
+                  <button
+                    key={s.chasis}
+                    type="button"
+                    onClick={() => seleccionarVehiculo(s)}
+                    className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-accent"
+                  >
+                    <span className="font-mono font-medium">{s.chasis}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {[s.marca, s.ciudad].filter(Boolean).join(' · ') || 'Sin datos adicionales'}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {!vehiculoSeleccionado && (
+          <p className="text-sm text-muted-foreground">
+            Busca un vehículo por chasis o placa para ver su historial.
+          </p>
+        )}
+
+        {vehiculoSeleccionado && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm">
+                Chasis <span className="font-mono font-medium">{vehiculoSeleccionado.chasis}</span>
+              </p>
+              <button
+                type="button"
+                onClick={limpiarSeleccion}
+                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              >
+                Buscar otro
+              </button>
+            </div>
+
+            {cargandoEventos ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Cargando historial...
+              </div>
+            ) : eventos.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Este vehículo no tiene formularios registrados.
+              </p>
+            ) : (
+              <ol className="space-y-4 border-l border-border pl-4">
+                {eventos.map((evento) => {
+                  const Icono = iconoPorTipo(evento.tipoLabel)
+                  return (
+                    <li key={evento.id} className="relative">
+                      <span className="absolute -left-[21px] flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background">
+                        <Icono className="h-3.5 w-3.5" />
+                      </span>
+                      <p className="text-sm font-medium">{evento.tipoLabel}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatearFechaFormulario(evento.fecha) || 'Sin fecha'}
+                        {evento.ciudad ? ` · ${evento.ciudad}` : ''}
+                      </p>
+                    </li>
+                  )
+                })}
+              </ol>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
