@@ -185,9 +185,8 @@ export function VehiculoTimelineCard() {
                         key={etapa.etapa}
                         className={cn('flex items-center', !esUltimo && 'flex-1')}
                       >
-                        <button
-                          type="button"
-                          onClick={() => setPasoActivo(indice)}
+                        <div
+                          role="img"
                           aria-label={`${etapa.etapa}, paso ${indice + 1} de ${etapas.length}${etapa.completada ? '' : ' (pendiente)'}`}
                           className="flex shrink-0 flex-col items-center gap-1.5"
                         >
@@ -211,7 +210,7 @@ export function VehiculoTimelineCard() {
                           >
                             {etapa.etapa}
                           </span>
-                        </button>
+                        </div>
                         {!esUltimo && (
                           <div
                             className={cn(
