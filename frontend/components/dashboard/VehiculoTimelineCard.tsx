@@ -10,13 +10,21 @@ import {
   buscarVehiculosFormulario,
   fetchLineaTiempoVehiculo,
 } from '@/lib/supabase/vehiculo-timeline-actions'
-import type { EventoLineaTiempo, VehiculoSugerencia } from '@/lib/formularios/linea-tiempo'
+import {
+  construirEtapasVehiculo,
+  type EtapaVehiculo,
+  type VehiculoSugerencia,
+} from '@/lib/formularios/linea-tiempo'
 
-function iconoPorTipo(tipoLabel: string) {
-  const t = tipoLabel.toLowerCase()
+function iconoPorEtapa(etapa: string) {
+  const t = etapa.toLowerCase()
   if (t === 'entrada') return ArrowDownToLine
   if (t === 'salida') return ArrowUpFromLine
   return ParkingSquare
+}
+
+function ultimaEtapaCompletada(etapas: EtapaVehiculo[]): number {
+  return etapas.reduce((acc, etapa, indice) => (etapa.completada ? indice : acc), 0)
 }
 
 export function VehiculoTimelineCard() {
@@ -26,7 +34,7 @@ export function VehiculoTimelineCard() {
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<VehiculoSugerencia | null>(
     null
   )
-  const [eventos, setEventos] = useState<EventoLineaTiempo[]>([])
+  const [etapas, setEtapas] = useState<EtapaVehiculo[]>([])
   const [cargandoEventos, setCargandoEventos] = useState(false)
   const [pasoActivo, setPasoActivo] = useState(0)
 
@@ -56,19 +64,20 @@ export function VehiculoTimelineCard() {
     setCargandoEventos(true)
     fetchLineaTiempoVehiculo(sugerencia.chasis)
       .then((data) => {
-        setEventos(data)
-        setPasoActivo(data.length > 0 ? data.length - 1 : 0)
+        const etapasCalculadas = construirEtapasVehiculo(data)
+        setEtapas(etapasCalculadas)
+        setPasoActivo(ultimaEtapaCompletada(etapasCalculadas))
       })
       .catch((error) => {
         console.error('Failed to load vehicle timeline:', error)
-        setEventos([])
+        setEtapas([])
       })
       .finally(() => setCargandoEventos(false))
   }
 
   function limpiarSeleccion() {
     setVehiculoSeleccionado(null)
-    setEventos([])
+    setEtapas([])
     setTermino('')
   }
 
@@ -141,7 +150,7 @@ export function VehiculoTimelineCard() {
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Cargando historial...
               </div>
-            ) : eventos.length === 0 ? (
+            ) : etapas.every((etapa) => !etapa.completada) ? (
               <p className="text-sm text-muted-foreground">
                 Este vehículo no tiene formularios registrados.
               </p>
@@ -149,33 +158,32 @@ export function VehiculoTimelineCard() {
               <div className="space-y-4">
                 <div className="overflow-x-auto pb-1">
                   <div className="flex min-w-max items-center px-1">
-                    {eventos.map((evento, indice) => {
-                      const Icono = iconoPorTipo(evento.tipoLabel)
-                      const completado = indice <= pasoActivo
+                    {etapas.map((etapa, indice) => {
+                      const Icono = iconoPorEtapa(etapa.etapa)
                       const esActivo = indice === pasoActivo
 
                       return (
-                        <div key={evento.id} className="flex items-center">
+                        <div key={etapa.etapa} className="flex items-center">
                           <button
                             type="button"
                             onClick={() => setPasoActivo(indice)}
-                            aria-label={`${evento.tipoLabel}, paso ${indice + 1} de ${eventos.length}`}
+                            aria-label={`${etapa.etapa}, paso ${indice + 1} de ${etapas.length}${etapa.completada ? '' : ' (pendiente)'}`}
                             className={cn(
                               'flex items-center justify-center rounded-full border-2 transition-colors',
                               esActivo
                                 ? 'h-10 w-10 border-primary bg-primary text-primary-foreground'
-                                : completado
+                                : etapa.completada
                                   ? 'h-8 w-8 border-primary bg-primary/15 text-primary'
-                                  : 'h-8 w-8 border-border bg-muted text-muted-foreground'
+                                  : 'h-8 w-8 border-dashed border-border bg-muted text-muted-foreground'
                             )}
                           >
                             <Icono className={esActivo ? 'h-5 w-5' : 'h-4 w-4'} />
                           </button>
-                          {indice < eventos.length - 1 && (
+                          {indice < etapas.length - 1 && (
                             <div
                               className={cn(
                                 'h-0.5 w-10 sm:w-16',
-                                indice < pasoActivo ? 'bg-primary' : 'bg-border'
+                                etapas[indice + 1].completada ? 'bg-primary' : 'bg-border'
                               )}
                             />
                           )}
@@ -185,15 +193,21 @@ export function VehiculoTimelineCard() {
                   </div>
                 </div>
 
-                {eventos[pasoActivo] && (
+                {etapas[pasoActivo] && (
                   <div className="text-center">
-                    <p className="text-sm font-medium">{eventos[pasoActivo].tipoLabel}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatearFechaFormulario(eventos[pasoActivo].fecha) || 'Sin fecha'}
-                      {eventos[pasoActivo].ciudad ? ` · ${eventos[pasoActivo].ciudad}` : ''}
-                    </p>
+                    <p className="text-sm font-medium">{etapas[pasoActivo].etapa}</p>
+                    {etapas[pasoActivo].evento ? (
+                      <p className="text-xs text-muted-foreground">
+                        {formatearFechaFormulario(etapas[pasoActivo].evento!.fecha) || 'Sin fecha'}
+                        {etapas[pasoActivo].evento!.ciudad
+                          ? ` · ${etapas[pasoActivo].evento!.ciudad}`
+                          : ''}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Pendiente</p>
+                    )}
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Paso {pasoActivo + 1} de {eventos.length}
+                      Paso {pasoActivo + 1} de {etapas.length}
                     </p>
                   </div>
                 )}

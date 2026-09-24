@@ -17,6 +17,16 @@ export interface VehiculoSugerencia {
   ciudad: string | null
 }
 
+/** Etapas fijas del proceso de un vehículo, en el orden en que ocurren. */
+export const ETAPAS_VEHICULO = ['Entrada', 'Parqueadero', 'Salida'] as const
+export type EtapaVehiculoNombre = (typeof ETAPAS_VEHICULO)[number]
+
+export interface EtapaVehiculo {
+  etapa: EtapaVehiculoNombre
+  completada: boolean
+  evento: EventoLineaTiempo | null
+}
+
 function ciudadDe(fila: FormularioListado): string | null {
   const dg = datosGeneralesDe(fila.rawData)
   return (
@@ -49,6 +59,15 @@ export function construirEventosLineaTiempo(filas: FormularioListado[]): EventoL
       if (!b.fecha) return 1
       return a.fecha.localeCompare(b.fecha)
     })
+}
+
+/** Mapea eventos reales a las 3 etapas fijas del proceso, marcando las que aún no ocurrieron. */
+export function construirEtapasVehiculo(eventos: EventoLineaTiempo[]): EtapaVehiculo[] {
+  return ETAPAS_VEHICULO.map((etapa) => {
+    const eventosDeEtapa = eventos.filter((evento) => evento.tipoLabel === etapa)
+    const evento = eventosDeEtapa.length > 0 ? eventosDeEtapa[eventosDeEtapa.length - 1] : null
+    return { etapa, completada: evento !== null, evento }
+  })
 }
 
 /** Sugerencias de vehículos (chasis únicos) que hacen match con el término de búsqueda. */
