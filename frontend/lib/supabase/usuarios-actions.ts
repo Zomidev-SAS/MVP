@@ -19,8 +19,8 @@ export async function fetchUsuarios(): Promise<UsuarioListado[]> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('profiles')
-    .select('id, nombre, rol, activo, created_at')
+    .from('vista_usuarios_panel')
+    .select('id, nombre, email, rol, activo, created_at')
     .order('created_at', { ascending: true })
 
   if (error) {

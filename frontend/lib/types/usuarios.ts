@@ -4,6 +4,7 @@ import { ALL_ROLES, type Role } from '@/lib/types/database'
 export interface UsuarioListado {
   id: string
   nombre: string | null
+  email: string | null
   rol: Role
   activo: boolean
   created_at: string

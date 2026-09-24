@@ -65,6 +65,7 @@ export function UsersTable() {
       <TableHeader>
         <TableRow>
           <TableHead>Nombre</TableHead>
+          <TableHead>Correo</TableHead>
           <TableHead>Rol</TableHead>
           <TableHead>Estado</TableHead>
           <TableHead className="text-right">Acciones</TableHead>
@@ -73,14 +74,19 @@ export function UsersTable() {
       <TableBody>
         {usuarios.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={4} className="text-center text-muted-foreground">
+            <TableCell colSpan={5} className="text-center text-muted-foreground">
               {loading ? 'Cargando...' : 'Sin usuarios.'}
             </TableCell>
           </TableRow>
         ) : (
           usuarios.map((usuario) => (
             <TableRow key={usuario.id}>
-              <TableCell className="font-medium">{usuario.nombre ?? '—'}</TableCell>
+              <TableCell className="font-medium">
+                {usuario.nombre?.trim() || '—'}
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {usuario.email?.trim() || '—'}
+              </TableCell>
               <TableCell>
                 <select
                   value={usuario.rol}
