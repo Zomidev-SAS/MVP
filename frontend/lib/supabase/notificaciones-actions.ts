@@ -5,7 +5,9 @@ import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { getSessionUser } from '@/lib/supabase/get-session-user'
 import { fetchAjustesPendientesCount } from '@/lib/supabase/ajustes-actions'
+import { fetchEventosHoy } from '@/lib/supabase/calendario-actions'
 import { fetchProductosBajoStock } from '@/lib/supabase/inventario-actions'
+import { fetchOrdenesCompraPendientes } from '@/lib/supabase/ordenes-compra-actions'
 import type {
   AlertaNotificacion,
   MensajePanel,
@@ -22,9 +24,13 @@ const mensajeSchema = z.object({
 export async function fetchNotificaciones(rol: string): Promise<NotificacionesPayload> {
   const alertas: AlertaNotificacion[] = []
 
-  const [productos, ajustesCount, mensajes] = await Promise.all([
+  const esComprasOSupervisor = rol === 'compras' || rol === 'supervisor'
+
+  const [productos, ajustesCount, eventosHoy, ordenesPendientes, mensajes] = await Promise.all([
     fetchProductosBajoStock(15),
     rol === 'supervisor' ? fetchAjustesPendientesCount().catch(() => 0) : Promise.resolve(0),
+    fetchEventosHoy().catch(() => []),
+    esComprasOSupervisor ? fetchOrdenesCompraPendientes().catch(() => []) : Promise.resolve([]),
     fetchMensajesInternos(),
   ])
 
@@ -47,6 +53,40 @@ export async function fetchNotificaciones(rol: string): Promise<NotificacionesPa
       resumen: `${ajustesCount} solicitud${ajustesCount === 1 ? '' : 'es'} esperando tu aprobación`,
       href: '/ajustes',
       cantidad: ajustesCount,
+    })
+  }
+
+  if (ordenesPendientes.length > 0) {
+    alertas.push({
+      tipo: 'ordenes_compra',
+      id: 'ordenes-compra',
+      titulo: 'Órdenes de compra pendientes',
+      resumen: `${ordenesPendientes.length} orden${ordenesPendientes.length === 1 ? '' : 'es'} por cargar en Siigo`,
+      href: '/inventario',
+      ordenes: ordenesPendientes.map((o) => ({
+        id: o.id,
+        codigo_producto: o.codigo_producto,
+        descripcion: o.descripcion,
+        cantidad: o.cantidad,
+        fecha_pedido: o.fecha_pedido,
+      })),
+    })
+  }
+
+  if (eventosHoy.length > 0) {
+    alertas.push({
+      tipo: 'eventos_hoy',
+      id: 'eventos-hoy',
+      titulo: 'Eventos de hoy',
+      resumen: `${eventosHoy.length} evento${eventosHoy.length === 1 ? '' : 's'} programado${eventosHoy.length === 1 ? '' : 's'} para hoy`,
+      href: '/',
+      eventos: eventosHoy.map((e) => ({
+        id: e.id,
+        titulo: e.titulo,
+        fecha: e.fecha,
+        fecha_fin: e.fecha_fin,
+        nota: e.nota,
+      })),
     })
   }
 

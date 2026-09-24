@@ -93,11 +93,48 @@ function AlertaItem({
               {alerta.cantidad} ajuste(s) requieren revisión del supervisor.
             </p>
           )}
+          {alerta.tipo === 'ordenes_compra' && (
+            <ul className="max-h-40 space-y-2 overflow-y-auto text-xs">
+              {alerta.ordenes.map((o) => (
+                <li key={o.id} className="rounded border px-2 py-1.5">
+                  <p className="font-medium">
+                    #{o.id} · {o.codigo_producto}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {o.descripcion} · {o.cantidad} uds · {o.fecha_pedido}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {alerta.tipo === 'eventos_hoy' && (
+            <ul className="max-h-40 space-y-2 overflow-y-auto text-xs">
+              {alerta.eventos.map((e) => (
+                <li key={e.id} className="rounded border px-2 py-1.5">
+                  <p className="font-medium">{e.titulo}</p>
+                  {e.fecha_fin && e.fecha_fin !== e.fecha ? (
+                    <p className="text-muted-foreground">
+                      Rango: {e.fecha} → {e.fecha_fin}
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">{e.fecha}</p>
+                  )}
+                  {e.nota && <p className="mt-0.5 text-muted-foreground">{e.nota}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
           <Link
             href={alerta.href}
             className="mt-2 inline-block text-xs font-medium text-primary hover:underline"
           >
-            Ir a {alerta.tipo === 'stock_bajo' ? 'inventario' : 'ajustes'} →
+            Ir a{' '}
+            {alerta.tipo === 'stock_bajo' || alerta.tipo === 'ordenes_compra'
+              ? 'inventario'
+              : alerta.tipo === 'eventos_hoy'
+                ? 'calendario'
+                : 'ajustes'}{' '}
+            →
           </Link>
         </div>
       )}

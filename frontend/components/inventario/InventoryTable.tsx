@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ShoppingCart } from 'lucide-react'
+import { OrdenCompraDialog } from '@/components/inventario/OrdenCompraDialog'
 import {
   Table,
   TableBody,
@@ -34,6 +35,7 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
   const [filas, setFilas] = useState<InventarioItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [productoOc, setProductoOc] = useState<InventarioItem | null>(null)
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -89,7 +91,7 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
   }
 
   const totalPaginas = Math.max(1, Math.ceil(total / INVENTARIO_PAGE_SIZE))
-  const totalColumnas = puedeVerCostos ? 6 : 4
+  const totalColumnas = (puedeVerCostos ? 6 : 4) + 1
 
   return (
     <div className="space-y-4">
@@ -124,6 +126,7 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
                 </>
               )}
               <TableHead className="whitespace-nowrap">Último mov.</TableHead>
+              <TableHead className="whitespace-nowrap w-[52px]">OC</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -167,6 +170,18 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
                       ? new Date(item.ultimo_movimiento).toLocaleDateString('es-CO')
                       : '—'}
                   </TableCell>
+                  <TableCell>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      aria-label="Orden de compra"
+                      onClick={() => setProductoOc(item)}
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -195,6 +210,12 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
           Siguiente
         </Button>
       </div>
+
+      <OrdenCompraDialog
+        producto={productoOc}
+        abierto={productoOc !== null}
+        onOpenChange={(open) => { if (!open) setProductoOc(null) }}
+      />
     </div>
   )
 }

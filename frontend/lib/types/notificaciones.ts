@@ -22,7 +22,45 @@ export interface AlertaAjustes {
   cantidad: number
 }
 
-export type AlertaNotificacion = AlertaStockBajo | AlertaAjustes
+export interface EventoHoyResumen {
+  id: number
+  titulo: string
+  fecha: string
+  fecha_fin: string | null
+  nota: string | null
+}
+
+export interface AlertaEventosHoy {
+  tipo: 'eventos_hoy'
+  id: string
+  titulo: string
+  resumen: string
+  href: string
+  eventos: EventoHoyResumen[]
+}
+
+export interface OrdenCompraPendienteResumen {
+  id: number
+  codigo_producto: string
+  descripcion: string
+  cantidad: number
+  fecha_pedido: string
+}
+
+export interface AlertaOrdenesCompra {
+  tipo: 'ordenes_compra'
+  id: string
+  titulo: string
+  resumen: string
+  href: string
+  ordenes: OrdenCompraPendienteResumen[]
+}
+
+export type AlertaNotificacion =
+  | AlertaStockBajo
+  | AlertaAjustes
+  | AlertaEventosHoy
+  | AlertaOrdenesCompra
 
 export interface MensajePanel {
   id: number

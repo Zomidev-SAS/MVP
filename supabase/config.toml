@@ -478,3 +478,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/reactivar-usuario/deno.json"
 entrypoint = "./functions/reactivar-usuario/index.ts"
+
+[functions.siigo-validar]
+enabled = true
+verify_jwt = false
+import_map = "./functions/siigo-validar/deno.json"
+entrypoint = "./functions/siigo-validar/index.ts"

@@ -1,25 +1,19 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { EventoFormDialog } from '@/components/dashboard/EventoFormDialog'
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
-import { crearEventoSchema, type CrearEventoInput, type CalendarEvento } from '@/lib/types/calendario'
-import { fetchEventos, crearEvento, eliminarEvento } from '@/lib/supabase/calendario-actions'
+  eventoOcurreEnFecha,
+  formatearRangoFechas,
+  getFechasEvento,
+  type CalendarEvento,
+} from '@/lib/types/calendario'
+import { fetchEventos } from '@/lib/supabase/calendario-actions'
 import { NotesPanel } from '@/components/dashboard/NotesPanel'
 
 const MESES = [
@@ -45,6 +39,15 @@ function getMonthGrid(year: number, month: number): (number | null)[] {
   return cells
 }
 
+function formatearFechaLegible(fecha: string): string {
+  const [y, m, d] = fecha.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('es-CO', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
 export function CalendarWidget() {
   const hoy = new Date()
   const [viewYear, setViewYear] = useState(hoy.getFullYear())
@@ -54,36 +57,61 @@ export function CalendarWidget() {
   )
   const [eventos, setEventos] = useState<CalendarEvento[]>([])
   const [loading, setLoading] = useState(true)
-  const [dialogoAbierto, setDialogoAbierto] = useState(false)
+  const [dialogoDiaAbierto, setDialogoDiaAbierto] = useState(false)
+  const [dialogoEventoAbierto, setDialogoEventoAbierto] = useState(false)
+  const [eventoEditando, setEventoEditando] = useState<CalendarEvento | null>(null)
 
-  const form = useForm<CrearEventoInput>({
-    resolver: zodResolver(crearEventoSchema),
-    defaultValues: { fecha: diaSeleccionado, titulo: '', nota: '' },
-  })
-
-  useEffect(() => {
-    fetchEventos()
-      .then(setEventos)
-      .catch((error) => {
-        console.error('Failed to fetch eventos:', error)
-        setEventos([])
-      })
-      .finally(() => setLoading(false))
+  const recargarEventos = useCallback(async () => {
+    try {
+      const actualizados = await fetchEventos()
+      setEventos(actualizados)
+    } catch (error) {
+      console.error('Failed to fetch eventos:', error)
+      toast.error('No se pudieron cargar los eventos.')
+    }
   }, [])
 
   useEffect(() => {
-    if (dialogoAbierto) {
-      form.reset({ fecha: diaSeleccionado, titulo: '', nota: '' })
-    }
-  }, [dialogoAbierto, diaSeleccionado, form])
+    recargarEventos().finally(() => setLoading(false))
+  }, [recargarEventos])
 
   const hoyKey = fechaKey(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
   const grid = useMemo(() => getMonthGrid(viewYear, viewMonth), [viewYear, viewMonth])
-  const fechasConEvento = useMemo(() => new Set(eventos.map((e) => e.fecha)), [eventos])
-  const proximosEventos = useMemo(
-    () => eventos.filter((e) => e.fecha >= hoyKey).sort((a, b) => a.fecha.localeCompare(b.fecha)),
-    [eventos, hoyKey]
+
+  const fechasConEvento = useMemo(() => {
+    const set = new Set<string>()
+    for (const evento of eventos) {
+      if (evento.fecha_fin) {
+        const inicio = new Date(evento.fecha + 'T00:00:00')
+        const fin = new Date(evento.fecha_fin + 'T00:00:00')
+        for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
+          set.add(fechaKey(d.getFullYear(), d.getMonth(), d.getDate()))
+        }
+      } else {
+        set.add(evento.fecha)
+      }
+      for (const extra of evento.fechas_adicionales) {
+        set.add(extra)
+      }
+    }
+    return set
+  }, [eventos])
+
+  const eventosDelDia = useMemo(
+    () => eventos.filter((e) => eventoOcurreEnFecha(e, diaSeleccionado)),
+    [eventos, diaSeleccionado]
   )
+
+  const proximosEventos = useMemo(() => {
+    return eventos
+      .map((evento) => {
+        const proxima = getFechasEvento(evento).find((f) => f >= hoyKey)
+        return proxima ? { evento, proxima } : null
+      })
+      .filter((item): item is { evento: CalendarEvento; proxima: string } => item !== null)
+      .sort((a, b) => a.proxima.localeCompare(b.proxima))
+      .slice(0, 8)
+  }, [eventos, hoyKey])
 
   function irMesAnterior() {
     const nuevo = new Date(viewYear, viewMonth - 1, 1)
@@ -97,25 +125,26 @@ export function CalendarWidget() {
     setViewMonth(nuevo.getMonth())
   }
 
-  async function onSubmit(datos: CrearEventoInput) {
-    const resultado = await crearEvento(datos)
-    if (resultado.ok) {
-      toast.success('Evento agregado.')
-      setDialogoAbierto(false)
-      const actualizados = await fetchEventos()
-      setEventos(actualizados)
-    } else {
-      toast.error(resultado.error)
-    }
+  function abrirEvento(evento: CalendarEvento) {
+    setEventoEditando(evento)
+    setDialogoDiaAbierto(false)
+    setDialogoEventoAbierto(true)
   }
 
-  async function handleBorrar(id: number) {
-    const resultado = await eliminarEvento(id)
-    if (resultado.ok) {
-      toast.success('Evento borrado.')
-      setEventos((prev) => prev.filter((e) => e.id !== id))
+  function abrirNuevoEvento(fecha?: string) {
+    setEventoEditando(null)
+    if (fecha) setDiaSeleccionado(fecha)
+    setDialogoDiaAbierto(false)
+    setDialogoEventoAbierto(true)
+  }
+
+  function handleTapFecha(key: string) {
+    setDiaSeleccionado(key)
+    const delDia = eventos.filter((e) => eventoOcurreEnFecha(e, key))
+    if (delDia.length === 1) {
+      abrirEvento(delDia[0])
     } else {
-      toast.error(resultado.error)
+      setDialogoDiaAbierto(true)
     }
   }
 
@@ -123,7 +152,7 @@ export function CalendarWidget() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Calendario</CardTitle>
-        <Button type="button" size="sm" onClick={() => setDialogoAbierto(true)}>
+        <Button type="button" size="sm" onClick={() => abrirNuevoEvento(diaSeleccionado)}>
           <Plus className="mr-1 h-4 w-4" />
           Agregar evento
         </Button>
@@ -157,7 +186,7 @@ export function CalendarWidget() {
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setDiaSeleccionado(key)}
+                  onClick={() => handleTapFecha(key)}
                   className={`relative flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors ${
                     esSeleccionado
                       ? 'bg-primary text-primary-foreground'
@@ -168,13 +197,21 @@ export function CalendarWidget() {
                 >
                   {dia}
                   {tieneEvento && (
-                    <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-primary" />
+                    <span
+                      className={`absolute bottom-0.5 h-1 w-1 rounded-full ${
+                        esSeleccionado ? 'bg-primary-foreground' : 'bg-primary'
+                      }`}
+                    />
                   )}
                 </button>
               )
             })}
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Toca una fecha para ver o editar sus eventos.
+          </p>
         </div>
+
         <div>
           <h3 className="mb-2 text-sm font-medium">Próximos eventos</h3>
           {loading ? (
@@ -183,87 +220,94 @@ export function CalendarWidget() {
             <p className="text-sm text-muted-foreground">Sin eventos próximos.</p>
           ) : (
             <ul className="space-y-2">
-              {proximosEventos.map((evento) => (
-                <li
-                  key={evento.id}
-                  className="flex items-start justify-between gap-2 rounded-md border p-2"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{evento.titulo}</p>
-                    <p className="text-xs text-muted-foreground">{evento.fecha}</p>
-                    {evento.nota && (
-                      <p className="text-xs text-muted-foreground">{evento.nota}</p>
-                    )}
-                  </div>
+              {proximosEventos.map(({ evento, proxima }) => (
+                <li key={evento.id}>
                   <button
                     type="button"
-                    onClick={() => handleBorrar(evento.id)}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                    aria-label="Borrar evento"
+                    onClick={() => abrirEvento(evento)}
+                    className="flex w-full items-start gap-2 rounded-md border p-2 text-left transition-colors hover:bg-accent/50"
                   >
-                    <X className="h-4 w-4" />
+                    <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{evento.titulo}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatearRangoFechas(evento)}
+                        {proxima !== evento.fecha && ` · próx: ${proxima}`}
+                      </p>
+                      {evento.nota && (
+                        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                          {evento.nota}
+                        </p>
+                      )}
+                      {evento.secciones.length > 0 && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {evento.secciones.filter((s) => s.completada).length}/
+                          {evento.secciones.length} secciones
+                        </p>
+                      )}
+                    </div>
                   </button>
                 </li>
               ))}
             </ul>
           )}
         </div>
+
         <NotesPanel />
       </CardContent>
 
-      <Dialog open={dialogoAbierto} onOpenChange={setDialogoAbierto}>
+      <Dialog open={dialogoDiaAbierto} onOpenChange={setDialogoDiaAbierto}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Agregar evento</DialogTitle>
+            <DialogTitle>Eventos del {formatearFechaLegible(diaSeleccionado)}</DialogTitle>
           </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="fecha"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fecha</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="titulo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Título</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="nota"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nota (opcional)</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Guardando...' : 'Guardar'}
+          {eventosDelDia.length === 0 ? (
+            <div className="space-y-3 py-2">
+              <p className="text-sm text-muted-foreground">No hay eventos en esta fecha.</p>
+              <Button type="button" onClick={() => abrirNuevoEvento(diaSeleccionado)}>
+                <Plus className="mr-1 h-4 w-4" />
+                Crear evento
               </Button>
-            </form>
-          </Form>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <ul className="space-y-2">
+                {eventosDelDia.map((evento) => (
+                  <li key={evento.id}>
+                    <button
+                      type="button"
+                      onClick={() => abrirEvento(evento)}
+                      className="w-full rounded-md border p-3 text-left transition-colors hover:bg-accent/50"
+                    >
+                      <p className="font-medium">{evento.titulo}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatearRangoFechas(evento)}
+                      </p>
+                      {evento.nota && (
+                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                          {evento.nota}
+                        </p>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <Button type="button" variant="outline" onClick={() => abrirNuevoEvento(diaSeleccionado)}>
+                <Plus className="mr-1 h-4 w-4" />
+                Agregar otro evento
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
+
+      <EventoFormDialog
+        abierto={dialogoEventoAbierto}
+        onOpenChange={setDialogoEventoAbierto}
+        evento={eventoEditando}
+        fechaInicial={diaSeleccionado}
+        onGuardado={recargarEventos}
+      />
     </Card>
   )
 }

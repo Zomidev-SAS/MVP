@@ -428,6 +428,9 @@ supabase db push
 supabase secrets set SYSTEM_ACTOR_ID=<uuid real de un usuario sistema en staging>
 supabase secrets set MI_SERVICE_ROLE_KEY=<service_role key de staging>
 supabase secrets set MI_ANON_KEY=<anon key de staging>
+supabase secrets set SIIGO_USERNAME=<usuario API Siigo Nube>
+supabase secrets set SIIGO_ACCESS_KEY=<access key Siigo>
+supabase secrets set SIIGO_PARTNER_ID=PanelCarreraArango
 
 # 5. Desplegar las funciones
 supabase functions deploy sync-inventario-vin
@@ -435,6 +438,7 @@ supabase functions deploy consultar-saldo-vin
 supabase functions deploy importar-inventario-csv
 supabase functions deploy crear-usuario
 supabase functions deploy desactivar-usuario
+supabase functions deploy siigo-validar
 
 # 6. Repetir TODO el proceso (2-5) para producción, apuntando a su project-ref,
 #    con secrets DISTINTOS a los de staging.
