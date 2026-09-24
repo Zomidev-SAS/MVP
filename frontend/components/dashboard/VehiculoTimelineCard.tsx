@@ -1,7 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowDownToLine, ArrowUpFromLine, Loader2, ParkingSquare, Search } from 'lucide-react'
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Car,
+  Loader2,
+  ParkingSquare,
+  Search,
+  Wrench,
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -20,6 +28,7 @@ function iconoPorEtapa(etapa: string) {
   const t = etapa.toLowerCase()
   if (t === 'entrada') return ArrowDownToLine
   if (t === 'salida') return ArrowUpFromLine
+  if (t === 'en proceso') return Wrench
   return ParkingSquare
 }
 
@@ -84,7 +93,10 @@ export function VehiculoTimelineCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Línea de tiempo del vehículo</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Car className="h-5 w-5 text-primary" />
+          Línea de tiempo del vehículo
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="relative">
@@ -156,18 +168,24 @@ export function VehiculoTimelineCard() {
               </p>
             ) : (
               <div className="space-y-4">
-                <div className="overflow-x-auto pb-1">
-                  <div className="flex min-w-max items-center px-1">
-                    {etapas.map((etapa, indice) => {
-                      const Icono = iconoPorEtapa(etapa.etapa)
-                      const esActivo = indice === pasoActivo
+                <div className="flex w-full items-start">
+                  {etapas.map((etapa, indice) => {
+                    const Icono = iconoPorEtapa(etapa.etapa)
+                    const esActivo = indice === pasoActivo
+                    const esUltimo = indice === etapas.length - 1
 
-                      return (
-                        <div key={etapa.etapa} className="flex items-center">
-                          <button
-                            type="button"
-                            onClick={() => setPasoActivo(indice)}
-                            aria-label={`${etapa.etapa}, paso ${indice + 1} de ${etapas.length}${etapa.completada ? '' : ' (pendiente)'}`}
+                    return (
+                      <div
+                        key={etapa.etapa}
+                        className={cn('flex items-center', !esUltimo && 'flex-1')}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setPasoActivo(indice)}
+                          aria-label={`${etapa.etapa}, paso ${indice + 1} de ${etapas.length}${etapa.completada ? '' : ' (pendiente)'}`}
+                          className="flex shrink-0 flex-col items-center gap-1.5"
+                        >
+                          <span
                             className={cn(
                               'flex items-center justify-center rounded-full border-2 transition-colors',
                               esActivo
@@ -178,19 +196,27 @@ export function VehiculoTimelineCard() {
                             )}
                           >
                             <Icono className={esActivo ? 'h-5 w-5' : 'h-4 w-4'} />
-                          </button>
-                          {indice < etapas.length - 1 && (
-                            <div
-                              className={cn(
-                                'h-0.5 w-10 sm:w-16',
-                                etapas[indice + 1].completada ? 'bg-primary' : 'bg-border'
-                              )}
-                            />
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+                          </span>
+                          <span
+                            className={cn(
+                              'whitespace-nowrap text-[11px]',
+                              esActivo ? 'font-medium text-foreground' : 'text-muted-foreground'
+                            )}
+                          >
+                            {etapa.etapa}
+                          </span>
+                        </button>
+                        {!esUltimo && (
+                          <div
+                            className={cn(
+                              'mx-1.5 h-0.5 flex-1 sm:mx-2',
+                              etapas[indice + 1].completada ? 'bg-primary' : 'bg-border'
+                            )}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
 
                 {etapas[pasoActivo] && (
@@ -203,6 +229,8 @@ export function VehiculoTimelineCard() {
                           ? ` · ${etapas[pasoActivo].evento!.ciudad}`
                           : ''}
                       </p>
+                    ) : etapas[pasoActivo].completada ? (
+                      <p className="text-xs text-muted-foreground">Vehículo en gestión activa</p>
                     ) : (
                       <p className="text-xs text-muted-foreground">Pendiente</p>
                     )}

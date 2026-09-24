@@ -18,7 +18,7 @@ export interface VehiculoSugerencia {
 }
 
 /** Etapas fijas del proceso de un vehículo, en el orden en que ocurren. */
-export const ETAPAS_VEHICULO = ['Entrada', 'Parqueadero', 'Salida'] as const
+export const ETAPAS_VEHICULO = ['Entrada', 'En proceso', 'Parqueadero', 'Salida'] as const
 export type EtapaVehiculoNombre = (typeof ETAPAS_VEHICULO)[number]
 
 export interface EtapaVehiculo {
@@ -61,11 +61,24 @@ export function construirEventosLineaTiempo(filas: FormularioListado[]): EventoL
     })
 }
 
-/** Mapea eventos reales a las 3 etapas fijas del proceso, marcando las que aún no ocurrieron. */
+/**
+ * Mapea eventos reales a las etapas fijas del proceso, marcando las que aún no ocurrieron.
+ * "En proceso" no tiene formulario propio — se marca completada apenas hay Entrada,
+ * representando que el vehículo ya está en gestión activa.
+ */
 export function construirEtapasVehiculo(eventos: EventoLineaTiempo[]): EtapaVehiculo[] {
+  function ultimoEventoDe(nombre: EtapaVehiculoNombre): EventoLineaTiempo | null {
+    const coincidencias = eventos.filter((evento) => evento.tipoLabel === nombre)
+    return coincidencias.length > 0 ? coincidencias[coincidencias.length - 1] : null
+  }
+
+  const eventoEntrada = ultimoEventoDe('Entrada')
+
   return ETAPAS_VEHICULO.map((etapa) => {
-    const eventosDeEtapa = eventos.filter((evento) => evento.tipoLabel === etapa)
-    const evento = eventosDeEtapa.length > 0 ? eventosDeEtapa[eventosDeEtapa.length - 1] : null
+    if (etapa === 'En proceso') {
+      return { etapa, completada: eventoEntrada !== null, evento: null }
+    }
+    const evento = ultimoEventoDe(etapa)
     return { etapa, completada: evento !== null, evento }
   })
 }
