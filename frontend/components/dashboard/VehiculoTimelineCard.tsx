@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ArrowDownToLine, ArrowUpFromLine, Loader2, ParkingSquare, Search } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import { formatearFechaFormulario } from '@/lib/types/formularios'
 import {
   buscarVehiculosFormulario,
@@ -27,6 +28,7 @@ export function VehiculoTimelineCard() {
   )
   const [eventos, setEventos] = useState<EventoLineaTiempo[]>([])
   const [cargandoEventos, setCargandoEventos] = useState(false)
+  const [pasoActivo, setPasoActivo] = useState(0)
 
   useEffect(() => {
     if (vehiculoSeleccionado) return
@@ -53,7 +55,10 @@ export function VehiculoTimelineCard() {
     setSugerencias([])
     setCargandoEventos(true)
     fetchLineaTiempoVehiculo(sugerencia.chasis)
-      .then(setEventos)
+      .then((data) => {
+        setEventos(data)
+        setPasoActivo(data.length > 0 ? data.length - 1 : 0)
+      })
       .catch((error) => {
         console.error('Failed to load vehicle timeline:', error)
         setEventos([])
@@ -141,23 +146,58 @@ export function VehiculoTimelineCard() {
                 Este vehículo no tiene formularios registrados.
               </p>
             ) : (
-              <ol className="space-y-4 border-l border-border pl-4">
-                {eventos.map((evento) => {
-                  const Icono = iconoPorTipo(evento.tipoLabel)
-                  return (
-                    <li key={evento.id} className="relative">
-                      <span className="absolute -left-[21px] flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background">
-                        <Icono className="h-3.5 w-3.5" />
-                      </span>
-                      <p className="text-sm font-medium">{evento.tipoLabel}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatearFechaFormulario(evento.fecha) || 'Sin fecha'}
-                        {evento.ciudad ? ` · ${evento.ciudad}` : ''}
-                      </p>
-                    </li>
-                  )
-                })}
-              </ol>
+              <div className="space-y-4">
+                <div className="overflow-x-auto pb-1">
+                  <div className="flex min-w-max items-center px-1">
+                    {eventos.map((evento, indice) => {
+                      const Icono = iconoPorTipo(evento.tipoLabel)
+                      const completado = indice <= pasoActivo
+                      const esActivo = indice === pasoActivo
+
+                      return (
+                        <div key={evento.id} className="flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => setPasoActivo(indice)}
+                            aria-label={`${evento.tipoLabel}, paso ${indice + 1} de ${eventos.length}`}
+                            className={cn(
+                              'flex items-center justify-center rounded-full border-2 transition-colors',
+                              esActivo
+                                ? 'h-10 w-10 border-primary bg-primary text-primary-foreground'
+                                : completado
+                                  ? 'h-8 w-8 border-primary bg-primary/15 text-primary'
+                                  : 'h-8 w-8 border-border bg-muted text-muted-foreground'
+                            )}
+                          >
+                            <Icono className={esActivo ? 'h-5 w-5' : 'h-4 w-4'} />
+                          </button>
+                          {indice < eventos.length - 1 && (
+                            <div
+                              className={cn(
+                                'h-0.5 w-10 sm:w-16',
+                                indice < pasoActivo ? 'bg-primary' : 'bg-border'
+                              )}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {eventos[pasoActivo] && (
+                  <div className="text-center">
+                    <p className="text-sm font-medium">{eventos[pasoActivo].tipoLabel}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatearFechaFormulario(eventos[pasoActivo].fecha) || 'Sin fecha'}
+                      {eventos[pasoActivo].ciudad ? ` · ${eventos[pasoActivo].ciudad}` : ''}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Paso {pasoActivo + 1} de {eventos.length}
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
