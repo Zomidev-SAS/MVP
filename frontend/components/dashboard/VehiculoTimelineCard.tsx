@@ -21,6 +21,7 @@ import {
 import {
   construirEtapasVehiculo,
   type EtapaVehiculo,
+  type EtapaVehiculoNombre,
   type VehiculoSugerencia,
 } from '@/lib/formularios/linea-tiempo'
 
@@ -34,6 +35,11 @@ function iconoPorEtapa(etapa: string) {
 
 function ultimaEtapaCompletada(etapas: EtapaVehiculo[]): number {
   return etapas.reduce((acc, etapa, indice) => (etapa.completada ? indice : acc), 0)
+}
+
+function textoEtapaSinFormulario(etapa: EtapaVehiculoNombre): string {
+  if (etapa === 'En proceso') return 'Vehículo en gestión activa'
+  return 'Sin formulario propio — el vehículo ya avanzó'
 }
 
 export function VehiculoTimelineCard() {
@@ -230,7 +236,9 @@ export function VehiculoTimelineCard() {
                           : ''}
                       </p>
                     ) : etapas[pasoActivo].completada ? (
-                      <p className="text-xs text-muted-foreground">Vehículo en gestión activa</p>
+                      <p className="text-xs text-muted-foreground">
+                        {textoEtapaSinFormulario(etapas[pasoActivo].etapa)}
+                      </p>
                     ) : (
                       <p className="text-xs text-muted-foreground">Pendiente</p>
                     )}

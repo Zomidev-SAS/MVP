@@ -65,6 +65,8 @@ export function construirEventosLineaTiempo(filas: FormularioListado[]): EventoL
  * Mapea eventos reales a las etapas fijas del proceso, marcando las que aún no ocurrieron.
  * "En proceso" no tiene formulario propio — se marca completada apenas hay Entrada,
  * representando que el vehículo ya está en gestión activa.
+ * "Parqueadero" también se marca completada si ya hay Salida, aunque no tenga su propio
+ * formulario — si el vehículo ya salió, necesariamente pasó (o se saltó) esa etapa.
  */
 export function construirEtapasVehiculo(eventos: EventoLineaTiempo[]): EtapaVehiculo[] {
   function ultimoEventoDe(nombre: EtapaVehiculoNombre): EventoLineaTiempo | null {
@@ -73,12 +75,16 @@ export function construirEtapasVehiculo(eventos: EventoLineaTiempo[]): EtapaVehi
   }
 
   const eventoEntrada = ultimoEventoDe('Entrada')
+  const eventoSalida = ultimoEventoDe('Salida')
 
   return ETAPAS_VEHICULO.map((etapa) => {
     if (etapa === 'En proceso') {
       return { etapa, completada: eventoEntrada !== null, evento: null }
     }
     const evento = ultimoEventoDe(etapa)
+    if (etapa === 'Parqueadero') {
+      return { etapa, completada: evento !== null || eventoSalida !== null, evento }
+    }
     return { etapa, completada: evento !== null, evento }
   })
 }
