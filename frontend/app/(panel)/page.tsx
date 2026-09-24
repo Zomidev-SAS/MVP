@@ -23,6 +23,7 @@ import { UltimosMovimientosTable } from '@/components/dashboard/UltimosMovimient
 import { RealtimeRefresher } from '@/components/dashboard/RealtimeRefresher'
 import { QuickLinksCard } from '@/components/dashboard/QuickLinksCard'
 import { LowStockList } from '@/components/dashboard/LowStockList'
+import { VehiculoTimelineCard } from '@/components/dashboard/VehiculoTimelineCard'
 
 export default function DashboardPage() {
   return (
@@ -49,6 +50,8 @@ async function DashboardContent() {
   return (
     <div className="space-y-6">
       {variante !== 'bitacora' && variante !== 'basico' && <CalendarWidget />}
+
+      <VehiculoTimelineCard />
 
       <div>
         <h1 className="text-2xl font-semibold">
