@@ -51,7 +51,7 @@ async function DashboardContent() {
     <div className="space-y-6">
       {variante !== 'bitacora' && variante !== 'basico' && <CalendarWidget />}
 
-      <VehiculoTimelineCard />
+      <VehiculoTimelineCard rolActual={result.profile.rol} />
 
       <div>
         <h1 className="text-2xl font-semibold">

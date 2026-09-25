@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { formatearFechaFormulario } from '@/lib/types/formularios'
+import type { Role } from '@/lib/types/database'
 import {
   buscarVehiculosFormulario,
   fetchLineaTiempoVehiculo,
@@ -24,6 +25,7 @@ import {
   type EtapaVehiculoNombre,
   type VehiculoSugerencia,
 } from '@/lib/formularios/linea-tiempo'
+import { VehiculoProcesoDialog } from '@/components/dashboard/VehiculoProcesoDialog'
 
 function iconoPorEtapa(etapa: string) {
   const t = etapa.toLowerCase()
@@ -42,8 +44,9 @@ function textoEtapaSinFormulario(etapa: EtapaVehiculoNombre): string {
   return 'Sin formulario propio — el vehículo ya avanzó'
 }
 
-export function VehiculoTimelineCard() {
+export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
   const [termino, setTermino] = useState('')
+  const [procesoDialogAbierto, setProcesoDialogAbierto] = useState(false)
   const [sugerencias, setSugerencias] = useState<VehiculoSugerencia[]>([])
   const [buscando, setBuscando] = useState(false)
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<VehiculoSugerencia | null>(
@@ -179,16 +182,23 @@ export function VehiculoTimelineCard() {
                     const Icono = iconoPorEtapa(etapa.etapa)
                     const esActivo = indice === pasoActivo
                     const esUltimo = indice === etapas.length - 1
+                    const esProceso = etapa.etapa === 'En proceso'
+                    const Envoltorio = esProceso ? 'button' : 'div'
 
                     return (
                       <div
                         key={etapa.etapa}
                         className={cn('flex items-center', !esUltimo && 'flex-1')}
                       >
-                        <div
-                          role="img"
-                          aria-label={`${etapa.etapa}, paso ${indice + 1} de ${etapas.length}${etapa.completada ? '' : ' (pendiente)'}`}
-                          className="flex shrink-0 flex-col items-center gap-1.5"
+                        <Envoltorio
+                          type={esProceso ? 'button' : undefined}
+                          onClick={esProceso ? () => setProcesoDialogAbierto(true) : undefined}
+                          role={esProceso ? undefined : 'img'}
+                          aria-label={`${etapa.etapa}, paso ${indice + 1} de ${etapas.length}${etapa.completada ? '' : ' (pendiente)'}${esProceso ? ' — click para ver procesos' : ''}`}
+                          className={cn(
+                            'flex shrink-0 flex-col items-center gap-1.5',
+                            esProceso && 'cursor-pointer'
+                          )}
                         >
                           <span
                             className={cn(
@@ -210,7 +220,7 @@ export function VehiculoTimelineCard() {
                           >
                             {etapa.etapa}
                           </span>
-                        </div>
+                        </Envoltorio>
                         {!esUltimo && (
                           <div
                             className={cn(
@@ -251,6 +261,15 @@ export function VehiculoTimelineCard() {
           </div>
         )}
       </CardContent>
+
+      {vehiculoSeleccionado && (
+        <VehiculoProcesoDialog
+          abierto={procesoDialogAbierto}
+          onOpenChange={setProcesoDialogAbierto}
+          chasis={vehiculoSeleccionado.chasis}
+          rolActual={rolActual}
+        />
+      )}
     </Card>
   )
 }

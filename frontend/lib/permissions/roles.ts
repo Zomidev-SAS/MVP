@@ -54,6 +54,9 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
 /** Roles que pueden ver valor_unitario/valor_total en cualquier pantalla — igual a la matriz real de las vistas de Supabase. */
 export const CAN_VIEW_COSTS: readonly Role[] = ['supervisor', 'compras', 'auditoria']
 
+/** Roles que pueden agregar procesos al vehículo (etapa "En proceso" de la línea de tiempo). */
+export const ROLES_PROCESO_VEHICULO: readonly Role[] = ['supervisor', 'metalmecanica', 'instalacion']
+
 export const NAV_ITEMS: {
   key: RouteKey
   label: string
