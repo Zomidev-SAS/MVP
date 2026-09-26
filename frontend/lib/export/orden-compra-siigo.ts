@@ -15,25 +15,32 @@ export function generarCsvSiigo(ordenes: OrdenCompra[]): string {
     'Código producto',
     'Descripción pedido',
     'Cantidad',
-    'Observaciones',
+    'Cantidad recibida',
+    'Observaciones ítem',
     'Referencia panel',
   ]
 
-  const filas = ordenes.map((oc) =>
-    [
-      oc.fecha_pedido,
-      oc.proveedor_nit ?? '',
-      oc.proveedor_nombre ?? '',
-      oc.proveedor_email ?? '',
-      oc.codigo_producto,
-      oc.descripcion,
-      oc.cantidad,
-      oc.observaciones ?? '',
-      `OC-PANEL-${oc.id}`,
-    ]
-      .map(escCsv)
-      .join(',')
-  )
+  const filas: string[] = []
+  for (const oc of ordenes) {
+    for (const item of oc.items) {
+      filas.push(
+        [
+          oc.fecha_pedido,
+          item.proveedor_nit ?? '',
+          item.proveedor_nombre ?? '',
+          item.proveedor_email ?? '',
+          item.codigo_producto,
+          item.descripcion,
+          item.cantidad,
+          item.cantidad_recibida ?? '',
+          item.observaciones ?? '',
+          `OC-PANEL-${oc.id}`,
+        ]
+          .map(escCsv)
+          .join(',')
+      )
+    }
+  }
 
   return [encabezados.join(','), ...filas].join('\n')
 }

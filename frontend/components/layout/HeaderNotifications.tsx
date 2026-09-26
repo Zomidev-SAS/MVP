@@ -129,8 +129,10 @@ function AlertaItem({
             className="mt-2 inline-block text-xs font-medium text-primary hover:underline"
           >
             Ir a{' '}
-            {alerta.tipo === 'stock_bajo' || alerta.tipo === 'ordenes_compra'
+            {alerta.tipo === 'stock_bajo'
               ? 'inventario'
+              : alerta.tipo === 'ordenes_compra'
+                ? 'compras'
               : alerta.tipo === 'eventos_hoy'
                 ? 'calendario'
                 : 'ajustes'}{' '}

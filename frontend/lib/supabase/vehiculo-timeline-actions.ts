@@ -11,6 +11,7 @@ import { vistaFormulario, type FormularioListado } from '@/lib/types/formularios
 import {
   construirEventosLineaTiempo,
   extraerSugerenciasVehiculo,
+  listarVehiculosRecientes,
   type EventoLineaTiempo,
   type VehiculoSugerencia,
 } from '@/lib/formularios/linea-tiempo'
@@ -43,6 +44,11 @@ async function cargarFormularios(): Promise<FormularioListado[]> {
 export async function buscarVehiculosFormulario(termino: string): Promise<VehiculoSugerencia[]> {
   const filas = await cargarFormularios()
   return extraerSugerenciasVehiculo(filas, termino)
+}
+
+export async function fetchVehiculosRecientes(limite = 30): Promise<VehiculoSugerencia[]> {
+  const filas = await cargarFormularios()
+  return listarVehiculosRecientes(filas, limite)
 }
 
 export async function fetchLineaTiempoVehiculo(chasis: string): Promise<EventoLineaTiempo[]> {

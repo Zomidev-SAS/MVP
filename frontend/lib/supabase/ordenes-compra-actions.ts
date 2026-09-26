@@ -7,22 +7,70 @@ import {
   devPreviewDeleteOrden,
   devPreviewInsertOrden,
   devPreviewUpdateOrden,
+  getDevPreviewOrdenById,
   getDevPreviewOrdenesCompra,
   getDevPreviewOrdenesPendientesCount,
 } from '@/lib/dev/preview-ordenes-compra-data'
 import {
-  guardarOrdenCompraSchema,
-  type GuardarOrdenCompraInput,
+  guardarOrdenCompraPedidoSchema,
+  type GuardarOrdenCompraPedidoInput,
   type OrdenCompra,
+  type OrdenCompraItem,
   type OrdenCompraResultado,
+  type EstadoOrdenCompra,
 } from '@/lib/types/orden-compra'
 
-const SELECT_COLS =
-  'id, codigo_producto, nombre_producto, fecha_pedido, cantidad, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, destino_envio, estado, observaciones, creado_por, enviado_a_compras_at, enviado_a_proveedor_at, descargada_siigo_at, finalizada_at, siigo_referencia, created_at, updated_at'
+const SELECT_ORDEN =
+  'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, creado_por, descargada_siigo_at, finalizada_at, siigo_referencia, created_at, updated_at'
 
-export async function fetchOrdenesCompraProducto(codigoProducto: string): Promise<OrdenCompra[]> {
+const SELECT_ITEM =
+  'id, orden_id, codigo_producto, nombre_producto, cantidad, cantidad_recibida, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
+
+type OrdenRow = Omit<OrdenCompra, 'items' | 'codigo_producto' | 'nombre_producto' | 'cantidad' | 'descripcion' | 'proveedor_nit' | 'proveedor_nombre'>
+
+function enriquecerOrden(orden: OrdenRow, items: OrdenCompraItem[]): OrdenCompra {
+  const primero = items[0]
+  return {
+    ...orden,
+    items,
+    codigo_producto: primero?.codigo_producto ?? null,
+    nombre_producto: primero?.nombre_producto ?? null,
+    cantidad: primero?.cantidad ?? null,
+    descripcion: primero?.descripcion ?? null,
+    proveedor_nit: primero?.proveedor_nit ?? null,
+    proveedor_nombre: primero?.proveedor_nombre ?? null,
+  }
+}
+
+async function cargarItems(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ordenIds: number[]
+): Promise<Map<number, OrdenCompraItem[]>> {
+  if (ordenIds.length === 0) return new Map()
+
+  const { data, error } = await supabase
+    .from('orden_compra_items')
+    .select(SELECT_ITEM)
+    .in('orden_id', ordenIds)
+    .order('orden_linea', { ascending: true })
+
+  if (error) {
+    console.error('Failed to load orden_compra_items:', error)
+    return new Map()
+  }
+
+  const map = new Map<number, OrdenCompraItem[]>()
+  for (const row of (data ?? []) as OrdenCompraItem[]) {
+    const lista = map.get(row.orden_id) ?? []
+    lista.push(row)
+    map.set(row.orden_id, lista)
+  }
+  return map
+}
+
+export async function fetchOrdenesCompra(): Promise<OrdenCompra[]> {
   if (isDevBypassActive()) {
-    return getDevPreviewOrdenesCompra(codigoProducto)
+    return getDevPreviewOrdenesCompra()
   }
 
   const user = await getSessionUser()
@@ -31,8 +79,7 @@ export async function fetchOrdenesCompraProducto(codigoProducto: string): Promis
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('ordenes_compra')
-    .select(SELECT_COLS)
-    .eq('codigo_producto', codigoProducto)
+    .select(SELECT_ORDEN)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -40,12 +87,40 @@ export async function fetchOrdenesCompraProducto(codigoProducto: string): Promis
     return []
   }
 
-  return (data ?? []) as OrdenCompra[]
+  const ordenes = (data ?? []) as OrdenRow[]
+  const itemsMap = await cargarItems(
+    supabase,
+    ordenes.map((o) => o.id)
+  )
+
+  return ordenes.map((o) => enriquecerOrden(o, itemsMap.get(o.id) ?? []))
+}
+
+export async function fetchOrdenCompraById(id: number): Promise<OrdenCompra | null> {
+  if (isDevBypassActive()) {
+    return getDevPreviewOrdenById(id)
+  }
+
+  const user = await getSessionUser()
+  if (!user) return null
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('ordenes_compra').select(SELECT_ORDEN).eq('id', id).single()
+
+  if (error || !data) return null
+
+  const itemsMap = await cargarItems(supabase, [id])
+  return enriquecerOrden(data as OrdenRow, itemsMap.get(id) ?? [])
+}
+
+export async function fetchOrdenesCompraProducto(codigoProducto: string): Promise<OrdenCompra[]> {
+  const todas = await fetchOrdenesCompra()
+  return todas.filter((o) => o.items.some((i) => i.codigo_producto === codigoProducto))
 }
 
 export async function fetchOrdenesCompraPendientes(): Promise<OrdenCompra[]> {
   if (isDevBypassActive()) {
-    return getDevPreviewOrdenesCompra().filter((o) => o.estado === 'enviada')
+    return getDevPreviewOrdenesCompra().filter((o) => o.estado === 'en_curso')
   }
 
   const user = await getSessionUser()
@@ -54,9 +129,9 @@ export async function fetchOrdenesCompraPendientes(): Promise<OrdenCompra[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('ordenes_compra')
-    .select(SELECT_COLS)
-    .eq('estado', 'enviada')
-    .order('enviado_a_compras_at', { ascending: false })
+    .select(SELECT_ORDEN)
+    .eq('estado', 'en_curso')
+    .order('created_at', { ascending: false })
     .limit(20)
 
   if (error) {
@@ -64,7 +139,12 @@ export async function fetchOrdenesCompraPendientes(): Promise<OrdenCompra[]> {
     return []
   }
 
-  return (data ?? []) as OrdenCompra[]
+  const ordenes = (data ?? []) as OrdenRow[]
+  const itemsMap = await cargarItems(
+    supabase,
+    ordenes.map((o) => o.id)
+  )
+  return ordenes.map((o) => enriquecerOrden(o, itemsMap.get(o.id) ?? []))
 }
 
 export async function fetchOrdenesCompraPendientesCount(): Promise<number> {
@@ -79,7 +159,7 @@ export async function fetchOrdenesCompraPendientesCount(): Promise<number> {
   const { count, error } = await supabase
     .from('ordenes_compra')
     .select('id', { count: 'exact', head: true })
-    .eq('estado', 'enviada')
+    .eq('estado', 'en_curso')
 
   if (error) {
     console.error('Failed to count ordenes pendientes:', error)
@@ -89,39 +169,179 @@ export async function fetchOrdenesCompraPendientesCount(): Promise<number> {
   return count ?? 0
 }
 
-function mapInputToRow(datos: GuardarOrdenCompraInput, userId: string) {
+function mapPedidoHeader(datos: GuardarOrdenCompraPedidoInput, userId: string) {
   return {
-    codigo_producto: datos.codigo_producto,
-    nombre_producto: datos.nombre_producto.trim() || null,
+    titulo: datos.titulo.trim(),
     fecha_pedido: datos.fecha_pedido,
-    cantidad: datos.cantidad,
-    descripcion: datos.descripcion,
-    proveedor_nit: datos.proveedor_nit || null,
-    proveedor_nombre: datos.proveedor_nombre || null,
-    proveedor_email: datos.proveedor_email || null,
-    destino_envio: datos.destino_envio,
-    observaciones: datos.observaciones || null,
+    fecha_vencimiento: datos.fecha_vencimiento?.trim() || null,
+    observaciones: datos.observaciones.trim() || null,
+    observaciones_entrega: datos.observaciones_entrega.trim() || null,
     creado_por: userId,
     updated_at: new Date().toISOString(),
   }
 }
 
-export async function crearOrdenCompra(datos: GuardarOrdenCompraInput): Promise<OrdenCompraResultado> {
-  const parsed = guardarOrdenCompraSchema.safeParse(datos)
+function mapItemsInsert(ordenId: number, datos: GuardarOrdenCompraPedidoInput) {
+  return datos.items.map((item, idx) => ({
+    orden_id: ordenId,
+    codigo_producto: item.codigo_producto,
+    nombre_producto: item.nombre_producto.trim() || null,
+    cantidad: item.cantidad,
+    cantidad_recibida: item.cantidad_recibida ?? null,
+    descripcion: item.descripcion,
+    proveedor_nit: item.proveedor_nit.trim() || null,
+    proveedor_nombre: item.proveedor_nombre.trim() || null,
+    proveedor_email: item.proveedor_email.trim() || null,
+    observaciones: item.observaciones.trim() || null,
+    orden_linea: idx + 1,
+  }))
+}
+
+export async function crearOrdenCompraPedido(
+  datos: GuardarOrdenCompraPedidoInput
+): Promise<OrdenCompraResultado> {
+  const parsed = guardarOrdenCompraPedidoSchema.safeParse(datos)
   if (!parsed.success) {
     return { ok: false, error: 'Datos inválidos. Revisa el formulario.' }
   }
 
   if (isDevBypassActive()) {
     await new Promise((r) => setTimeout(r, 400))
-    devPreviewInsertOrden({
-      ...mapInputToRow(parsed.data, 'dev-preview-user'),
-      estado: 'borrador',
-      enviado_a_compras_at: null,
-      enviado_a_proveedor_at: null,
+    const nueva = devPreviewInsertOrden({
+      ...mapPedidoHeader(parsed.data, 'dev-preview-user'),
+      estado: 'en_curso',
       descargada_siigo_at: null,
       finalizada_at: null,
       siigo_referencia: null,
+      items: parsed.data.items.map((item, idx) => ({
+        ...item,
+        cantidad_recibida: item.cantidad_recibida ?? null,
+        observaciones: item.observaciones.trim() || null,
+        orden_linea: idx + 1,
+      })),
+    })
+    return { ok: true, id: nueva.id }
+  }
+
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sesión expirada.' }
+
+  const supabase = await createClient()
+  const header = mapPedidoHeader(parsed.data, user.id)
+  const primero = parsed.data.items[0]
+
+  const { data: inserted, error } = await supabase
+    .from('ordenes_compra')
+    .insert({
+      ...header,
+      estado: 'en_curso',
+      codigo_producto: primero.codigo_producto,
+      nombre_producto: primero.nombre_producto.trim() || null,
+      cantidad: primero.cantidad,
+      descripcion: primero.descripcion,
+      proveedor_nit: primero.proveedor_nit.trim() || null,
+      proveedor_nombre: primero.proveedor_nombre.trim() || null,
+      proveedor_email: primero.proveedor_email.trim() || null,
+    })
+    .select('id')
+    .single()
+
+  if (error || !inserted) {
+    console.error('Failed to insert orden_compra:', error)
+    return { ok: false, error: 'No se pudo crear la orden de compra.' }
+  }
+
+  const { error: itemsError } = await supabase
+    .from('orden_compra_items')
+    .insert(mapItemsInsert(inserted.id, parsed.data))
+
+  if (itemsError) {
+    console.error('Failed to insert orden_compra_items:', itemsError)
+    await supabase.from('ordenes_compra').delete().eq('id', inserted.id)
+    return { ok: false, error: 'No se pudieron guardar los ítems de la orden.' }
+  }
+
+  return { ok: true, id: inserted.id }
+}
+
+export async function actualizarOrdenCompraPedido(
+  id: number,
+  datos: GuardarOrdenCompraPedidoInput
+): Promise<OrdenCompraResultado> {
+  const parsed = guardarOrdenCompraPedidoSchema.safeParse(datos)
+  if (!parsed.success) {
+    return { ok: false, error: 'Datos inválidos. Revisa el formulario.' }
+  }
+
+  if (isDevBypassActive()) {
+    await new Promise((r) => setTimeout(r, 400))
+    const actual = getDevPreviewOrdenById(id)
+    if (!actual || actual.estado !== 'en_curso') {
+      return { ok: false, error: 'Esta orden ya no se puede editar.' }
+    }
+    devPreviewUpdateOrden(id, {
+      ...mapPedidoHeader(parsed.data, actual.creado_por),
+      items: parsed.data.items.map((item, idx) => ({
+        id: actual.items[idx]?.id ?? id * 100 + idx + 1,
+        orden_id: id,
+        ...item,
+        cantidad_recibida: item.cantidad_recibida ?? null,
+        observaciones: item.observaciones.trim() || null,
+        orden_linea: idx + 1,
+      })),
+    })
+    return { ok: true, id }
+  }
+
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sesión expirada.' }
+
+  const supabase = await createClient()
+  const primero = parsed.data.items[0]
+
+  const { error } = await supabase
+    .from('ordenes_compra')
+    .update({
+      ...mapPedidoHeader(parsed.data, user.id),
+      codigo_producto: primero.codigo_producto,
+      nombre_producto: primero.nombre_producto.trim() || null,
+      cantidad: primero.cantidad,
+      descripcion: primero.descripcion,
+      proveedor_nit: primero.proveedor_nit.trim() || null,
+      proveedor_nombre: primero.proveedor_nombre.trim() || null,
+      proveedor_email: primero.proveedor_email.trim() || null,
+    })
+    .eq('id', id)
+    .eq('estado', 'en_curso')
+
+  if (error) {
+    console.error('Failed to update orden_compra:', error)
+    return { ok: false, error: 'No se pudo actualizar la orden.' }
+  }
+
+  await supabase.from('orden_compra_items').delete().eq('orden_id', id)
+  const { error: itemsError } = await supabase
+    .from('orden_compra_items')
+    .insert(mapItemsInsert(id, parsed.data))
+
+  if (itemsError) {
+    console.error('Failed to update orden_compra_items:', itemsError)
+    return { ok: false, error: 'No se pudieron actualizar los ítems.' }
+  }
+
+  return { ok: true, id }
+}
+
+export async function actualizarEstadoOrdenCompra(
+  id: number,
+  estado: EstadoOrdenCompra
+): Promise<OrdenCompraResultado> {
+  const ahora = new Date().toISOString()
+
+  if (isDevBypassActive()) {
+    devPreviewUpdateOrden(id, {
+      estado,
+      finalizada_at: estado === 'listo' ? ahora : null,
     })
     return { ok: true }
   }
@@ -130,35 +350,27 @@ export async function crearOrdenCompra(datos: GuardarOrdenCompraInput): Promise<
   if (!user) return { ok: false, error: 'Sesión expirada.' }
 
   const supabase = await createClient()
-  const { error } = await supabase.from('ordenes_compra').insert({
-    ...mapInputToRow(parsed.data, user.id),
-    estado: 'borrador',
-  })
+  const patch: Record<string, string | null> = {
+    estado,
+    updated_at: ahora,
+    finalizada_at: estado === 'listo' ? ahora : null,
+  }
+
+  const { error } = await supabase.from('ordenes_compra').update(patch).eq('id', id)
 
   if (error) {
-    console.error('Failed to insert orden_compra:', error)
-    return { ok: false, error: 'No se pudo crear la orden de compra.' }
+    return { ok: false, error: 'No se pudo actualizar el estado.' }
   }
 
   return { ok: true }
 }
 
-export async function actualizarOrdenCompra(
+export async function actualizarObservacionesEntrega(
   id: number,
-  datos: GuardarOrdenCompraInput
+  observacionesEntrega: string
 ): Promise<OrdenCompraResultado> {
-  const parsed = guardarOrdenCompraSchema.safeParse(datos)
-  if (!parsed.success) {
-    return { ok: false, error: 'Datos inválidos. Revisa el formulario.' }
-  }
-
   if (isDevBypassActive()) {
-    await new Promise((r) => setTimeout(r, 400))
-    const actual = getDevPreviewOrdenesCompra().find((o) => o.id === id)
-    if (!actual || !['borrador', 'enviada'].includes(actual.estado)) {
-      return { ok: false, error: 'Esta orden ya no se puede editar.' }
-    }
-    devPreviewUpdateOrden(id, mapInputToRow(parsed.data, actual.creado_por))
+    devPreviewUpdateOrden(id, { observaciones_entrega: observacionesEntrega.trim() || null })
     return { ok: true }
   }
 
@@ -168,89 +380,14 @@ export async function actualizarOrdenCompra(
   const supabase = await createClient()
   const { error } = await supabase
     .from('ordenes_compra')
-    .update(mapInputToRow(parsed.data, user.id))
-    .eq('id', id)
-    .in('estado', ['borrador', 'enviada'])
-
-  if (error) {
-    console.error('Failed to update orden_compra:', error)
-    return { ok: false, error: 'No se pudo actualizar la orden.' }
-  }
-
-  return { ok: true }
-}
-
-async function notificarCompras(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  orden: { id: number; codigo_producto: string; descripcion: string; cantidad: number }
-) {
-  const { error } = await supabase.from('mensajes_panel').insert({
-    titulo: `Orden de compra #${orden.id}`,
-    cuerpo: `${orden.codigo_producto}: ${orden.descripcion} (${orden.cantidad} uds). Descarga el CSV desde inventario y carga la OC en Siigo Nube.`,
-    nivel: 'aviso',
-    rol_destino: 'compras',
-    created_by: userId,
-  })
-  if (error) {
-    console.error('Failed to notify compras:', error)
-  }
-}
-
-export async function enviarOrdenCompra(id: number): Promise<OrdenCompraResultado> {
-  const ahora = new Date().toISOString()
-
-  if (isDevBypassActive()) {
-    await new Promise((r) => setTimeout(r, 400))
-    const orden = getDevPreviewOrdenesCompra().find((o) => o.id === id)
-    if (!orden) return { ok: false, error: 'Orden no encontrada.' }
-    if (orden.estado !== 'borrador') return { ok: false, error: 'Solo se pueden enviar borradores.' }
-    devPreviewUpdateOrden(id, {
-      estado: 'enviada',
-      enviado_a_compras_at: ahora,
-      enviado_a_proveedor_at:
-        orden.destino_envio === 'proveedor' || orden.destino_envio === 'ambos' ? ahora : null,
+    .update({
+      observaciones_entrega: observacionesEntrega.trim() || null,
+      updated_at: new Date().toISOString(),
     })
-    return { ok: true }
-  }
-
-  const user = await getSessionUser()
-  if (!user) return { ok: false, error: 'Sesión expirada.' }
-
-  const supabase = await createClient()
-  const { data: orden, error: fetchError } = await supabase
-    .from('ordenes_compra')
-    .select('id, codigo_producto, descripcion, cantidad, destino_envio, estado')
     .eq('id', id)
-    .single()
-
-  if (fetchError || !orden) {
-    return { ok: false, error: 'Orden no encontrada.' }
-  }
-
-  if (orden.estado !== 'borrador') {
-    return { ok: false, error: 'Solo se pueden enviar borradores.' }
-  }
-
-  const patch: Record<string, string | null> = {
-    estado: 'enviada',
-    enviado_a_compras_at: ahora,
-    updated_at: ahora,
-  }
-
-  if (orden.destino_envio === 'proveedor' || orden.destino_envio === 'ambos') {
-    patch.enviado_a_proveedor_at = ahora
-  }
-
-  const { error } = await supabase.from('ordenes_compra').update(patch).eq('id', id)
 
   if (error) {
-    console.error('Failed to send orden_compra:', error)
-    return { ok: false, error: 'No se pudo enviar la orden.' }
-  }
-
-  if (orden.destino_envio === 'compras' || orden.destino_envio === 'ambos') {
-    await notificarCompras(supabase, user.id, orden)
+    return { ok: false, error: 'No se pudieron guardar las observaciones.' }
   }
 
   return { ok: true }
@@ -272,7 +409,6 @@ export async function marcarOrdenDescargadaSiigo(id: number): Promise<OrdenCompr
     .from('ordenes_compra')
     .update({ descargada_siigo_at: ahora, updated_at: ahora })
     .eq('id', id)
-    .eq('estado', 'enviada')
 
   if (error) {
     return { ok: false, error: 'No se pudo registrar la descarga.' }
@@ -285,73 +421,29 @@ export async function finalizarOrdenCompra(
   id: number,
   siigoReferencia?: string
 ): Promise<OrdenCompraResultado> {
-  const ahora = new Date().toISOString()
+  return actualizarEstadoOrdenCompra(id, 'listo').then(async (res) => {
+    if (!res.ok) return res
 
-  if (isDevBypassActive()) {
-    await new Promise((r) => setTimeout(r, 400))
-    const orden = getDevPreviewOrdenesCompra().find((o) => o.id === id)
-    if (!orden) return { ok: false, error: 'Orden no encontrada.' }
-    if (orden.estado !== 'enviada') {
-      return { ok: false, error: 'Solo se pueden finalizar órdenes enviadas.' }
+    const ref = siigoReferencia?.trim()
+    if (!ref) return res
+
+    if (isDevBypassActive()) {
+      devPreviewUpdateOrden(id, { siigo_referencia: ref })
+      return res
     }
-    devPreviewUpdateOrden(id, {
-      estado: 'finalizada',
-      finalizada_at: ahora,
-      siigo_referencia: siigoReferencia?.trim() || null,
-    })
-    return { ok: true }
-  }
 
-  const user = await getSessionUser()
-  if (!user) return { ok: false, error: 'Sesión expirada.' }
+    const supabase = await createClient()
+    await supabase
+      .from('ordenes_compra')
+      .update({ siigo_referencia: ref, updated_at: new Date().toISOString() })
+      .eq('id', id)
 
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('ordenes_compra')
-    .update({
-      estado: 'finalizada',
-      finalizada_at: ahora,
-      siigo_referencia: siigoReferencia?.trim() || null,
-      updated_at: ahora,
-    })
-    .eq('id', id)
-    .eq('estado', 'enviada')
-
-  if (error) {
-    console.error('Failed to finalize orden_compra:', error)
-    return { ok: false, error: 'No se pudo finalizar la orden.' }
-  }
-
-  return { ok: true }
+    return res
+  })
 }
 
 export async function cancelarOrdenCompra(id: number): Promise<OrdenCompraResultado> {
-  const ahora = new Date().toISOString()
-
-  if (isDevBypassActive()) {
-    const orden = getDevPreviewOrdenesCompra().find((o) => o.id === id)
-    if (!orden || !['borrador', 'enviada'].includes(orden.estado)) {
-      return { ok: false, error: 'Esta orden no se puede cancelar.' }
-    }
-    devPreviewUpdateOrden(id, { estado: 'cancelada', updated_at: ahora })
-    return { ok: true }
-  }
-
-  const user = await getSessionUser()
-  if (!user) return { ok: false, error: 'Sesión expirada.' }
-
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('ordenes_compra')
-    .update({ estado: 'cancelada', updated_at: ahora })
-    .eq('id', id)
-    .in('estado', ['borrador', 'enviada'])
-
-  if (error) {
-    return { ok: false, error: 'No se pudo cancelar la orden.' }
-  }
-
-  return { ok: true }
+  return actualizarEstadoOrdenCompra(id, 'cancelada')
 }
 
 export async function eliminarOrdenCompra(id: number): Promise<OrdenCompraResultado> {
@@ -366,11 +458,26 @@ export async function eliminarOrdenCompra(id: number): Promise<OrdenCompraResult
   if (!user) return { ok: false, error: 'Sesión expirada.' }
 
   const supabase = await createClient()
-  const { error } = await supabase.from('ordenes_compra').delete().eq('id', id).eq('estado', 'borrador')
+  const { error } = await supabase.from('ordenes_compra').delete().eq('id', id).eq('estado', 'en_curso')
 
   if (error) {
     return { ok: false, error: 'No se pudo borrar la orden.' }
   }
 
+  return { ok: true }
+}
+
+/** @deprecated Usar crearOrdenCompraPedido */
+export async function crearOrdenCompra(): Promise<OrdenCompraResultado> {
+  return { ok: false, error: 'Usa la sección Compras para crear órdenes.' }
+}
+
+/** @deprecated */
+export async function actualizarOrdenCompra(): Promise<OrdenCompraResultado> {
+  return { ok: false, error: 'Usa la sección Compras para editar órdenes.' }
+}
+
+/** @deprecated */
+export async function enviarOrdenCompra(): Promise<OrdenCompraResultado> {
   return { ok: true }
 }

@@ -1,12 +1,13 @@
+import Link from 'next/link'
+import { ClipboardList } from 'lucide-react'
 import { RoleGuard } from '@/components/shared/RoleGuard'
 import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
-import { getDashboardData } from '@/lib/supabase/get-dashboard-data'
-import {
-  PANELES_VISUALIZACION,
-  VisualizacionRolePanel,
-} from '@/components/visualizacion/VisualizacionRolePanel'
+import { fetchEntradasSalidasFormulariosSemana } from '@/lib/supabase/lectura-panel-actions'
+import { VehiculoTimelineCard } from '@/components/dashboard/VehiculoTimelineCard'
+import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChart'
 import { RealtimeRefresher } from '@/components/dashboard/RealtimeRefresher'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function VisualizacionPage() {
   return (
@@ -20,27 +21,47 @@ async function VisualizacionContent() {
   const result = await getCurrentProfile()
   if (result.status !== 'authenticated') return null
 
-  const data = await getDashboardData(10)
+  const entradasSalidas = await fetchEntradasSalidasFormulariosSemana()
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col gap-4">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Visualización en tiempo real</h1>
+        <h1 className="text-2xl font-semibold">Panel operativo</h1>
         <p className="text-sm text-muted-foreground">
-          Paneles de cada rol del sistema — se actualizan automáticamente ante cambios en inventario.
+          Vista general de vehículos, entradas y salidas. Sin inventario ni valores de stock.
         </p>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {PANELES_VISUALIZACION.map((panel) => (
-          <VisualizacionRolePanel
-            key={panel.rol}
-            label={panel.label}
-            rol={panel.rol}
-            variante={panel.variante}
-            data={data}
-          />
-        ))}
-      </div>
+
+      <VehiculoTimelineCard rolActual={result.profile.rol} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Entradas vs salidas de vehículos (7 días)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EntradasSalidasChart data={entradasSalidas} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle>Formularios</CardTitle>
+          <Link
+            href="/formularios"
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-input bg-background px-3 text-sm hover:bg-accent"
+          >
+            <ClipboardList className="h-4 w-4" />
+            Ver todos
+          </Link>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Consulta entradas, salidas y parqueadero desde la bitácora de formularios — sin acceso a
+            inventario ni compras.
+          </p>
+        </CardContent>
+      </Card>
+
       <RealtimeRefresher />
     </div>
   )

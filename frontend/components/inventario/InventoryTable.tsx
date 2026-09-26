@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { AlertTriangle, ShoppingCart } from 'lucide-react'
-import { OrdenCompraDialog } from '@/components/inventario/OrdenCompraDialog'
 import {
   Table,
   TableBody,
@@ -35,7 +35,6 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
   const [filas, setFilas] = useState<InventarioItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [productoOc, setProductoOc] = useState<InventarioItem | null>(null)
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -171,16 +170,13 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
                       : '—'}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      aria-label="Orden de compra"
-                      onClick={() => setProductoOc(item)}
+                    <Link
+                      href={`/compras?producto=${encodeURIComponent(item.codigo_producto)}&nombre=${encodeURIComponent(item.nombre_producto ?? item.codigo_producto)}`}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent"
+                      aria-label="Crear orden de compra"
                     >
                       <ShoppingCart className="h-4 w-4" />
-                    </Button>
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))
@@ -211,11 +207,6 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
         </Button>
       </div>
 
-      <OrdenCompraDialog
-        producto={productoOc}
-        abierto={productoOc !== null}
-        onOpenChange={(open) => { if (!open) setProductoOc(null) }}
-      />
     </div>
   )
 }

@@ -15,6 +15,8 @@ export interface VehiculoSugerencia {
   chasis: string
   marca: string | null
   ciudad: string | null
+  /** ISO — último formulario asociado al chasis (para ordenar recientes). */
+  ultimo_ingreso?: string | null
 }
 
 /** Etapas fijas del proceso de un vehículo, en el orden en que ocurren. */
@@ -89,6 +91,52 @@ export function construirEtapasVehiculo(eventos: EventoLineaTiempo[]): EtapaVehi
   })
 }
 
+function indiceVehiculos(filas: FormularioListado[]): Map<string, VehiculoSugerencia> {
+  const map = new Map<string, VehiculoSugerencia>()
+
+  for (const fila of filas) {
+    const vista = vistaFormulario(fila)
+    if (vista.chasis === '—') continue
+
+    const fecha = fechaEvento(vista)
+    const existente = map.get(vista.chasis)
+    if (!existente) {
+      map.set(vista.chasis, {
+        chasis: vista.chasis,
+        marca: vista.marca,
+        ciudad: ciudadDe(fila),
+        ultimo_ingreso: fecha,
+      })
+      continue
+    }
+
+    if (fecha && (!existente.ultimo_ingreso || fecha > existente.ultimo_ingreso)) {
+      map.set(vista.chasis, {
+        chasis: vista.chasis,
+        marca: vista.marca ?? existente.marca,
+        ciudad: ciudadDe(fila) ?? existente.ciudad,
+        ultimo_ingreso: fecha,
+      })
+    }
+  }
+
+  return map
+}
+
+/** Vehículos únicos ordenados del más reciente al más antiguo. */
+export function listarVehiculosRecientes(
+  filas: FormularioListado[],
+  limite = 30
+): VehiculoSugerencia[] {
+  return Array.from(indiceVehiculos(filas).values())
+    .sort((a, b) => {
+      const fa = a.ultimo_ingreso ?? ''
+      const fb = b.ultimo_ingreso ?? ''
+      return fb.localeCompare(fa)
+    })
+    .slice(0, limite)
+}
+
 /** Sugerencias de vehículos (chasis únicos) que hacen match con el término de búsqueda. */
 export function extraerSugerenciasVehiculo(
   filas: FormularioListado[],
@@ -98,22 +146,11 @@ export function extraerSugerenciasVehiculo(
   const q = normalizarTextoBusqueda(termino)
   if (!q) return []
 
-  const vistas = new Map<string, VehiculoSugerencia>()
-
-  for (const fila of filas) {
-    const vista = vistaFormulario(fila)
-    if (vista.chasis === '—') continue
-    if (!normalizarTextoBusqueda(vista.chasis).includes(q)) continue
-    if (vistas.has(vista.chasis)) continue
-
-    vistas.set(vista.chasis, {
-      chasis: vista.chasis,
-      marca: vista.marca,
-      ciudad: ciudadDe(fila),
-    })
-
-    if (vistas.size >= limite) break
-  }
-
-  return Array.from(vistas.values())
+  return listarVehiculosRecientes(filas, filas.length)
+    .filter(
+      (v) =>
+        normalizarTextoBusqueda(v.chasis).includes(q) ||
+        normalizarTextoBusqueda(v.marca ?? '').includes(q)
+    )
+    .slice(0, limite)
 }

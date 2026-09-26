@@ -62,12 +62,12 @@ export async function fetchNotificaciones(rol: string): Promise<NotificacionesPa
       id: 'ordenes-compra',
       titulo: 'Órdenes de compra pendientes',
       resumen: `${ordenesPendientes.length} orden${ordenesPendientes.length === 1 ? '' : 'es'} por cargar en Siigo`,
-      href: '/inventario',
+      href: '/compras',
       ordenes: ordenesPendientes.map((o) => ({
         id: o.id,
-        codigo_producto: o.codigo_producto,
-        descripcion: o.descripcion,
-        cantidad: o.cantidad,
+        codigo_producto: o.codigo_producto ?? o.items[0]?.codigo_producto ?? '—',
+        descripcion: o.descripcion ?? o.items[0]?.descripcion ?? o.titulo ?? '—',
+        cantidad: o.cantidad ?? o.items[0]?.cantidad ?? 0,
         fecha_pedido: o.fecha_pedido,
       })),
     })

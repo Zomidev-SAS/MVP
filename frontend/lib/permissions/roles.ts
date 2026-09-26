@@ -9,6 +9,7 @@ import {
   Users,
   ClipboardList,
   Settings,
+  ShoppingCart,
   type LucideIcon,
 } from 'lucide-react'
 import { ALL_ROLES, type Role } from '@/lib/types/database'
@@ -19,6 +20,7 @@ export type RouteKey =
   | 'dashboard'
   | 'visualizacion'
   | 'inventario'
+  | 'compras'
   | 'movimientos'
   | 'formularios'
   | 'entradas'
@@ -33,13 +35,14 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   visualizacion: ['lectura'] as const,
   // RLS real: productos_select/mov_select_autenticados permiten leer a
   // cualquier rol activo — no hay restricción de lectura por rol.
-  inventario: ALL_ROLES,
+  inventario: ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[],
+  compras: ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[],
   // RLS real (mov_select_autenticados) permite leer a cualquier activo,
   // pero mantenemos la bitácora completa reservada a supervisor/auditoria
   // (el rol "ingenieria" que la usaba ya no existe en el schema real).
   movimientos: ['supervisor', 'auditoria'] as const,
-  // Alineado a RLS formularios_select_panel (023): lectura no ve PII de formularios.
-  formularios: ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[],
+  // Lectura: formularios operativos (entrada/salida) — sin inventario ni costos.
+  formularios: [...ALL_ROLES.filter((r) => r !== 'lectura'), 'lectura'] as readonly Role[],
   // Alineado a la policy real mov_insert_roles_autorizados.
   entradas: ['supervisor', 'metalmecanica', 'produccion', 'instalacion', 'compras'] as const,
   // Alineado a la policy real ajustes_insert_roles.
@@ -64,8 +67,9 @@ export const NAV_ITEMS: {
   icon: LucideIcon
 }[] = [
   { key: 'dashboard', label: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { key: 'visualizacion', label: 'Visualización', href: '/visualizacion', icon: LayoutGrid },
+  { key: 'visualizacion', label: 'Panel operativo', href: '/visualizacion', icon: LayoutGrid },
   { key: 'inventario', label: 'Inventario', href: '/inventario', icon: Package },
+  { key: 'compras', label: 'Compras', href: '/compras', icon: ShoppingCart },
   { key: 'movimientos', label: 'Movimientos', href: '/movimientos', icon: ArrowLeftRight },
   { key: 'formularios', label: 'Formularios', href: '/formularios', icon: ClipboardList },
   { key: 'entradas', label: 'Entradas', href: '/entradas', icon: FilePlus },
