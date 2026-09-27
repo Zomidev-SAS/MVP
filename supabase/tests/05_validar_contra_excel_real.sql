@@ -1,13 +1,13 @@
 -- 05_validar_contra_excel_real.sql
--- Compara el saldo que calcula el ledger (apertura + deltas) contra el
--- valor_total real reportado en Saldos_de_inventario_30_Agosto_2026.xlsx.
--- Si esto pasa, significa que la carga (01 a 04) reconstruyó exactamente
--- el inventario real, sin perder ni duplicar ningún movimiento.
+-- Compara el saldo que calcula el ledger (apertura + deltas, YA FILTRADOS)
+-- contra el valor_total real de agosto, recalculado solo sobre los 475
+-- productos que pasan los 3 filtros de negocio (código numérico puro, sin
+-- nombre de vehículo, sin categoría genérica "Productos"/"Productos CA").
 
 do $$
 declare
   valor_calculado   numeric;
-  valor_real_agosto numeric := 3494744746.02;  -- suma real del xlsx de agosto
+  valor_real_agosto numeric := 791284169.98;  -- recalculado solo con productos filtrados
   diferencia        numeric;
   productos_cargados int;
 begin
@@ -21,14 +21,13 @@ begin
 
   diferencia := abs(valor_calculado - valor_real_agosto);
 
-  -- margen de tolerancia por redondeos de valor_unitario aproximado
   if diferencia > 1000 then
-    raise exception 'FALLÓ: valor calculado (%) difiere del real de agosto (%) por más de $1.000. Diferencia: %',
+    raise exception 'FALLÓ: valor calculado (%) difiere del real filtrado de agosto (%) por más de $1.000. Diferencia: %',
       valor_calculado, valor_real_agosto, diferencia;
   end if;
 
-  raise notice 'OK: % productos cargados', productos_cargados;
+  raise notice 'OK: % productos cargados (filtrados)', productos_cargados;
   raise notice 'OK: valor calculado por el ledger = %', valor_calculado;
-  raise notice 'OK: valor real reportado en agosto = %', valor_real_agosto;
+  raise notice 'OK: valor real filtrado de agosto = %', valor_real_agosto;
   raise notice 'OK: diferencia = % (dentro de tolerancia)', diferencia;
 end $$;
