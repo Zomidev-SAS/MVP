@@ -36,7 +36,7 @@ begin
     url := 'http://host.docker.internal:54321/functions/v1/sync-inventario-vin',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer REEMPLAZAR_CON_TU_SERVICE_ROLE_KEY_LOCAL'
+      'Authorization', 'Bearer sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz'
     ),
     body := jsonb_build_object(
       'formulario_id', new.id,
