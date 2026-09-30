@@ -7,7 +7,15 @@
 begin;
 
 insert into movimientos_inventario (codigo_producto, tipo_movimiento, cantidad, valor_unitario, bodega, motivo, actor_id, idempotency_key)
-select v.codigo_producto, v.tipo_movimiento, v.cantidad, v.valor_unitario, v.bodega, v.motivo, v.actor_id::uuid, v.idempotency_key
+select
+  v.codigo_producto,
+  v.tipo_movimiento,
+  v.cantidad,
+  v.valor_unitario,
+  v.bodega,
+  v.motivo,
+  (select p.id from profiles p where p.rol = 'supervisor' and p.activo order by p.created_at limit 1),
+  v.idempotency_key
 from (values
 ('10101100', 'ajuste', -1400, 30, 'ALMACEN NIVEL 1', 'Variación calculada automáticamente entre Junio y Julio 2026 (migración histórica)', '33333333-3333-3333-3333-333333333333', 'delta-jul2026-1'),
 ('101011000', 'entrada', 100, 29.2, 'ALMACEN NIVEL 1', 'Variación calculada automáticamente entre Junio y Julio 2026 (migración histórica)', '33333333-3333-3333-3333-333333333333', 'delta-jul2026-2'),
@@ -288,7 +296,7 @@ from (values
 ('95011000', 'entrada', 150, 0, 'DESCANSABRAZOS', 'Variación calculada automáticamente entre Junio y Julio 2026 (migración histórica)', '33333333-3333-3333-3333-333333333333', 'delta-jul2026-277'),
 ('95021000', 'ajuste', -6, 1600, 'DESCANSABRAZOS', 'Variación calculada automáticamente entre Junio y Julio 2026 (migración histórica)', '33333333-3333-3333-3333-333333333333', 'delta-jul2026-278'),
 ('95031000', 'entrada', 2, 2424.22, 'DESCANSABRAZOS', 'Variación calculada automáticamente entre Junio y Julio 2026 (migración histórica)', '33333333-3333-3333-3333-333333333333', 'delta-jul2026-279')
-) as v(codigo_producto, tipo_movimiento, cantidad, valor_unitario, bodega, motivo, actor_id, idempotency_key)
+) as v(codigo_producto, tipo_movimiento, cantidad, valor_unitario, bodega, motivo, actor_legacy, idempotency_key)
 where not exists (
   select 1 from movimientos_inventario m where m.idempotency_key = v.idempotency_key
 );
