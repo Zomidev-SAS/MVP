@@ -15,6 +15,7 @@ import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { getDashboardData } from '@/lib/supabase/get-dashboard-data'
 import { fetchProductosBajoStock } from '@/lib/supabase/inventario-actions'
 import { formatCOP, formatNumber } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { CalendarWidget } from '@/components/dashboard/CalendarWidget'
@@ -47,104 +48,114 @@ async function DashboardContent() {
   const data = await getDashboardData(variante === 'bitacora' ? 25 : 10)
   const productosBajoStock = variante === 'compras' ? await fetchProductosBajoStock(5) : []
 
+  const mostrarCalendario = variante !== 'bitacora' && variante !== 'basico'
+
   return (
     <div className="space-y-6">
-      {variante !== 'bitacora' && variante !== 'basico' && <CalendarWidget />}
+      <div className={cn('grid gap-6', mostrarCalendario && 'lg:grid-cols-[minmax(0,1fr)_320px]')}>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-semibold">
+              Bienvenido, {result.profile.nombre ?? result.user.email}
+            </h1>
+            <p className="text-muted-foreground">Rol: {result.profile.rol}</p>
+          </div>
 
-      <VehiculoTimelineCard rolActual={result.profile.rol} />
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <KpiCard
+              label="Total Unidades en Stock"
+              value={formatNumber(data.totalUnidades)}
+              icon={Package}
+            />
+            {puedeVerCostos && (
+              <KpiCard
+                label="Valor Total del Inventario"
+                value={formatCOP(data.valorTotal)}
+                icon={DollarSign}
+              />
+            )}
+            {variante !== 'basico' && (
+              <KpiCard
+                label="Movimientos del Día"
+                value={formatNumber(data.movimientosHoy)}
+                icon={ArrowLeftRight}
+              />
+            )}
+            <KpiCard
+              label="Productos con Stock Bajo"
+              value={formatNumber(data.stockBajo)}
+              icon={AlertTriangle}
+            />
+          </div>
 
-      <div>
-        <h1 className="text-2xl font-semibold">
-          Bienvenido, {result.profile.nombre ?? result.user.email}
-        </h1>
-        <p className="text-muted-foreground">Rol: {result.profile.rol}</p>
-      </div>
+          {(variante === 'completo' || variante === 'comercial' || variante === 'compras') && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Entradas vs Salidas (últimos 7 días)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <EntradasSalidasChart data={data.entradasVsSalidas} />
+              </CardContent>
+            </Card>
+          )}
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <KpiCard
-          label="Total Unidades en Stock"
-          value={formatNumber(data.totalUnidades)}
-          icon={Package}
-        />
-        {puedeVerCostos && (
-          <KpiCard
-            label="Valor Total del Inventario"
-            value={formatCOP(data.valorTotal)}
-            icon={DollarSign}
-          />
+          <VehiculoTimelineCard rolActual={result.profile.rol} />
+
+          {variante === 'compras' && <LowStockList productos={productosBajoStock} />}
+
+          {variante === 'comercial' && (
+            <QuickLinksCard
+              enlaces={[{ label: 'Inventario', href: '/inventario', icon: Package }]}
+            />
+          )}
+
+          {variante === 'compras' && (
+            <QuickLinksCard
+              enlaces={[
+                { label: 'Importar CSV', href: '/importar', icon: Upload },
+                { label: 'Entradas', href: '/entradas', icon: FilePlus },
+              ]}
+            />
+          )}
+
+          {variante === 'taller' && (
+            <QuickLinksCard
+              enlaces={[
+                { label: 'Inventario', href: '/inventario', icon: Package },
+                { label: 'Formularios', href: '/formularios', icon: ClipboardList },
+                { label: 'Ajustes', href: '/ajustes', icon: SlidersHorizontal },
+              ]}
+            />
+          )}
+
+          {variante === 'instalacion' && (
+            <QuickLinksCard enlaces={[{ label: 'Inventario', href: '/inventario', icon: Package }]} />
+          )}
+
+          {variante !== 'basico' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {variante === 'bitacora'
+                    ? 'Bitácora de actividad'
+                    : variante === 'instalacion'
+                      ? 'Productos con movimiento reciente'
+                      : 'Últimos movimientos'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <UltimosMovimientosTable movimientos={data.ultimosMovimientos} />
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {mostrarCalendario && (
+          <div className="lg:sticky lg:top-6">
+            <CalendarWidget />
+          </div>
         )}
-        {variante !== 'basico' && (
-          <KpiCard
-            label="Movimientos del Día"
-            value={formatNumber(data.movimientosHoy)}
-            icon={ArrowLeftRight}
-          />
-        )}
-        <KpiCard
-          label="Productos con Stock Bajo"
-          value={formatNumber(data.stockBajo)}
-          icon={AlertTriangle}
-        />
       </div>
-
-      {(variante === 'completo' || variante === 'comercial' || variante === 'compras') && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Entradas vs Salidas (últimos 7 días)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <EntradasSalidasChart data={data.entradasVsSalidas} />
-          </CardContent>
-        </Card>
-      )}
-
-      {variante === 'compras' && <LowStockList productos={productosBajoStock} />}
-
-      {variante === 'comercial' && (
-        <QuickLinksCard
-          enlaces={[{ label: 'Inventario', href: '/inventario', icon: Package }]}
-        />
-      )}
-
-      {variante === 'compras' && (
-        <QuickLinksCard
-          enlaces={[
-            { label: 'Importar CSV', href: '/importar', icon: Upload },
-            { label: 'Entradas', href: '/entradas', icon: FilePlus },
-          ]}
-        />
-      )}
-
-      {variante === 'taller' && (
-        <QuickLinksCard
-          enlaces={[
-            { label: 'Inventario', href: '/inventario', icon: Package },
-            { label: 'Formularios', href: '/formularios', icon: ClipboardList },
-            { label: 'Ajustes', href: '/ajustes', icon: SlidersHorizontal },
-          ]}
-        />
-      )}
-
-      {variante === 'instalacion' && (
-        <QuickLinksCard enlaces={[{ label: 'Inventario', href: '/inventario', icon: Package }]} />
-      )}
-
-      {variante !== 'basico' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {variante === 'bitacora'
-                ? 'Bitácora de actividad'
-                : variante === 'instalacion'
-                  ? 'Productos con movimiento reciente'
-                  : 'Últimos movimientos'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <UltimosMovimientosTable movimientos={data.ultimosMovimientos} />
-          </CardContent>
-        </Card>
-      )}
 
       <RealtimeRefresher />
     </div>

@@ -79,6 +79,18 @@ export const NAV_ITEMS: {
   { key: 'configuracion', label: 'Configuración', href: '/configuracion', icon: Settings },
 ]
 
+/** Agrupa NAV_ITEMS en las dos secciones visuales del sidebar. */
+export const NAV_GROUPS: { label: string; keys: RouteKey[] }[] = [
+  {
+    label: 'Módulos de planta',
+    keys: ['dashboard', 'visualizacion', 'inventario', 'compras', 'movimientos', 'formularios', 'entradas'],
+  },
+  {
+    label: 'Sistema y control',
+    keys: ['ajustes', 'importar', 'usuarios', 'configuracion'],
+  },
+]
+
 /** Resuelve un pathname exacto a su RouteKey, o null si no es una ruta controlada por ROUTE_PERMISSIONS (ej. /login, /acceso-denegado). */
 export function getRouteKeyForPath(pathname: string): RouteKey | null {
   if (pathname === '/cuenta') return 'cuenta'

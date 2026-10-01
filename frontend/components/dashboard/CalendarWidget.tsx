@@ -157,7 +157,7 @@ export function CalendarWidget() {
           Agregar evento
         </Button>
       </CardHeader>
-      <CardContent className="grid gap-6 lg:grid-cols-3">
+      <CardContent className="grid gap-6">
         <div>
           <div className="mb-2 flex items-center justify-between">
             <Button type="button" variant="outline" size="sm" onClick={irMesAnterior}>
