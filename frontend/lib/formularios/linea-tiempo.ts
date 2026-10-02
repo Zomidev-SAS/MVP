@@ -17,6 +17,8 @@ export interface VehiculoSugerencia {
   ciudad: string | null
   /** ISO — último formulario asociado al chasis (para ordenar recientes). */
   ultimo_ingreso?: string | null
+  /** Etapa más avanzada alcanzada por el vehículo, o null si no hay formularios reconocidos. */
+  estadoActual?: EtapaVehiculoNombre | null
 }
 
 /** Etapas fijas del proceso de un vehículo, en el orden en que ocurren. */
@@ -91,12 +93,25 @@ export function construirEtapasVehiculo(eventos: EventoLineaTiempo[]): EtapaVehi
   })
 }
 
+/** Etapa más avanzada alcanzada dado el conjunto de tipoLabel vistos para un chasis. */
+function estadoActualDe(tiposVistos: Set<string>): EtapaVehiculoNombre | null {
+  if (tiposVistos.has('Salida')) return 'Salida'
+  if (tiposVistos.has('Parqueadero')) return 'Parqueadero'
+  if (tiposVistos.has('Entrada')) return 'En proceso'
+  return null
+}
+
 function indiceVehiculos(filas: FormularioListado[]): Map<string, VehiculoSugerencia> {
   const map = new Map<string, VehiculoSugerencia>()
+  const tiposPorChasis = new Map<string, Set<string>>()
 
   for (const fila of filas) {
     const vista = vistaFormulario(fila)
     if (vista.chasis === '—') continue
+
+    const tipos = tiposPorChasis.get(vista.chasis) ?? new Set<string>()
+    tipos.add(vista.tipoLabel)
+    tiposPorChasis.set(vista.chasis, tipos)
 
     const fecha = fechaEvento(vista)
     const existente = map.get(vista.chasis)
@@ -118,6 +133,10 @@ function indiceVehiculos(filas: FormularioListado[]): Map<string, VehiculoSugere
         ultimo_ingreso: fecha,
       })
     }
+  }
+
+  for (const [chasis, vehiculo] of map) {
+    vehiculo.estadoActual = estadoActualDe(tiposPorChasis.get(chasis) ?? new Set())
   }
 
   return map

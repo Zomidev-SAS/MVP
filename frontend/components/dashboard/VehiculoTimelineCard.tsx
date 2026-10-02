@@ -42,6 +42,40 @@ function iconoPorEtapa(etapa: string) {
   return ParkingSquare
 }
 
+const ESTADO_BADGE: Record<EtapaVehiculoNombre, { label: string; className: string }> = {
+  Entrada: {
+    label: 'Entrada Completada',
+    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
+  },
+  'En proceso': {
+    label: 'En Transformación',
+    className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+  },
+  Parqueadero: {
+    label: 'Parqueadero Técnico',
+    className: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+  },
+  Salida: {
+    label: 'Salida Completada',
+    className: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400',
+  },
+}
+
+function EstadoVehiculoBadge({ estado }: { estado: EtapaVehiculoNombre | null | undefined }) {
+  if (!estado) return null
+  const badge = ESTADO_BADGE[estado]
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+        badge.className
+      )}
+    >
+      {badge.label}
+    </span>
+  )
+}
+
 function textoEtapaSinFormulario(etapa: EtapaVehiculoNombre): string {
   if (etapa === 'En proceso') return 'Sin registros de proceso'
   return 'Etapa completada'
@@ -197,15 +231,18 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
                     key={v.chasis}
                     type="button"
                     onClick={() => seleccionarVehiculo(v)}
-                    className="flex w-full flex-col items-start border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent"
+                    className="flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent"
                   >
-                    <span className="font-mono font-medium">{v.chasis}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {[v.marca, v.ciudad].filter(Boolean).join(' · ') || 'Sin datos adicionales'}
-                      {v.ultimo_ingreso
-                        ? ` · ${formatearFechaFormulario(v.ultimo_ingreso) ?? v.ultimo_ingreso}`
-                        : ''}
+                    <span className="flex min-w-0 flex-col items-start">
+                      <span className="font-mono font-medium">{v.chasis}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {[v.marca, v.ciudad].filter(Boolean).join(' · ') || 'Sin datos adicionales'}
+                        {v.ultimo_ingreso
+                          ? ` · ${formatearFechaFormulario(v.ultimo_ingreso) ?? v.ultimo_ingreso}`
+                          : ''}
+                      </span>
                     </span>
+                    <EstadoVehiculoBadge estado={v.estadoActual} />
                   </button>
                 ))
               )}
