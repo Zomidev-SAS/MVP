@@ -89,9 +89,9 @@ export const ETIQUETA_ESTADO_OC: Record<EstadoOrdenCompra, string> = {
 }
 
 export const CLASE_ESTADO_OC: Record<EstadoOrdenCompra, string> = {
-  en_curso: 'bg-amber-100 text-amber-900 border-amber-200',
-  listo: 'bg-emerald-100 text-emerald-900 border-emerald-200',
-  cancelada: 'bg-muted text-muted-foreground border-border',
+  en_curso: 'chip-warning',
+  listo: 'chip-success',
+  cancelada: 'chip-neutral',
 }
 
 export function tituloOrdenDisplay(orden: OrdenCompra): string {

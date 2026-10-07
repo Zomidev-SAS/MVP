@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -20,6 +20,7 @@ import { formatearFechaFormulario } from '@/lib/types/formularios'
 import type { Role } from '@/lib/types/database'
 import type { VehiculoProceso } from '@/lib/types/vehiculo-proceso'
 import {
+  buscarVehiculosFormulario,
   fetchLineaTiempoVehiculo,
   fetchVehiculosRecientes,
 } from '@/lib/supabase/vehiculo-timeline-actions'
@@ -45,19 +46,19 @@ function iconoPorEtapa(etapa: string) {
 const ESTADO_BADGE: Record<EtapaVehiculoNombre, { label: string; className: string }> = {
   Entrada: {
     label: 'Entrada Completada',
-    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
+    className: 'badge-success',
   },
   'En proceso': {
     label: 'En Transformación',
-    className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+    className: 'badge-warning',
   },
   Parqueadero: {
     label: 'Parqueadero Técnico',
-    className: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+    className: 'badge-info',
   },
   Salida: {
     label: 'Salida Completada',
-    className: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400',
+    className: 'badge-highlight',
   },
 }
 
@@ -119,7 +120,9 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
   const [termino, setTermino] = useState('')
   const [procesoDialogAbierto, setProcesoDialogAbierto] = useState(false)
   const [vehiculosRecientes, setVehiculosRecientes] = useState<VehiculoSugerencia[]>([])
+  const [resultadosBusqueda, setResultadosBusqueda] = useState<VehiculoSugerencia[]>([])
   const [cargandoLista, setCargandoLista] = useState(true)
+  const [buscando, setBuscando] = useState(false)
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<VehiculoSugerencia | null>(
     null
   )
@@ -138,16 +141,28 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
       .finally(() => setCargandoLista(false))
   }, [])
 
-  const listaVisible = useMemo(() => {
-    const q = termino.trim().toLowerCase()
-    if (!q) return vehiculosRecientes
-    return vehiculosRecientes.filter(
-      (v) =>
-        v.chasis.toLowerCase().includes(q) ||
-        (v.marca?.toLowerCase().includes(q) ?? false) ||
-        (v.ciudad?.toLowerCase().includes(q) ?? false)
-    )
-  }, [vehiculosRecientes, termino])
+  useEffect(() => {
+    const q = termino.trim()
+    if (!q) {
+      setResultadosBusqueda([])
+      setBuscando(false)
+      return
+    }
+    setBuscando(true)
+    const id = setTimeout(() => {
+      buscarVehiculosFormulario(q)
+        .then(setResultadosBusqueda)
+        .catch((error) => {
+          console.error('Failed to search vehiculos:', error)
+          setResultadosBusqueda([])
+        })
+        .finally(() => setBuscando(false))
+    }, 300)
+    return () => clearTimeout(id)
+  }, [termino])
+
+  const buscandoActivamente = termino.trim().length > 0
+  const listaVisible = buscandoActivamente ? resultadosBusqueda : vehiculosRecientes
 
   const cargarDetalleVehiculo = useCallback(async (chasis: string) => {
     setCargandoEventos(true)
@@ -190,14 +205,18 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Car className="h-5 w-5 text-primary" />
+          <Car aria-hidden="true" className="h-5 w-5 text-primary" />
           Estado vehículo
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          />
           <Input
+            aria-label="Buscar vehículo por chasis, marca o ciudad"
             value={termino}
             onChange={(e) => {
               setTermino(e.target.value)
@@ -213,18 +232,24 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
         </div>
 
         {!vehiculoSeleccionado && (
-          <div className="space-y-2">
+          <div className="animate-in fade-in-0 slide-in-from-bottom-1 duration-150 space-y-2">
             <p className="text-xs font-medium text-muted-foreground">
-              Vehículos recientes {cargandoLista ? '' : `(${listaVisible.length})`}
+              {buscandoActivamente
+                ? `Resultados ${buscando ? '' : `(${listaVisible.length})`}`
+                : `Vehículos recientes ${cargandoLista ? '' : `(${listaVisible.length})`}`}
             </p>
             <div className="max-h-48 overflow-y-auto rounded-md border border-border">
-              {cargandoLista ? (
+              {cargandoLista || buscando ? (
                 <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Cargando lista...
+                  <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                  {buscandoActivamente ? 'Buscando...' : 'Cargando lista...'}
                 </p>
               ) : listaVisible.length === 0 ? (
-                <p className="px-3 py-2 text-sm text-muted-foreground">Sin vehículos registrados.</p>
+                <p className="px-3 py-2 text-sm text-muted-foreground">
+                  {buscandoActivamente
+                    ? 'Sin vehículos que coincidan con la búsqueda.'
+                    : 'Sin vehículos registrados.'}
+                </p>
               ) : (
                 listaVisible.map((v) => (
                   <button
@@ -251,7 +276,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
         )}
 
         {vehiculoSeleccionado && (
-          <div className="space-y-3">
+          <div className="animate-in fade-in-0 slide-in-from-bottom-1 duration-150 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm">
                 Chasis <span className="font-mono font-medium">{vehiculoSeleccionado.chasis}</span>
@@ -267,7 +292,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
 
             {cargandoEventos ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
                 Cargando historial...
               </div>
             ) : etapas.every((etapa) => !etapa.completada) && procesos.length === 0 ? (
@@ -291,7 +316,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
                               : 'border-dashed border-border bg-muted text-muted-foreground'
                           )}
                         >
-                          <Icono className="h-4 w-4" />
+                          <Icono aria-hidden="true" className="h-4 w-4" />
                         </span>
                         <span
                           className={cn(
@@ -324,7 +349,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
                                   className="mt-1 h-7 w-full text-[10px]"
                                   onClick={() => setProcesoDialogAbierto(true)}
                                 >
-                                  <Plus className="mr-1 h-3 w-3" />
+                                  <Plus aria-hidden="true" className="mr-1 h-3 w-3" />
                                   Agregar
                                 </Button>
                               )}

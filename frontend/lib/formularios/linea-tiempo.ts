@@ -169,7 +169,8 @@ export function extraerSugerenciasVehiculo(
     .filter(
       (v) =>
         normalizarTextoBusqueda(v.chasis).includes(q) ||
-        normalizarTextoBusqueda(v.marca ?? '').includes(q)
+        normalizarTextoBusqueda(v.marca ?? '').includes(q) ||
+        normalizarTextoBusqueda(v.ciudad ?? '').includes(q)
     )
     .slice(0, limite)
 }

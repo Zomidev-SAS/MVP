@@ -10,8 +10,8 @@ import {
 import type { EntradaSalidaDia } from '@/lib/types/dashboard'
 
 const chartConfig = {
-  entradas: { label: 'Entradas', color: 'var(--primary)' },
-  salidas: { label: 'Salidas', color: 'var(--muted-foreground)' },
+  entradas: { label: 'Entradas', color: 'var(--chart-1)' },
+  salidas: { label: 'Salidas', color: 'var(--chart-2)' },
 } satisfies ChartConfig
 
 export function EntradasSalidasChart({ data }: { data: EntradaSalidaDia[] }) {

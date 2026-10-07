@@ -3,6 +3,7 @@ import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { fetchNotificaciones } from '@/lib/supabase/notificaciones-actions'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
+import { PageTransition } from '@/components/layout/PageTransition'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,10 +46,14 @@ export default async function PanelLayout({
       <Sidebar profile={result.profile} ajustesPendientes={ajustesPendientes} />
       <div className="flex flex-1 flex-col">
         <Header
+          profile={result.profile}
+          ajustesPendientes={ajustesPendientes}
           notificaciones={notificaciones}
           esSupervisor={result.profile.rol === 'supervisor'}
         />
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6">
+          <PageTransition>{children}</PageTransition>
+        </main>
       </div>
     </div>
   )

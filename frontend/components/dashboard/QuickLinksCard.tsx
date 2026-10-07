@@ -14,16 +14,18 @@ export function QuickLinksCard({
       <CardHeader>
         <CardTitle>{titulo}</CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {/* flex-wrap with a fixed item width (not a grid) so a single link
+          doesn't stretch to fill an empty row. */}
+      <CardContent className="flex flex-wrap gap-3">
         {enlaces.map((enlace) => {
           const Icon = enlace.icon
           return (
             <Link
               key={enlace.href}
               href={enlace.href}
-              className="flex flex-col items-center gap-2 rounded-md border p-4 text-center text-sm transition-colors hover:bg-accent"
+              className="flex w-28 shrink-0 flex-col items-center gap-2 rounded-md border p-4 text-center text-sm transition-colors hover:bg-accent sm:w-32"
             >
-              <Icon className="h-5 w-5 text-primary" />
+              <Icon aria-hidden="true" className="h-5 w-5 text-primary" />
               {enlace.label}
             </Link>
           )

@@ -187,7 +187,7 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
         <TableCell>
           <select
             className={cn(
-              'rounded-full border px-2.5 py-1 text-xs font-medium',
+              'w-[110px] cursor-pointer rounded-md border-0 px-3 py-1.5 text-center text-xs font-semibold',
               CLASE_ESTADO_OC[orden.estado]
             )}
             value={orden.estado}
@@ -307,7 +307,10 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
         <div className="space-y-6">
           {pendientes.length > 0 && (
             <section>
-              <h2 className="mb-2 text-sm font-semibold text-primary">Pendientes</h2>
+              <div className="mb-2 flex items-center gap-2">
+                <span aria-hidden="true" className="h-5 w-1.5 rounded-full bg-primary" />
+                <h2 className="text-sm font-semibold text-foreground">Pendientes</h2>
+              </div>
               <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
@@ -320,7 +323,21 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
                       <TableHead className="w-[80px]" />
                     </TableRow>
                   </TableHeader>
-                  <TableBody>{pendientes.map(renderFila)}</TableBody>
+                  <TableBody>
+                    {pendientes.map(renderFila)}
+                    <TableRow className="hover:bg-muted/50">
+                      <TableCell colSpan={6} className="p-0">
+                        <button
+                          type="button"
+                          onClick={abrirNueva}
+                          className="flex w-full items-center gap-1.5 px-2 py-2.5 text-left text-sm text-muted-foreground hover:text-foreground"
+                        >
+                          <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+                          Agregar pedido
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
                 </Table>
               </div>
             </section>
@@ -328,7 +345,10 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
 
           {otras.length > 0 && (
             <section>
-              <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Historial</h2>
+              <div className="mb-2 flex items-center gap-2">
+                <span aria-hidden="true" className="h-5 w-1.5 rounded-full bg-muted-foreground/40" />
+                <h2 className="text-sm font-semibold text-muted-foreground">Historial</h2>
+              </div>
               <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>

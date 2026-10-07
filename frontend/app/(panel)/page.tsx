@@ -14,7 +14,6 @@ import { VARIANTE_POR_ROL } from '@/lib/permissions/dashboard-variante'
 import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { getDashboardData } from '@/lib/supabase/get-dashboard-data'
 import { fetchProductosBajoStock } from '@/lib/supabase/inventario-actions'
-import { formatCOP, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
@@ -62,28 +61,25 @@ async function DashboardContent() {
           </div>
 
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <KpiCard
-              label="Total Unidades en Stock"
-              value={formatNumber(data.totalUnidades)}
-              icon={Package}
-            />
+            <KpiCard label="Total Unidades en Stock" value={data.totalUnidades} icon={Package} />
             {puedeVerCostos && (
               <KpiCard
                 label="Valor Total del Inventario"
-                value={formatCOP(data.valorTotal)}
+                value={data.valorTotal}
+                format="currency"
                 icon={DollarSign}
               />
             )}
             {variante !== 'basico' && (
               <KpiCard
                 label="Movimientos del Día"
-                value={formatNumber(data.movimientosHoy)}
+                value={data.movimientosHoy}
                 icon={ArrowLeftRight}
               />
             )}
             <KpiCard
               label="Productos con Stock Bajo"
-              value={formatNumber(data.stockBajo)}
+              value={data.stockBajo}
               icon={AlertTriangle}
             />
           </div>
