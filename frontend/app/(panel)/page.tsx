@@ -23,7 +23,7 @@ import { CalendarWidget } from '@/components/dashboard/CalendarWidget'
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
 import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChart'
 import { UltimosMovimientosTable } from '@/components/dashboard/UltimosMovimientosTable'
-import { RealtimeRefresher } from '@/components/dashboard/RealtimeRefresher'
+import { RealtimePanelProvider } from '@/components/realtime/RealtimePanelProvider'
 import { QuickLinksCard } from '@/components/dashboard/QuickLinksCard'
 import { LowStockList } from '@/components/dashboard/LowStockList'
 import { VehiculoTimelineCard } from '@/components/dashboard/VehiculoTimelineCard'
@@ -97,11 +97,16 @@ async function DashboardContent() {
     <div className="space-y-6">
       <div className={cn('grid gap-6', mostrarCalendario && 'lg:grid-cols-[minmax(0,1fr)_320px]')}>
         <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-semibold">
-              Bienvenido, {result.profile.nombre ?? result.user.email}
-            </h1>
-            <p className="text-muted-foreground">Rol: {result.profile.rol}</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h1 className="text-2xl font-semibold">
+                Bienvenido, {result.profile.nombre ?? result.user.email}
+              </h1>
+              <p className="text-muted-foreground">Rol: {result.profile.rol}</p>
+            </div>
+            <RealtimePanelProvider
+              tablas={['movimientos_inventario', 'ajustes_pendientes', 'ordenes_compra', 'mensajes_panel']}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -199,8 +204,6 @@ async function DashboardContent() {
           </div>
         )}
       </div>
-
-      <RealtimeRefresher />
     </div>
   )
 }
