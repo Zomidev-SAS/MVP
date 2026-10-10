@@ -4,6 +4,11 @@ export interface ProductoStockBajo {
   saldo: number
 }
 
+export interface EstadoCorreoNotificacion {
+  enviado: boolean
+  fecha: string | null
+}
+
 export interface AlertaStockBajo {
   tipo: 'stock_bajo'
   id: string
@@ -11,6 +16,7 @@ export interface AlertaStockBajo {
   resumen: string
   href: string
   productos: ProductoStockBajo[]
+  correoEnviado?: EstadoCorreoNotificacion
 }
 
 export interface AlertaAjustes {
@@ -20,6 +26,7 @@ export interface AlertaAjustes {
   resumen: string
   href: string
   cantidad: number
+  correoEnviado?: EstadoCorreoNotificacion
 }
 
 export interface EventoHoyResumen {
@@ -37,6 +44,7 @@ export interface AlertaEventosHoy {
   resumen: string
   href: string
   eventos: EventoHoyResumen[]
+  correoEnviado?: EstadoCorreoNotificacion
 }
 
 export interface OrdenCompraPendienteResumen {
@@ -54,6 +62,7 @@ export interface AlertaOrdenesCompra {
   resumen: string
   href: string
   ordenes: OrdenCompraPendienteResumen[]
+  correoEnviado?: EstadoCorreoNotificacion
 }
 
 export type AlertaNotificacion =
