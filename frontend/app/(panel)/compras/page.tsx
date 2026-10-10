@@ -1,6 +1,7 @@
 import { RoleGuard } from '@/components/shared/RoleGuard'
 import { ComprasTable } from '@/components/compras/ComprasTable'
 import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
+import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 
 interface ComprasPageProps {
   searchParams: Promise<{ producto?: string; nombre?: string }>
@@ -15,7 +16,7 @@ export default function ComprasPage({ searchParams }: ComprasPageProps) {
 }
 
 async function ComprasContent({ searchParams }: ComprasPageProps) {
-  const params = await searchParams
+  const [params, result] = await Promise.all([searchParams, getCurrentProfile()])
   const productoInicial =
     params.producto?.trim()
       ? {
@@ -23,6 +24,9 @@ async function ComprasContent({ searchParams }: ComprasPageProps) {
           nombre: params.nombre?.trim() || params.producto.trim(),
         }
       : null
+  const puedeGestionarSiigo =
+    result.status === 'authenticated' &&
+    (result.profile.rol === 'supervisor' || result.profile.rol === 'compras')
 
   return (
     <div className="space-y-4">
@@ -33,7 +37,7 @@ async function ComprasContent({ searchParams }: ComprasPageProps) {
           registra entregas parciales en el campo de texto.
         </p>
       </div>
-      <ComprasTable productoInicial={productoInicial} />
+      <ComprasTable productoInicial={productoInicial} puedeGestionarSiigo={puedeGestionarSiigo} />
     </div>
   )
 }

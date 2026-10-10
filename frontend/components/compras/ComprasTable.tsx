@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Send,
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -38,12 +39,17 @@ import {
   actualizarEstadoOrdenCompra,
   actualizarObservacionesEntrega,
   eliminarOrdenCompra,
+  enviarOrdenASiigo,
   fetchOrdenesCompra,
   marcarOrdenDescargadaSiigo,
+  reintentarEnvioSiigo,
 } from '@/lib/supabase/ordenes-compra-actions'
+import { derivarEstadoSiigo } from '@/lib/supabase/orden-compra-siigo-status'
 import { descargarCsvSiigo } from '@/lib/export/orden-compra-siigo'
 import { descargarPdfOrdenCompra } from '@/lib/export/orden-compra-pdf'
 import { ComprasPedidoDialog } from '@/components/compras/ComprasPedidoDialog'
+import { SiigoStatusBadge, ETIQUETA_SIIGO_SYNC } from '@/components/compras/SiigoStatusBadge'
+import type { EstadoSyncSiigo } from '@/lib/types/siigo'
 
 function formatearVencimiento(fecha: string | null): string {
   if (!fecha) return '—'
@@ -69,17 +75,20 @@ function iconoVencimiento(orden: OrdenCompra) {
 
 interface ComprasTableProps {
   productoInicial?: { codigo: string; nombre: string } | null
+  puedeGestionarSiigo: boolean
 }
 
-export function ComprasTable({ productoInicial }: ComprasTableProps) {
+export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTableProps) {
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'todos' | EstadoOrdenCompra>('todos')
+  const [filtroSiigo, setFiltroSiigo] = useState<'todos' | EstadoSyncSiigo>('todos')
   const [dialogAbierto, setDialogAbierto] = useState(Boolean(productoInicial))
   const [ordenEditar, setOrdenEditar] = useState<OrdenCompra | null>(null)
   const [editandoTextoId, setEditandoTextoId] = useState<number | null>(null)
   const [textoEntrega, setTextoEntrega] = useState('')
+  const [enviandoSiigoId, setEnviandoSiigoId] = useState<number | null>(null)
 
   const recargar = useCallback(async () => {
     setLoading(true)
@@ -98,6 +107,7 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
     const q = busqueda.trim().toLowerCase()
     return ordenes.filter((o) => {
       if (filtroEstado !== 'todos' && o.estado !== filtroEstado) return false
+      if (filtroSiigo !== 'todos' && derivarEstadoSiigo(o).estado !== filtroSiigo) return false
       if (!q) return true
       const titulo = tituloOrdenDisplay(o).toLowerCase()
       const items = o.items
@@ -110,7 +120,7 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
       const texto = `${titulo} ${o.observaciones_entrega ?? ''} ${items}`.toLowerCase()
       return texto.includes(q)
     })
-  }, [ordenes, busqueda, filtroEstado])
+  }, [ordenes, busqueda, filtroEstado, filtroSiigo])
 
   const pendientes = filtradas.filter((o) => o.estado === 'en_curso')
   const otras = filtradas.filter((o) => o.estado !== 'en_curso')
@@ -137,6 +147,21 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
     await marcarOrdenDescargadaSiigo(orden.id)
     toast.success('CSV descargado.')
     recargar()
+  }
+
+  async function handleEnviarSiigo(orden: OrdenCompra, esReintento: boolean) {
+    setEnviandoSiigoId(orden.id)
+    try {
+      const res = esReintento ? await reintentarEnvioSiigo(orden.id) : await enviarOrdenASiigo(orden.id)
+      if (res.ok) {
+        toast.success('Orden enviada a Siigo.')
+        recargar()
+      } else {
+        toast.error(res.error)
+      }
+    } finally {
+      setEnviandoSiigoId(null)
+    }
   }
 
   async function guardarTextoEntrega(id: number) {
@@ -175,6 +200,8 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
       orden.items.length === 1
         ? `${orden.items[0].cantidad} uds · ${orden.items[0].codigo_producto}`
         : `${orden.items.length} líneas · ${orden.items.map((i) => i.proveedor_nombre).filter(Boolean).slice(0, 2).join(', ')}`
+    const siigo = derivarEstadoSiigo(orden)
+    const enviandoEstaOrden = enviandoSiigoId === orden.id
 
     return (
       <TableRow key={orden.id}>
@@ -201,6 +228,14 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
           </select>
         </TableCell>
         <TableCell>
+          <div>
+            <SiigoStatusBadge estado={siigo.estado} />
+            {siigo.referencia && (
+              <p className="mt-1 text-xs text-muted-foreground">Ref. {siigo.referencia}</p>
+            )}
+          </div>
+        </TableCell>
+        <TableCell>
           <div className="flex items-center gap-1.5 text-sm">
             {iconoVencimiento(orden)}
             <span>{formatearVencimiento(orden.fecha_vencimiento)}</span>
@@ -215,6 +250,30 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
             <Button type="button" variant="ghost" size="sm" onClick={() => handleCsv(orden)}>
               <Download className="h-3 w-3" />
             </Button>
+            {puedeGestionarSiigo && siigo.estado === 'pendiente' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={enviandoEstaOrden}
+                onClick={() => handleEnviarSiigo(orden, false)}
+              >
+                <Send className="mr-1 h-3 w-3" />
+                {enviandoEstaOrden ? 'Enviando…' : 'Enviar a Siigo'}
+              </Button>
+            )}
+            {puedeGestionarSiigo && siigo.estado === 'error' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={enviandoEstaOrden}
+                onClick={() => handleEnviarSiigo(orden, true)}
+              >
+                <Send className="mr-1 h-3 w-3" />
+                {enviandoEstaOrden ? 'Enviando…' : 'Reintentar'}
+              </Button>
+            )}
           </div>
         </TableCell>
         <TableCell className="max-w-[220px]">
@@ -296,6 +355,18 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
               </option>
             ))}
           </select>
+          <select
+            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+            value={filtroSiigo}
+            onChange={(e) => setFiltroSiigo(e.target.value as typeof filtroSiigo)}
+          >
+            <option value="todos">Todos (Siigo)</option>
+            {(Object.keys(ETIQUETA_SIIGO_SYNC) as EstadoSyncSiigo[]).map((e) => (
+              <option key={e} value={e}>
+                {ETIQUETA_SIIGO_SYNC[e]}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -317,6 +388,7 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
                     <TableRow>
                       <TableHead>Tarea</TableHead>
                       <TableHead>Estado</TableHead>
+                      <TableHead>Siigo</TableHead>
                       <TableHead>Vencimiento</TableHead>
                       <TableHead>Archivo</TableHead>
                       <TableHead>Texto</TableHead>
@@ -326,7 +398,7 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
                   <TableBody>
                     {pendientes.map(renderFila)}
                     <TableRow className="hover:bg-muted/50">
-                      <TableCell colSpan={6} className="p-0">
+                      <TableCell colSpan={7} className="p-0">
                         <button
                           type="button"
                           onClick={abrirNueva}
@@ -355,6 +427,7 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
                     <TableRow>
                       <TableHead>Tarea</TableHead>
                       <TableHead>Estado</TableHead>
+                      <TableHead>Siigo</TableHead>
                       <TableHead>Vencimiento</TableHead>
                       <TableHead>Archivo</TableHead>
                       <TableHead>Texto</TableHead>
