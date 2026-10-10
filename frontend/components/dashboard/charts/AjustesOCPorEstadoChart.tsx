@@ -6,6 +6,7 @@ import { Bar, BarChart, CartesianGrid, Legend, XAxis, YAxis } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ClipboardList } from 'lucide-react'
+import { ChartExportMenu } from '@/components/dashboard/ChartExportMenu'
 import type { AjusteOCPorEstadoPunto } from '@/lib/types/dashboard-graficas'
 
 const chartConfig = {
@@ -30,16 +31,22 @@ export function AjustesOCPorEstadoChart({ data }: { data: AjusteOCPorEstadoPunto
   }
 
   return (
-    <ChartContainer config={chartConfig} className="h-[280px] w-full">
-      <BarChart data={porEstado}>
-        <CartesianGrid vertical={false} />
-        <XAxis dataKey="estado" tickLine={false} axisLine={false} />
-        <YAxis />
-        <ChartTooltip content={<ChartTooltipContent />} />
-        <Legend />
-        <Bar dataKey="ajuste" fill="var(--color-ajuste)" radius={4} stackId="a" />
-        <Bar dataKey="orden_compra" fill="var(--color-orden_compra)" radius={4} stackId="a" />
-      </BarChart>
-    </ChartContainer>
+    <div id="chart-ajustes-oc" className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium">Ajustes y OC por estado</h3>
+        <ChartExportMenu targetId="chart-ajustes-oc" data={data} nombreArchivo="chart-ajustes-oc" />
+      </div>
+      <ChartContainer config={chartConfig} className="h-[280px] w-full">
+        <BarChart data={porEstado}>
+          <CartesianGrid vertical={false} />
+          <XAxis dataKey="estado" tickLine={false} axisLine={false} />
+          <YAxis />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Legend />
+          <Bar dataKey="ajuste" fill="var(--color-ajuste)" radius={4} stackId="a" />
+          <Bar dataKey="orden_compra" fill="var(--color-orden_compra)" radius={4} stackId="a" />
+        </BarChart>
+      </ChartContainer>
+    </div>
   )
 }
