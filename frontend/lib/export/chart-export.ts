@@ -7,7 +7,33 @@ export async function exportarChartComoPng(elementId: string, nombreArchivo: str
   const svg = nodo.querySelector('svg')
   if (!svg) throw new Error('La gráfica no tiene un SVG renderizado todavía')
 
-  const xml = new XMLSerializer().serializeToString(svg)
+  // Los colores del tema (--color-xxx) se definen en un <style> que
+  // ChartStyle inyecta como HERMANO del <svg>, dentro del div con
+  // data-chart={chartId} (ver components/ui/chart.tsx). Ese <style> usa un
+  // selector [data-chart=${chartId}] para acotar las variables CSS. Si solo
+  // serializamos el <svg>, ese <style> y el atributo data-chart (que vive en
+  // el div padre, no en el svg) no viajan con él, así que var(--color-xxx)
+  // no tiene dónde resolverse y los fill caen a negro. Por eso clonamos el
+  // svg, le copiamos el atributo data-chart y le inyectamos una copia del
+  // <style> para que el documento SVG independiente sea autosuficiente.
+  const wrapper = svg.closest('[data-chart]')
+  const styleEl = wrapper?.querySelector('style')
+  const cssText = styleEl?.textContent ?? ''
+
+  const svgClone = svg.cloneNode(true) as SVGElement
+  const chartDataId = wrapper?.getAttribute('data-chart') ?? ''
+  svgClone.setAttribute('data-chart', chartDataId)
+
+  if (cssText) {
+    const svgNs = 'http://www.w3.org/2000/svg'
+    const defs = document.createElementNS(svgNs, 'defs')
+    const styleTag = document.createElementNS(svgNs, 'style')
+    styleTag.textContent = cssText
+    defs.appendChild(styleTag)
+    svgClone.insertBefore(defs, svgClone.firstChild)
+  }
+
+  const xml = new XMLSerializer().serializeToString(svgClone)
   const svgBlob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
   const url = URL.createObjectURL(svgBlob)
 
