@@ -166,6 +166,39 @@ export async function marcarMensajeLeido(
   return { ok: true }
 }
 
+export async function marcarNotificacionLeida(
+  alertaId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isDevBypassActive()) return { ok: true }
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sin sesión.' }
+  const supabase = await createClient()
+  const { error } = await supabase.from('notificaciones_leidas').upsert({
+    alerta_id: alertaId,
+    usuario_id: user.id,
+    leida_en: new Date().toISOString(),
+  })
+  if (error) return { ok: false, error: 'No se pudo marcar como leída.' }
+  return { ok: true }
+}
+
+export async function marcarTodasLeidas(
+  alertaIds: string[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isDevBypassActive()) return { ok: true }
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sin sesión.' }
+  const supabase = await createClient()
+  const filas = alertaIds.map((id) => ({
+    alerta_id: id,
+    usuario_id: user.id,
+    leida_en: new Date().toISOString(),
+  }))
+  const { error } = await supabase.from('notificaciones_leidas').upsert(filas)
+  if (error) return { ok: false, error: 'No se pudieron marcar como leídas.' }
+  return { ok: true }
+}
+
 export async function crearMensajePanel(datos: {
   titulo: string
   cuerpo: string

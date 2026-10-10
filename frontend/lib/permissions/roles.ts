@@ -29,6 +29,7 @@ export type RouteKey =
   | 'usuarios'
   | 'configuracion'
   | 'cuenta'
+  | 'notificaciones'
 
 export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   dashboard: ROLES_CON_DASHBOARD,
@@ -52,6 +53,9 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   usuarios: ['supervisor'] as const,
   configuracion: ['supervisor'] as const,
   cuenta: ALL_ROLES,
+  // La campana de notificaciones es visible para cualquier rol en el header;
+  // el historial completo en /notificaciones debe estar igualmente abierto.
+  notificaciones: ALL_ROLES,
 }
 
 /** Roles que pueden ver valor_unitario/valor_total en cualquier pantalla — igual a la matriz real de las vistas de Supabase. */
@@ -94,6 +98,7 @@ export const NAV_GROUPS: { label: string; keys: RouteKey[] }[] = [
 /** Resuelve un pathname exacto a su RouteKey, o null si no es una ruta controlada por ROUTE_PERMISSIONS (ej. /login, /acceso-denegado). */
 export function getRouteKeyForPath(pathname: string): RouteKey | null {
   if (pathname === '/cuenta') return 'cuenta'
+  if (pathname === '/notificaciones') return 'notificaciones'
   if (pathname === '/visualizacion') return 'visualizacion'
   const item = NAV_ITEMS.find((i) => i.href === pathname)
   return item ? item.key : null

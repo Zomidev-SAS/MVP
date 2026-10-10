@@ -50,6 +50,10 @@ export default async function PanelLayout({
           ajustesPendientes={ajustesPendientes}
           notificaciones={notificaciones}
           esSupervisor={result.profile.rol === 'supervisor'}
+          // Placeholder hasta que exista la tabla notificaciones_leidas en el
+          // backend (ver Task 3.1): por ahora el estado "leída" solo vive en
+          // el cliente, sin persistencia entre recargas.
+          leidas={new Set<string>()}
         />
         <main className="flex-1 p-6">
           <PageTransition>{children}</PageTransition>
