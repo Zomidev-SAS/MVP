@@ -48,8 +48,9 @@ export async function middleware(request: NextRequest) {
   const isAuthCallback = request.nextUrl.pathname.startsWith('/auth/callback')
   const isPublicAuthPage =
     isLoginPage || isEstablecerPasswordPage || isRecuperarPasswordPage || isAuthCallback
+  const isPlantaKiosk = request.nextUrl.pathname.startsWith('/planta')
 
-  if (!user && !isPublicAuthPage) {
+  if (!user && !isPublicAuthPage && !isPlantaKiosk) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

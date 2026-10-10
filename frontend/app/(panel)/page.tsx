@@ -27,6 +27,7 @@ import { RealtimePanelProvider } from '@/components/realtime/RealtimePanelProvid
 import { QuickLinksCard } from '@/components/dashboard/QuickLinksCard'
 import { LowStockList } from '@/components/dashboard/LowStockList'
 import { VehiculoTimelineCard } from '@/components/dashboard/VehiculoTimelineCard'
+import { AbrirModoPlantaButton } from '@/components/dashboard/AbrirModoPlantaButton'
 
 export default function DashboardPage() {
   return (
@@ -63,9 +64,12 @@ async function DashboardContent() {
               </h1>
               <p className="text-muted-foreground">Rol: {result.profile.rol}</p>
             </div>
-            <RealtimePanelProvider
-              tablas={['movimientos_inventario', 'ajustes_pendientes', 'ordenes_compra', 'mensajes_panel']}
-            />
+            <div className="flex items-center gap-2">
+              {variante === 'completo' && <AbrirModoPlantaButton />}
+              <RealtimePanelProvider
+                tablas={['movimientos_inventario', 'ajustes_pendientes', 'ordenes_compra', 'mensajes_panel']}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
