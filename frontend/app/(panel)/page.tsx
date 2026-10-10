@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { CalendarWidget } from '@/components/dashboard/CalendarWidget'
+import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
 import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChart'
 import { UltimosMovimientosTable } from '@/components/dashboard/UltimosMovimientosTable'
 import { RealtimeRefresher } from '@/components/dashboard/RealtimeRefresher'
@@ -83,6 +85,15 @@ async function DashboardContent() {
               icon={AlertTriangle}
             />
           </div>
+
+          <section className="space-y-4">
+            <Suspense fallback={null}>
+              <DashboardFilters bodegas={[]} categorias={[]} />
+            </Suspense>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {/* Fase 2 (Task 2.4) inserta aquí cada <XxxChart /> según `variante` */}
+            </div>
+          </section>
 
           {(variante === 'completo' || variante === 'comercial' || variante === 'compras') && (
             <Card>
