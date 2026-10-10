@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Settings,
   ShoppingCart,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react'
 import { ALL_ROLES, type Role } from '@/lib/types/database'
@@ -28,6 +29,7 @@ export type RouteKey =
   | 'importar'
   | 'usuarios'
   | 'configuracion'
+  | 'automatizaciones'
   | 'cuenta'
   | 'notificaciones'
 
@@ -52,6 +54,7 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   importar: ['supervisor', 'compras'] as const,
   usuarios: ['supervisor'] as const,
   configuracion: ['supervisor'] as const,
+  automatizaciones: ['supervisor'] as const,
   cuenta: ALL_ROLES,
   // La campana de notificaciones es visible para cualquier rol en el header;
   // el historial completo en /notificaciones debe estar igualmente abierto.
@@ -81,6 +84,7 @@ export const NAV_ITEMS: {
   { key: 'importar', label: 'Importar CSV', href: '/importar', icon: Upload },
   { key: 'usuarios', label: 'Usuarios', href: '/usuarios', icon: Users },
   { key: 'configuracion', label: 'Configuración', href: '/configuracion', icon: Settings },
+  { key: 'automatizaciones', label: 'Automatizaciones', href: '/automatizaciones', icon: Workflow },
 ]
 
 /** Agrupa NAV_ITEMS en las dos secciones visuales del sidebar. */
@@ -91,7 +95,7 @@ export const NAV_GROUPS: { label: string; keys: RouteKey[] }[] = [
   },
   {
     label: 'Sistema y control',
-    keys: ['ajustes', 'importar', 'usuarios', 'configuracion'],
+    keys: ['ajustes', 'importar', 'usuarios', 'configuracion', 'automatizaciones'],
   },
 ]
 
