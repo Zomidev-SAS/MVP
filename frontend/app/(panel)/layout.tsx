@@ -4,6 +4,7 @@ import { fetchNotificaciones } from '@/lib/supabase/notificaciones-actions'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { PageTransition } from '@/components/layout/PageTransition'
+import { NewAlertToastListener } from '@/components/notifications/NewAlertToastListener'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,6 +44,7 @@ export default async function PanelLayout({
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
+      <NewAlertToastListener />
       <Sidebar profile={result.profile} ajustesPendientes={ajustesPendientes} />
       <div className="flex flex-1 flex-col">
         <Header
