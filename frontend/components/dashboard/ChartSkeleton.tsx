@@ -8,3 +8,13 @@ export function ChartSkeleton({ height = 280 }: { height?: number }) {
     </div>
   )
 }
+
+export function ChartSkeletonGrid() {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <ChartSkeleton key={i} />
+      ))}
+    </div>
+  )
+}

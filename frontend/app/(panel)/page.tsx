@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from 'react'
+import { Suspense } from 'react'
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -11,29 +11,22 @@ import {
 } from 'lucide-react'
 import { RoleGuard } from '@/components/shared/RoleGuard'
 import { ROUTE_PERMISSIONS, CAN_VIEW_COSTS } from '@/lib/permissions/roles'
-import { VARIANTE_POR_ROL, type DashboardVariante } from '@/lib/permissions/dashboard-variante'
+import { VARIANTE_POR_ROL } from '@/lib/permissions/dashboard-variante'
 import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { getDashboardData } from '@/lib/supabase/get-dashboard-data'
 import { fetchProductosBajoStock } from '@/lib/supabase/inventario-actions'
-import { fetchDashboardGraficas } from '@/lib/supabase/dashboard-graficas-actions'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { CalendarWidget } from '@/components/dashboard/CalendarWidget'
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
-import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChart'
+import { ChartSkeletonGrid } from '@/components/dashboard/ChartSkeleton'
+import { DashboardGraficasSection } from '@/components/dashboard/DashboardGraficasSection'
 import { UltimosMovimientosTable } from '@/components/dashboard/UltimosMovimientosTable'
 import { RealtimePanelProvider } from '@/components/realtime/RealtimePanelProvider'
 import { QuickLinksCard } from '@/components/dashboard/QuickLinksCard'
 import { LowStockList } from '@/components/dashboard/LowStockList'
 import { VehiculoTimelineCard } from '@/components/dashboard/VehiculoTimelineCard'
-import { IndicadorCard } from '@/components/dashboard/charts/IndicadorCard'
-import { StockPorBodegaChart } from '@/components/dashboard/charts/StockPorBodegaChart'
-import { StockPorCategoriaChart } from '@/components/dashboard/charts/StockPorCategoriaChart'
-import { TopProductosChart } from '@/components/dashboard/charts/TopProductosChart'
-import { VehiculosPorEtapaChart } from '@/components/dashboard/charts/VehiculosPorEtapaChart'
-import { AjustesOCPorEstadoChart } from '@/components/dashboard/charts/AjustesOCPorEstadoChart'
-import { ValorizacionChart } from '@/components/dashboard/charts/ValorizacionChart'
 
 export default function DashboardPage() {
   return (
@@ -56,40 +49,6 @@ async function DashboardContent() {
   const puedeVerCostos = CAN_VIEW_COSTS.includes(result.profile.rol)
   const data = await getDashboardData(variante === 'bitacora' ? 25 : 10)
   const productosBajoStock = variante === 'compras' ? await fetchProductosBajoStock(5) : []
-  // NOTA: filtros fijos por ahora ({ rango: '7d' }) — cablear `searchParams` de
-  // `DashboardFilters` hacia este fetch queda fuera del alcance de esta tarea.
-  const graficas = await fetchDashboardGraficas(result.profile.rol, { rango: '7d' })
-
-  const CHARTS_POR_VARIANTE: Record<DashboardVariante, ReactNode[]> = {
-    completo: [
-      <EntradasSalidasChart key="es" data={graficas.entradasSalidas} />,
-      <StockPorBodegaChart key="sb" data={graficas.stockPorBodega} />,
-      <StockPorCategoriaChart key="sc" data={graficas.stockPorCategoria} />,
-      <TopProductosChart key="tp" data={graficas.topProductos} />,
-      <VehiculosPorEtapaChart key="ve" data={graficas.vehiculosPorEtapa} />,
-      <AjustesOCPorEstadoChart key="ao" data={graficas.ajustesOCPorEstado} />,
-      <ValorizacionChart key="val" data={graficas.valorizacion} />,
-    ],
-    compras: [
-      <StockPorBodegaChart key="sb" data={graficas.stockPorBodega} />,
-      <AjustesOCPorEstadoChart key="ao" data={graficas.ajustesOCPorEstado} />,
-      <ValorizacionChart key="val" data={graficas.valorizacion} />,
-    ],
-    bitacora: [
-      <EntradasSalidasChart key="es" data={graficas.entradasSalidas} />,
-      <AjustesOCPorEstadoChart key="ao" data={graficas.ajustesOCPorEstado} />,
-      <ValorizacionChart key="val" data={graficas.valorizacion} />,
-    ],
-    comercial: [
-      <StockPorBodegaChart key="sb" data={graficas.stockPorBodega} />,
-      <StockPorCategoriaChart key="sc" data={graficas.stockPorCategoria} />,
-      <TopProductosChart key="tp" data={graficas.topProductos} />,
-      <VehiculosPorEtapaChart key="ve" data={graficas.vehiculosPorEtapa} />,
-    ],
-    taller: [<VehiculosPorEtapaChart key="ve" data={graficas.vehiculosPorEtapa} />],
-    instalacion: [<VehiculosPorEtapaChart key="ve" data={graficas.vehiculosPorEtapa} />],
-    basico: [<StockPorBodegaChart key="sb" data={graficas.stockPorBodega} />],
-  }
 
   const mostrarCalendario = variante !== 'bitacora' && variante !== 'basico'
 
@@ -137,14 +96,13 @@ async function DashboardContent() {
             <Suspense fallback={null}>
               <DashboardFilters bodegas={[]} categorias={[]} />
             </Suspense>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {graficas.kpis.map((k) => (
-                <IndicadorCard key={k.id} kpi={k} />
-              ))}
-            </div>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {CHARTS_POR_VARIANTE[variante]}
-            </div>
+            <Suspense fallback={<ChartSkeletonGrid />}>
+              <DashboardGraficasSection
+                rol={result.profile.rol}
+                filtros={{ rango: '7d' }}
+                variante={variante}
+              />
+            </Suspense>
           </section>
 
           <VehiculoTimelineCard rolActual={result.profile.rol} />
