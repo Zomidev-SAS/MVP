@@ -21,6 +21,8 @@ export async function DashboardGraficasSection({
   filtros: DashboardFiltros
   variante: DashboardVariante
 }) {
+  // NOTA: filtros fijos por ahora ({ rango: '7d' }) — cablear searchParams de DashboardFilters
+  // hacia este fetch queda fuera del alcance de esta tarea.
   const graficas = await fetchDashboardGraficas(rol, filtros)
 
   const CHARTS_POR_VARIANTE: Record<DashboardVariante, ReactNode[]> = {

@@ -2,8 +2,15 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Bar, BarChart, CartesianGrid, Legend, XAxis, YAxis } from 'recharts'
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ClipboardList } from 'lucide-react'
 import { ChartExportMenu } from '@/components/dashboard/ChartExportMenu'
@@ -42,7 +49,7 @@ export function AjustesOCPorEstadoChart({ data }: { data: AjusteOCPorEstadoPunto
           <XAxis dataKey="estado" tickLine={false} axisLine={false} />
           <YAxis />
           <ChartTooltip content={<ChartTooltipContent />} />
-          <Legend />
+          <ChartLegend content={<ChartLegendContent />} />
           <Bar dataKey="ajuste" fill="var(--color-ajuste)" radius={4} stackId="a" />
           <Bar dataKey="orden_compra" fill="var(--color-orden_compra)" radius={4} stackId="a" />
         </BarChart>
