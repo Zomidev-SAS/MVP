@@ -20,15 +20,32 @@ export async function exportarChartComoPng(elementId: string, nombreArchivo: str
   const styleEl = wrapper?.querySelector('style')
   const cssText = styleEl?.textContent ?? ''
 
+  // `cssText` solo resuelve un nivel de indirección: define
+  // --color-cantidad: var(--chart-1), pero --chart-1 en sí está definido en
+  // :root/.dark en app/globals.css, que tampoco viaja con el SVG
+  // independiente. Sin ese segundo nivel, var(--chart-1) seguiría sin
+  // resolverse y el fill caería a negro igual. Aquí aplanamos la cadena
+  // reemplazando cada var(--xxx) por su valor computado real, tomado del
+  // propio wrapper en vivo (que sí hereda --chart-1 desde :root/.dark).
+  const cssTextResuelto = wrapper
+    ? (() => {
+        const computedStyle = getComputedStyle(wrapper)
+        return cssText.replace(/var\((--[\w-]+)\)/g, (match, varName: string) => {
+          const valor = computedStyle.getPropertyValue(varName).trim()
+          return valor || match
+        })
+      })()
+    : cssText
+
   const svgClone = svg.cloneNode(true) as SVGElement
   const chartDataId = wrapper?.getAttribute('data-chart') ?? ''
   svgClone.setAttribute('data-chart', chartDataId)
 
-  if (cssText) {
+  if (cssTextResuelto) {
     const svgNs = 'http://www.w3.org/2000/svg'
     const defs = document.createElementNS(svgNs, 'defs')
     const styleTag = document.createElementNS(svgNs, 'style')
-    styleTag.textContent = cssText
+    styleTag.textContent = cssTextResuelto
     defs.appendChild(styleTag)
     svgClone.insertBefore(defs, svgClone.firstChild)
   }
