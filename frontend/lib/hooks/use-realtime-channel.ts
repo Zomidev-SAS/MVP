@@ -14,6 +14,7 @@ export function useRealtimeChannel(tablas: string[]): { conectado: boolean; ulti
   const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const conectadoRef = useRef(false)
 
   useEffect(() => {
     if (isDevBypassActive()) return
@@ -32,11 +33,13 @@ export function useRealtimeChannel(tablas: string[]): { conectado: boolean; ulti
     }
 
     channel.subscribe((status) => {
-      setConectado(status === 'SUBSCRIBED')
+      const esConectado = status === 'SUBSCRIBED'
+      setConectado(esConectado)
+      conectadoRef.current = esConectado
     })
 
     pollRef.current = setInterval(() => {
-      if (!conectado) {
+      if (!conectadoRef.current) {
         router.refresh()
         setUltimaActualizacion(new Date())
       }
