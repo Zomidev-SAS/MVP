@@ -28,16 +28,43 @@ import { QuickLinksCard } from '@/components/dashboard/QuickLinksCard'
 import { LowStockList } from '@/components/dashboard/LowStockList'
 import { VehiculoTimelineCard } from '@/components/dashboard/VehiculoTimelineCard'
 import { AbrirModoPlantaButton } from '@/components/dashboard/AbrirModoPlantaButton'
+import type { RangoFecha, DashboardFiltros } from '@/lib/types/dashboard-graficas'
 
-export default function DashboardPage() {
+// Mismo allow-list y fallback que useDashboardFilters (lib/hooks/use-dashboard-filters.ts),
+// pero resuelto en el servidor: este Server Component no puede usar ese hook de cliente.
+const RANGOS_VALIDOS: RangoFecha[] = ['hoy', '7d', '30d', '90d', 'personalizado']
+
+function parseFiltrosDesdeSearchParams(
+  searchParams: Record<string, string | string[] | undefined>
+): DashboardFiltros {
+  const rangoParam = typeof searchParams.rango === 'string' ? searchParams.rango : undefined
+  const rango: RangoFecha = RANGOS_VALIDOS.includes(rangoParam as RangoFecha)
+    ? (rangoParam as RangoFecha)
+    : '7d'
+
+  const filtros: DashboardFiltros = { rango }
+  if (rango === 'personalizado') {
+    if (typeof searchParams.desde === 'string') filtros.desde = searchParams.desde
+    if (typeof searchParams.hasta === 'string') filtros.hasta = searchParams.hasta
+  }
+  return filtros
+}
+
+type DashboardPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}
+
+export default function DashboardPage({ searchParams }: DashboardPageProps) {
   return (
     <RoleGuard allowed={ROUTE_PERMISSIONS.dashboard}>
-      <DashboardContent />
+      <DashboardContent searchParams={searchParams} />
     </RoleGuard>
   )
 }
 
-async function DashboardContent() {
+async function DashboardContent({ searchParams }: DashboardPageProps) {
+  const params = await searchParams
+  const filtros = parseFiltrosDesdeSearchParams(params)
   const result = await getCurrentProfile()
 
   if (result.status !== 'authenticated') {
@@ -103,8 +130,9 @@ async function DashboardContent() {
             <Suspense fallback={<ChartSkeletonGrid />}>
               <DashboardGraficasSection
                 rol={result.profile.rol}
-                filtros={{ rango: '7d' }}
+                filtros={filtros}
                 variante={variante}
+                entradasVsSalidas={data.entradasVsSalidas}
               />
             </Suspense>
           </section>

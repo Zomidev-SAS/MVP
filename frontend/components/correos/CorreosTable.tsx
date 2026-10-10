@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { RotateCw } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -21,14 +23,22 @@ export function CorreosTable({
   correos: CorreoEnviado[]
   puedeReenviar: boolean
 }) {
+  const router = useRouter()
   const [reenviando, setReenviando] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   function handleReenviar(id: string) {
     setReenviando(id)
     startTransition(async () => {
-      await reenviarCorreo(id)
-      setReenviando(null)
+      try {
+        await reenviarCorreo(id)
+        toast.success('Correo reenviado.')
+        router.refresh()
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'No se pudo reenviar el correo.')
+      } finally {
+        setReenviando(null)
+      }
     })
   }
 

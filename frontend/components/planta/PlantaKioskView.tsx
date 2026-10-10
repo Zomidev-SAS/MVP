@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { VehiculosPorEtapaChart } from '@/components/dashboard/charts/VehiculosPorEtapaChart'
 import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChart'
 import { LowStockList, type ProductoBajoStock } from '@/components/dashboard/LowStockList'
-import { useRealtimeChannel } from '@/lib/hooks/use-realtime-channel'
 import type { VehiculoPorEtapaPunto } from '@/lib/types/dashboard-graficas'
 import type { EntradaSalidaDia } from '@/lib/types/dashboard'
 
@@ -22,11 +22,20 @@ export function PlantaKioskView({
   entradasSalidas,
   productosStockBajo,
 }: PlantaKioskViewProps) {
+  const router = useRouter()
   const [indice, setIndice] = useState(0)
-  // Mantiene la pantalla al día sin recargar manualmente: cualquier cambio
-  // en vehículos o movimientos dispara un router.refresh(), que vuelve a
-  // ejecutar el Server Component de la página y trae props nuevas.
-  useRealtimeChannel(['vehiculo_procesos', 'movimientos_inventario'])
+  // Esta pantalla corre SIN sesión (cliente anon de Supabase): las políticas
+  // RLS de `postgres_changes` casi seguro escopan la entrega de eventos
+  // realtime a roles autenticados, así que un canal realtime aquí reportaría
+  // "conectado" pero nunca recibiría INSERT/UPDATE — y el fallback de polling
+  // de useRealtimeChannel solo se activa si el canal se desconecta, no si
+  // simplemente nunca recibe nada. Por eso esta vista usa polling simple e
+  // incondicional en vez de useRealtimeChannel (que es la herramienta
+  // correcta para sesiones autenticadas, no para este kiosko anónimo).
+  useEffect(() => {
+    const id = setInterval(() => router.refresh(), 60_000)
+    return () => clearInterval(id)
+  }, [router])
 
   useEffect(() => {
     const id = setInterval(() => setIndice((i) => (i + 1) % VISTAS.length), ROTACION_MS)
@@ -47,7 +56,7 @@ export function PlantaKioskView({
       )}
       {vista === 'entradas-salidas' && (
         <>
-          <h1 className="mb-8 text-5xl font-bold">Entradas vs. salidas de hoy</h1>
+          <h1 className="mb-8 text-5xl font-bold">Entradas vs. salidas (últimos 7 días)</h1>
           <div className="w-full max-w-5xl">
             <EntradasSalidasChart data={entradasSalidas} />
           </div>

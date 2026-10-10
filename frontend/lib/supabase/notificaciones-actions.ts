@@ -166,6 +166,17 @@ export async function marcarMensajeLeido(
   return { ok: true }
 }
 
+// NOTA PARA BACKEND: los IDs de alerta usados aquí y en marcarTodasLeidas
+// ('stock-bajo', 'ajustes-pendientes', 'ordenes-compra', ver fetchNotificaciones
+// arriba) son fijos por CATEGORÍA de alerta, no por instancia — cubren TODA
+// futura alerta de ese tipo, no una ocurrencia puntual. Cuando exista la
+// tabla real `notificaciones_leidas` (Fase 4.0), marcar "Stock bajo" como
+// leída con el ID 'stock-bajo' dejaría TODAS las futuras alertas de stock
+// bajo ocultas/atenuadas para siempre, lo cual no es el comportamiento
+// esperado. El diseño de esa tabla necesita resolver esto del lado de
+// backend — por ejemplo, con una clave por instancia (id de alerta + hash
+// del contenido + fecha) o con una expiración de la marca de "leída" — antes
+// de que este mecanismo se use en producción con datos reales.
 export async function marcarNotificacionLeida(
   alertaId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {

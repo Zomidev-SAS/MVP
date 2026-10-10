@@ -18,6 +18,9 @@ export async function fetchDashboardGraficas(
     return {
       ...PREVIEW_DASHBOARD_GRAFICAS,
       valorizacion: puedeVerCostos ? PREVIEW_DASHBOARD_GRAFICAS.valorizacion : null,
+      kpis: puedeVerCostos
+        ? PREVIEW_DASHBOARD_GRAFICAS.kpis
+        : PREVIEW_DASHBOARD_GRAFICAS.kpis.filter((k) => k.unidad !== 'cop'),
     }
   }
 
@@ -47,5 +50,9 @@ export async function fetchDashboardGraficas(
   }
 
   const payload = data as DashboardGraficasPayload
-  return { ...payload, valorizacion: puedeVerCostosReal ? payload.valorizacion : null }
+  return {
+    ...payload,
+    valorizacion: puedeVerCostosReal ? payload.valorizacion : null,
+    kpis: puedeVerCostosReal ? payload.kpis : payload.kpis.filter((k) => k.unidad !== 'cop'),
+  }
 }

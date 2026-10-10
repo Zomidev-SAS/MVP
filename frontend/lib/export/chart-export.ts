@@ -83,7 +83,10 @@ export async function exportarChartComoPng(elementId: string, nombreArchivo: str
 }
 
 export function exportarDatosComoCsv<T extends object>(data: T[], nombreArchivo: string): void {
-  const csv = Papa.unparse(data)
+  // escapeFormulae: evita inyección de fórmulas — nombres de producto/categoría
+  // vienen de la BD y el CSV se abre típicamente en Excel; una celda que empiece
+  // con =, +, - o @ podría ejecutarse como fórmula si no se escapa.
+  const csv = Papa.unparse(data, { escapeFormulae: true })
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
   const link = document.createElement('a')
   link.href = URL.createObjectURL(blob)

@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { requireRole } from '@/lib/auth/require-role'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { PREVIEW_CORREOS } from '@/lib/dev/preview-correos-data'
 import type { CorreoEnviado, EnvioPreview, EstadoCorreo } from '@/lib/types/correos'
@@ -20,6 +21,13 @@ export async function fetchCorreosEnviados(filtros?: { estado?: EstadoCorreo }):
 }
 
 export async function reenviarCorreo(id: string): Promise<void> {
+  // Este archivo es 'use server': el Server Action ID de esta función SÍ se
+  // expone al bundle del cliente porque la importa un Client Component
+  // (CorreosTable.tsx). La UI solo renderiza el botón "Reenviar" para
+  // supervisor, pero eso es un gate de UI nada más — sin este chequeo,
+  // cualquier usuario autenticado podría invocar la acción directamente.
+  const auth = await requireRole(['supervisor'])
+  if (!auth.ok) throw new Error(auth.error)
   if (isDevBypassActive()) return
   const supabase = await createClient()
   // NOTA: función/edge function de reenvío a confirmar en contrato (probablemente supabase.functions.invoke('reenviar-correo', { body: { id } }))
@@ -28,6 +36,12 @@ export async function reenviarCorreo(id: string): Promise<void> {
 }
 
 export async function previsualizarEnvio(rol: Role): Promise<EnvioPreview> {
+  // Mismo motivo que reenviarCorreo: el Server Action ID se expone al
+  // cliente vía EnvioCorreoPreview.tsx, así que sin este chequeo cualquier
+  // usuario autenticado (incluido `comercial`/`lectura`) podría contar
+  // usuarios por rol.
+  const auth = await requireRole(['supervisor'])
+  if (!auth.ok) throw new Error(auth.error)
   if (isDevBypassActive()) return { rol, totalDestinatarios: 5 }
   const supabase = await createClient()
   // NOTA: vista `vista_usuarios_panel` a confirmar en contrato del backend — aún no existe.

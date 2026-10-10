@@ -7,7 +7,7 @@ export default async function PlantaPage({ params }: { params: Promise<{ token: 
   const valido = await verificarTokenPlanta(token)
   if (!valido) notFound()
 
-  const { vehiculosPorEtapa, entradasSalidas, productosStockBajo } = await fetchDatosPlanta()
+  const { vehiculosPorEtapa, entradasSalidas, productosStockBajo } = await fetchDatosPlanta(token)
 
   return (
     <PlantaKioskView

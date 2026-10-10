@@ -106,8 +106,25 @@ export async function verificarTokenPlanta(token: string): Promise<boolean> {
  * Mientras ese RPC dedicado no exista, esta función se degrada a listas
  * vacías si la llamada falla (RPC inexistente o RLS la rechaza), en vez de
  * tronar la pantalla del taller.
+ *
+ * El token gatea el acceso a esta página y a esta función, pero una vez que
+ * el backend exponga una vista/RPC legible por `anon` para el kiosco,
+ * cualquier persona con la clave anon pública podría leer esos datos
+ * directamente sin pasar por este token — el token protege el acceso vía
+ * esta página/función, no los datos en la base si el backend los expone a
+ * `anon` de forma más amplia. Por eso esta función NO confía en que quien la
+ * llama ya verificó el token (aunque hoy solo la importe el Server
+ * Component de `/planta/[token]`, que sí lo hace): recibe el token como
+ * parámetro y lo vuelve a verificar aquí mismo, en vez de asumirlo — así
+ * sigue siendo segura aunque en el futuro alguien la importe desde otro
+ * lugar (ej. un Client Component) sin pasar primero por esa verificación.
  */
-export async function fetchDatosPlanta(): Promise<DatosPlanta> {
+export async function fetchDatosPlanta(token: string): Promise<DatosPlanta> {
+  const valido = await verificarTokenPlanta(token)
+  if (!valido) {
+    return { vehiculosPorEtapa: [], entradasSalidas: [], productosStockBajo: [] }
+  }
+
   if (isDevBypassActive()) {
     return {
       vehiculosPorEtapa: PREVIEW_DASHBOARD_GRAFICAS.vehiculosPorEtapa,
