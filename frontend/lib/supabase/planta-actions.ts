@@ -10,9 +10,28 @@ import type { ProductoBajoStock } from '@/components/dashboard/LowStockList'
 import type { VehiculoPorEtapaPunto } from '@/lib/types/dashboard-graficas'
 import type { EntradaSalidaDia } from '@/lib/types/dashboard'
 
-const SECRET = new TextEncoder().encode(
-  process.env.PLANTA_KIOSK_SECRET ?? 'dev-secret-cambiar-en-produccion'
-)
+// El secreto de firma es el ÚNICO control de acceso de /planta/* (no hay
+// sesión, no hay chequeo de rol a nivel de ruta). El fallback de desarrollo
+// está committeado en el repo, así que NUNCA debe usarse en producción:
+// si PLANTA_KIOSK_SECRET no está configurado ahí, se falla cerrado
+// (generarTokenPlanta lanza, verificarTokenPlanta rechaza todo) en vez de
+// firmar/verificar silenciosamente contra un secreto público conocido.
+const DEV_FALLBACK_SECRET = 'dev-secret-cambiar-en-produccion'
+const SECRET_ENV = process.env.PLANTA_KIOSK_SECRET
+
+function getSecretParaFirmar(): Uint8Array {
+  if (process.env.NODE_ENV === 'production' && !SECRET_ENV) {
+    throw new Error('PLANTA_KIOSK_SECRET no está configurado en producción.')
+  }
+  return new TextEncoder().encode(SECRET_ENV ?? DEV_FALLBACK_SECRET)
+}
+
+function getSecretParaVerificar(): Uint8Array | null {
+  if (process.env.NODE_ENV === 'production' && !SECRET_ENV) {
+    return null
+  }
+  return new TextEncoder().encode(SECRET_ENV ?? DEV_FALLBACK_SECRET)
+}
 
 export interface DatosPlanta {
   vehiculosPorEtapa: VehiculoPorEtapaPunto[]
@@ -23,11 +42,12 @@ export interface DatosPlanta {
 export async function generarTokenPlanta(): Promise<string> {
   const auth = await requireRole(['supervisor'])
   if (!auth.ok) throw new Error(auth.error)
+  const secret = getSecretParaFirmar()
   return new SignJWT({ tipo: 'planta-kiosk' })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('30d')
-    .sign(SECRET)
+    .sign(secret)
 }
 
 export async function verificarTokenPlanta(token: string): Promise<boolean> {
@@ -37,9 +57,18 @@ export async function verificarTokenPlanta(token: string): Promise<boolean> {
   // credenciales reales mientras se prueba localmente.
   if (isDevBypassActive()) return true
 
+  const secret = getSecretParaVerificar()
+  // Producción sin PLANTA_KIOSK_SECRET configurado: no hay secreto real
+  // contra el que verificar, así que ningún token puede considerarse
+  // válido (fallar cerrado, nunca caer al secreto de desarrollo conocido).
+  if (!secret) return false
+
   try {
-    await jwtVerify(token, SECRET)
-    return true
+    const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] })
+    // Rechaza tokens que verifican correctamente pero no fueron emitidos
+    // por generarTokenPlanta (ej. otro JWT firmado con la misma variable
+    // de entorno reutilizada en otra parte del sistema).
+    return payload.tipo === 'planta-kiosk'
   } catch {
     return false
   }
@@ -55,17 +84,28 @@ export async function verificarTokenPlanta(token: string): Promise<boolean> {
  *
  * Nunca se piden ni se devuelven datos de costos/valorización aquí.
  *
- * NOTA PARA BACKEND: en producción esta función usa el cliente anon de
- * Supabase (sin sesión) para llamar el mismo RPC `dashboard_graficas` que
- * ya es un placeholder pendiente de contrato (ver dashboard-graficas-actions.ts).
- * Si las políticas RLS reales de las vistas/tablas subyacentes solo
- * permiten lectura a `authenticated` (varios comentarios en roles.ts
- * sugieren que es el caso, ej. "mov_select_autenticados"), esta llamada
- * anónima devolverá error o cero filas en producción real. Este fallback
- * está escrito para degradar con listas vacías en ese caso (no truena la
- * página), pero probablemente backend necesite exponer una vista/RPC
- * específica para el kiosk con permiso de lectura `anon`, o el equipo debe
- * decidir conscientemente dar ese permiso a las vistas actuales.
+ * NOTA PARA BACKEND — IMPORTANTE, leer antes de tocar permisos de Supabase:
+ * en producción esta función usa el cliente anon de Supabase (sin sesión)
+ * para llamar el mismo RPC `dashboard_graficas` que ya es un placeholder
+ * pendiente de contrato (ver dashboard-graficas-actions.ts). Ese RPC (y las
+ * vistas de las que lee) devuelve `valorización`/costos para otros
+ * consumidores autenticados.
+ *
+ * NUNCA se debe otorgar al rol `anon` permiso de lectura sobre
+ * `dashboard_graficas` ni sobre ninguna vista/RPC que incluya datos
+ * monetarios — `anon` significa literalmente cualquiera con la anon key
+ * pública, no solo esta pantalla del taller; hacerlo filtraría costos a
+ * cualquier visitante no autenticado, no solo a este kiosk.
+ *
+ * La única solución aceptable del lado de backend es un RPC/vista
+ * DEDICADO y específico para este kiosk, que devuelva ÚNICAMENTE
+ * `vehiculosPorEtapa`/`entradasSalidas` (sin ningún campo monetario), y
+ * que ese RPC/vista dedicado sea el que obtenga permiso de lectura `anon`
+ * — nunca el RPC/vistas que ya exponen costos a otros roles.
+ *
+ * Mientras ese RPC dedicado no exista, esta función se degrada a listas
+ * vacías si la llamada falla (RPC inexistente o RLS la rechaza), en vez de
+ * tronar la pantalla del taller.
  */
 export async function fetchDatosPlanta(): Promise<DatosPlanta> {
   if (isDevBypassActive()) {
