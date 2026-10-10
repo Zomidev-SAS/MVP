@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -18,22 +19,52 @@ import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { CalendarWidget } from '@/components/dashboard/CalendarWidget'
-import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChart'
+import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
+import { ChartSkeletonGrid } from '@/components/dashboard/ChartSkeleton'
+import { DashboardGraficasSection } from '@/components/dashboard/DashboardGraficasSection'
 import { UltimosMovimientosTable } from '@/components/dashboard/UltimosMovimientosTable'
-import { RealtimeRefresher } from '@/components/dashboard/RealtimeRefresher'
+import { RealtimePanelProvider } from '@/components/realtime/RealtimePanelProvider'
 import { QuickLinksCard } from '@/components/dashboard/QuickLinksCard'
 import { LowStockList } from '@/components/dashboard/LowStockList'
 import { VehiculoTimelineCard } from '@/components/dashboard/VehiculoTimelineCard'
+import { AbrirModoPlantaButton } from '@/components/dashboard/AbrirModoPlantaButton'
+import type { RangoFecha, DashboardFiltros } from '@/lib/types/dashboard-graficas'
 
-export default function DashboardPage() {
+// Mismo allow-list y fallback que useDashboardFilters (lib/hooks/use-dashboard-filters.ts),
+// pero resuelto en el servidor: este Server Component no puede usar ese hook de cliente.
+const RANGOS_VALIDOS: RangoFecha[] = ['hoy', '7d', '30d', '90d', 'personalizado']
+
+function parseFiltrosDesdeSearchParams(
+  searchParams: Record<string, string | string[] | undefined>
+): DashboardFiltros {
+  const rangoParam = typeof searchParams.rango === 'string' ? searchParams.rango : undefined
+  const rango: RangoFecha = RANGOS_VALIDOS.includes(rangoParam as RangoFecha)
+    ? (rangoParam as RangoFecha)
+    : '7d'
+
+  const filtros: DashboardFiltros = { rango }
+  if (rango === 'personalizado') {
+    if (typeof searchParams.desde === 'string') filtros.desde = searchParams.desde
+    if (typeof searchParams.hasta === 'string') filtros.hasta = searchParams.hasta
+  }
+  return filtros
+}
+
+type DashboardPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}
+
+export default function DashboardPage({ searchParams }: DashboardPageProps) {
   return (
     <RoleGuard allowed={ROUTE_PERMISSIONS.dashboard}>
-      <DashboardContent />
+      <DashboardContent searchParams={searchParams} />
     </RoleGuard>
   )
 }
 
-async function DashboardContent() {
+async function DashboardContent({ searchParams }: DashboardPageProps) {
+  const params = await searchParams
+  const filtros = parseFiltrosDesdeSearchParams(params)
   const result = await getCurrentProfile()
 
   if (result.status !== 'authenticated') {
@@ -53,11 +84,19 @@ async function DashboardContent() {
     <div className="space-y-6">
       <div className={cn('grid gap-6', mostrarCalendario && 'lg:grid-cols-[minmax(0,1fr)_320px]')}>
         <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-semibold">
-              Bienvenido, {result.profile.nombre ?? result.user.email}
-            </h1>
-            <p className="text-muted-foreground">Rol: {result.profile.rol}</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h1 className="text-2xl font-semibold">
+                Bienvenido, {result.profile.nombre ?? result.user.email}
+              </h1>
+              <p className="text-muted-foreground">Rol: {result.profile.rol}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {variante === 'completo' && <AbrirModoPlantaButton />}
+              <RealtimePanelProvider
+                tablas={['movimientos_inventario', 'ajustes_pendientes', 'ordenes_compra', 'mensajes_panel']}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -84,16 +123,19 @@ async function DashboardContent() {
             />
           </div>
 
-          {(variante === 'completo' || variante === 'comercial' || variante === 'compras') && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Entradas vs Salidas (últimos 7 días)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <EntradasSalidasChart data={data.entradasVsSalidas} />
-              </CardContent>
-            </Card>
-          )}
+          <section className="space-y-4">
+            <Suspense fallback={null}>
+              <DashboardFilters bodegas={[]} categorias={[]} />
+            </Suspense>
+            <Suspense fallback={<ChartSkeletonGrid />}>
+              <DashboardGraficasSection
+                rol={result.profile.rol}
+                filtros={filtros}
+                variante={variante}
+                entradasVsSalidas={data.entradasVsSalidas}
+              />
+            </Suspense>
+          </section>
 
           <VehiculoTimelineCard rolActual={result.profile.rol} />
 
@@ -152,8 +194,6 @@ async function DashboardContent() {
           </div>
         )}
       </div>
-
-      <RealtimeRefresher />
     </div>
   )
 }

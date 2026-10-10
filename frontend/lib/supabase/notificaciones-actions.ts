@@ -166,6 +166,50 @@ export async function marcarMensajeLeido(
   return { ok: true }
 }
 
+// NOTA PARA BACKEND: los IDs de alerta usados aquí y en marcarTodasLeidas
+// ('stock-bajo', 'ajustes-pendientes', 'ordenes-compra', ver fetchNotificaciones
+// arriba) son fijos por CATEGORÍA de alerta, no por instancia — cubren TODA
+// futura alerta de ese tipo, no una ocurrencia puntual. Cuando exista la
+// tabla real `notificaciones_leidas` (Fase 4.0), marcar "Stock bajo" como
+// leída con el ID 'stock-bajo' dejaría TODAS las futuras alertas de stock
+// bajo ocultas/atenuadas para siempre, lo cual no es el comportamiento
+// esperado. El diseño de esa tabla necesita resolver esto del lado de
+// backend — por ejemplo, con una clave por instancia (id de alerta + hash
+// del contenido + fecha) o con una expiración de la marca de "leída" — antes
+// de que este mecanismo se use en producción con datos reales.
+export async function marcarNotificacionLeida(
+  alertaId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isDevBypassActive()) return { ok: true }
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sin sesión.' }
+  const supabase = await createClient()
+  const { error } = await supabase.from('notificaciones_leidas').upsert({
+    alerta_id: alertaId,
+    usuario_id: user.id,
+    leida_en: new Date().toISOString(),
+  })
+  if (error) return { ok: false, error: 'No se pudo marcar como leída.' }
+  return { ok: true }
+}
+
+export async function marcarTodasLeidas(
+  alertaIds: string[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isDevBypassActive()) return { ok: true }
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sin sesión.' }
+  const supabase = await createClient()
+  const filas = alertaIds.map((id) => ({
+    alerta_id: id,
+    usuario_id: user.id,
+    leida_en: new Date().toISOString(),
+  }))
+  const { error } = await supabase.from('notificaciones_leidas').upsert(filas)
+  if (error) return { ok: false, error: 'No se pudieron marcar como leídas.' }
+  return { ok: true }
+}
+
 export async function crearMensajePanel(datos: {
   titulo: string
   cuerpo: string

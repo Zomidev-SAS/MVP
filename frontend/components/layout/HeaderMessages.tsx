@@ -12,7 +12,16 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { EnvioCorreoPreview } from '@/components/correos/EnvioCorreoPreview'
 import { marcarMensajeLeido, crearMensajePanel } from '@/lib/supabase/notificaciones-actions'
+import { ALL_ROLES, ROLE_LABELS, type Role } from '@/lib/types/database'
 import type { MensajePanel } from '@/lib/types/notificaciones'
 
 export function HeaderMessages({
@@ -27,6 +36,7 @@ export function HeaderMessages({
   const [nuevoTitulo, setNuevoTitulo] = useState('')
   const [nuevoCuerpo, setNuevoCuerpo] = useState('')
   const [publicando, setPublicando] = useState(false)
+  const [rolDestino, setRolDestino] = useState<Role | 'todos'>('todos')
 
   const sinLeer = mensajes.filter((m) => !m.leido).length
 
@@ -46,6 +56,7 @@ export function HeaderMessages({
       titulo: nuevoTitulo,
       cuerpo: nuevoCuerpo,
       nivel: 'aviso',
+      rol_destino: rolDestino === 'todos' ? undefined : rolDestino,
     })
     setPublicando(false)
     if (!res.ok) {
@@ -55,6 +66,7 @@ export function HeaderMessages({
     toast.success('Mensaje publicado.')
     setNuevoTitulo('')
     setNuevoCuerpo('')
+    setRolDestino('todos')
   }
 
   return (
@@ -112,6 +124,21 @@ export function HeaderMessages({
               <DropdownMenuSeparator className="my-2" />
               <p className="mb-2 text-xs font-medium text-muted-foreground">Publicar aviso</p>
               <div className="space-y-2">
+                <Select
+                  value={rolDestino}
+                  onValueChange={(v) => setRolDestino(v as Role | 'todos')}
+                >
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    {ALL_ROLES.map((rol) => (
+                      <SelectItem key={rol} value={rol}>
+                        {ROLE_LABELS[rol]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <EnvioCorreoPreview rol={rolDestino === 'todos' ? null : rolDestino} />
                 <Input
                   placeholder="Título"
                   value={nuevoTitulo}

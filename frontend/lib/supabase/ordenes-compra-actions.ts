@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getSessionUser } from '@/lib/supabase/get-session-user'
+import { requireRole } from '@/lib/auth/require-role'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import {
   devPreviewDeleteOrden,
@@ -480,4 +481,31 @@ export async function actualizarOrdenCompra(): Promise<OrdenCompraResultado> {
 /** @deprecated */
 export async function enviarOrdenCompra(): Promise<OrdenCompraResultado> {
   return { ok: true }
+}
+
+/**
+ * Envía la orden a Siigo vía Edge Function.
+ *
+ * El Server Action ID de esta función se expone al bundle del cliente
+ * porque la importa un Client Component (ComprasTable.tsx). La UI solo
+ * renderiza el botón "Enviar a Siigo"/"Reintentar" para compras/supervisor,
+ * pero eso es un gate de UI nada más — sin este chequeo, cualquier usuario
+ * autenticado podría invocar la acción directamente. Por eso `requireRole`
+ * se evalúa ANTES de `isDevBypassActive()`.
+ *
+ * NOTA: Edge Function "siigo-enviar-orden" aún no existe en el backend —
+ * placeholder explícito pendiente del contrato de datos.
+ */
+export async function enviarOrdenASiigo(ordenId: number): Promise<OrdenCompraResultado> {
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+  if (isDevBypassActive()) return { ok: true }
+  const supabase = await createClient()
+  const { error } = await supabase.functions.invoke('siigo-enviar-orden', { body: { ordenId } })
+  if (error) return { ok: false, error: `No se pudo enviar a Siigo: ${error.message}` }
+  return { ok: true }
+}
+
+export async function reintentarEnvioSiigo(ordenId: number): Promise<OrdenCompraResultado> {
+  return enviarOrdenASiigo(ordenId)
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Table,
@@ -18,6 +19,12 @@ import {
   actualizarEstadoUsuario,
 } from '@/lib/supabase/usuarios-actions'
 import type { UsuarioListado } from '@/lib/types/usuarios'
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function esEmailValido(email: string | null | undefined): boolean {
+  return !!email && EMAIL_REGEX.test(email.trim())
+}
 
 export function UsersTable() {
   const [usuarios, setUsuarios] = useState<UsuarioListado[]>([])
@@ -85,7 +92,14 @@ export function UsersTable() {
                 {usuario.nombre?.trim() || '—'}
               </TableCell>
               <TableCell className="text-muted-foreground">
-                {usuario.email?.trim() || '—'}
+                {esEmailValido(usuario.email) ? (
+                  usuario.email!.trim()
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {usuario.email?.trim() || '—'}
+                  </span>
+                )}
               </TableCell>
               <TableCell>
                 <select

@@ -18,3 +18,12 @@ export interface SiigoValidacionResultado {
   proveedor?: SiigoValidacionProveedor | null
   error?: string
 }
+
+export type EstadoSyncSiigo = 'pendiente' | 'enviando' | 'sincronizada' | 'error'
+
+export interface SiigoSyncInfo {
+  estado: EstadoSyncSiigo
+  referencia: string | null
+  fecha: string | null
+  error: string | null
+}

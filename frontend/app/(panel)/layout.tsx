@@ -4,6 +4,7 @@ import { fetchNotificaciones } from '@/lib/supabase/notificaciones-actions'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { PageTransition } from '@/components/layout/PageTransition'
+import { NewAlertToastListener } from '@/components/notifications/NewAlertToastListener'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,6 +44,7 @@ export default async function PanelLayout({
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
+      <NewAlertToastListener />
       <Sidebar profile={result.profile} ajustesPendientes={ajustesPendientes} />
       <div className="flex flex-1 flex-col">
         <Header
@@ -50,6 +52,10 @@ export default async function PanelLayout({
           ajustesPendientes={ajustesPendientes}
           notificaciones={notificaciones}
           esSupervisor={result.profile.rol === 'supervisor'}
+          // Placeholder hasta que exista la tabla notificaciones_leidas en el
+          // backend (ver Task 3.1): por ahora el estado "leída" solo vive en
+          // el cliente, sin persistencia entre recargas.
+          leidas={new Set<string>()}
         />
         <main className="flex-1 p-6">
           <PageTransition>{children}</PageTransition>
