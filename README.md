@@ -1,4 +1,118 @@
-# Carrera Arango — Núcleo de inventario (Backend)
+# Panel Carrera Arango — Monorepo
+
+Proyecto unificado con **frontend** (Next.js) y **backend** (Supabase: migraciones, RLS, Edge Functions).
+
+## Estructura
+
+```
+├── frontend/          # Panel Next.js (App Router)
+├── supabase/          # Backend: migraciones, seed, Edge Functions
+│   ├── migrations/
+│   ├── functions/
+│   └── seed.sql
+└── docs/              # Specs, planes y estado del proyecto
+```
+
+## Ramas
+
+| Rama | Contenido |
+|------|-----------|
+| `main` | Desarrollo diario (frontend + backend integrados) |
+| **`production`** | **Despliegue VPS** (`carrera.zomidev.com`) — ver [docs/DEPLOY-VPS.md](docs/DEPLOY-VPS.md) |
+| `frontend` | Solo panel Next.js (legacy) |
+| `master` | Solo migraciones Supabase originales |
+
+Flujo: trabajar en `main` → merge a `production` → en el VPS `./docker/update.sh`.
+
+## Requisitos
+
+- Node.js 20+
+- [Supabase CLI](https://supabase.com/docs/guides/cli) (`brew install supabase/tap/supabase`)
+- Docker (para Supabase local)
+
+## 1. Levantar Supabase local
+
+Desde la raíz del repo:
+
+```bash
+supabase start
+```
+
+Copia las credenciales que imprime el comando (URL y `anon key`).
+
+Para aplicar migraciones y datos de prueba desde cero:
+
+```bash
+supabase db reset
+```
+
+Usuarios de prueba (contraseña `test1234`):
+
+| Email | Rol |
+|-------|-----|
+| supervisor@test.local | supervisor |
+| comercial@test.local | comercial |
+| produccion@test.local | produccion |
+| compras@test.local | compras |
+| auditoria@test.local | auditoria |
+
+## 2. Conectar el frontend
+
+```bash
+cd frontend
+cp .env.example .env.local
+```
+
+Edita `frontend/.env.local`:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key de supabase status>
+```
+
+Quita o comenta `DEV_SKIP_AUTH` para usar login real:
+
+```
+# DEV_SKIP_AUTH=true
+# DEV_SKIP_AUTH_ROLE=supervisor
+```
+
+```bash
+npm install
+npm run dev
+```
+
+Abrí [http://localhost:3000/login](http://localhost:3000/login) e iniciá sesión con `supervisor@test.local` / `test1234`.
+
+## 3. Edge Functions (local)
+
+Con Supabase corriendo:
+
+```bash
+supabase functions serve
+```
+
+Funciones incluidas:
+
+- `sync-inventario-vin` — registra salida automática al crear formulario móvil
+- `consultar-saldo-vin` — consulta saldo respetando RLS y enmascarado de costos
+- `importar-inventario-csv` — carga masiva de entradas desde CSV
+- `crear-usuario` — invita usuario Auth + perfil (solo supervisor)
+- `desactivar-usuario` — desactiva perfil y banea sesión (solo supervisor)
+
+También existe el RPC `resolver_ajuste` (PostgREST, no Edge Function).
+
+## Estado de integración
+
+Ver `docs/ESTADO_INTEGRACION.md` para qué está listo y qué falta probar contra Supabase real (cloud).
+
+## Documentación del frontend
+
+Detalle de instalación y variables: `frontend/README.md`.
+
+---
+
+# Backend — Núcleo de inventario (Supabase)
 
 Documentación técnica del backend en Supabase. Cubre el esquema, las 6 Edge
 Functions construidas, la matriz de seguridad (RLS), y la guía de despliegue
@@ -6,8 +120,6 @@ a staging/producción — según lo exigido en B12 del documento
 `FALTANTES_BACKEND_FASE_1.pdf`.
 
 Última actualización: cierre de Sprint 3-6 + B1-B9 del PDF de faltantes.
-
----
 
 ## 1. Esquema
 
@@ -44,8 +156,6 @@ a `null` en las 4 vistas para cualquier rol fuera de `supervisor`, `compras`,
 `authenticated`, así que no se puede saltar la vista consultando
 `movimientos_inventario` directo.
 
----
-
 ## 2. Roles
 
 ```
@@ -56,8 +166,6 @@ supervisor · comercial · metalmecanica · produccion · instalacion · compras
 confirmar con el cliente si reemplaza a `produccion` o coexiste con ella.
 Evidencia disponible: `metalmecanica` está confirmado porque aparece
 textual como bodega real en los archivos de saldos.
-
----
 
 ## 3. Edge Functions
 
@@ -111,8 +219,6 @@ que nadie la llame manualmente.
 `401` (sin `Authorization`), `500` (error de base de datos, p.ej. producto
 inexistente).
 
----
-
 ### 3.2 `consultar-saldo-vin`
 
 **Qué hace:** consulta el saldo/costos de un producto, respetando RLS y el
@@ -149,8 +255,6 @@ enmascarado de costos según el rol de quien pregunta.
 
 **Errores:** `400` (falta `codigo_producto`), `401` (sin token), `404`
 (producto sin movimientos aplicados).
-
----
 
 ### 3.3 `importar-inventario-csv`
 
@@ -204,8 +308,6 @@ codigo_producto,cantidad,bodega,valor_unitario
 **Errores:** `400` (CSV inválido, sin columnas requeridas, más de 500
 filas), `401`, `403` (rol no autorizado).
 
----
-
 ### 3.4 `crear-usuario`
 
 **Qué hace:** invita un nuevo usuario por correo (sin password en el body)
@@ -233,8 +335,6 @@ El usuario recibe un correo de invitación (en local, visible en Mailpit:
 
 **Errores:** `400` (campos faltantes o `rol` inválido), `401`, `403`.
 
----
-
 ### 3.5 `desactivar-usuario`
 
 **Qué hace:** marca `activo = false` en `profiles` y **banea** al usuario
@@ -256,8 +356,6 @@ puede auto-desactivar.
 ```
 
 **Errores:** `400` (falta `user_id`, o intenta auto-desactivarse), `401`, `403`.
-
----
 
 ### 3.6 `resolver_ajuste` (función RPC, no Edge Function)
 
@@ -294,8 +392,6 @@ chequeo interno de la función).
 **Errores (como excepción SQL, HTTP 400):** decisión inválida, ajuste
 inexistente, ajuste ya resuelto, o quien llama no es supervisor.
 
----
-
 ## 4. Variables de entorno requeridas (local)
 
 Archivo `supabase/functions/.env` (nunca se versiona — está en
@@ -313,8 +409,6 @@ variables que empiecen con `SUPABASE_`, y (2) la versión sin fijar de
 `@supabase/supabase-js@2` tuvo un bug real autenticando keys con el
 formato nuevo `sb_secret_...` — por eso todas las funciones importan una
 versión exacta: `@supabase/supabase-js@2.45.4`.
-
----
 
 ## 5. Guía de despliegue a staging/producción
 
@@ -334,6 +428,9 @@ supabase db push
 supabase secrets set SYSTEM_ACTOR_ID=<uuid real de un usuario sistema en staging>
 supabase secrets set MI_SERVICE_ROLE_KEY=<service_role key de staging>
 supabase secrets set MI_ANON_KEY=<anon key de staging>
+supabase secrets set SIIGO_USERNAME=<usuario API Siigo Nube>
+supabase secrets set SIIGO_ACCESS_KEY=<access key Siigo>
+supabase secrets set SIIGO_PARTNER_ID=PanelCarreraArango
 
 # 5. Desplegar las funciones
 supabase functions deploy sync-inventario-vin
@@ -341,6 +438,7 @@ supabase functions deploy consultar-saldo-vin
 supabase functions deploy importar-inventario-csv
 supabase functions deploy crear-usuario
 supabase functions deploy desactivar-usuario
+supabase functions deploy siigo-validar
 
 # 6. Repetir TODO el proceso (2-5) para producción, apuntando a su project-ref,
 #    con secrets DISTINTOS a los de staging.
@@ -348,8 +446,6 @@ supabase functions deploy desactivar-usuario
 
 Antes del primer `db push` a producción, revisar y resolver B10
 completo (signups desactivados, sesión de 8h, Site URL, backups activos).
-
----
 
 ## 6. Checklist de seguridad — verificado en esta fase
 

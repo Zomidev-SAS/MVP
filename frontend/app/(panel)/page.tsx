@@ -1,0 +1,199 @@
+import { Suspense } from 'react'
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  ClipboardList,
+  DollarSign,
+  FilePlus,
+  Package,
+  SlidersHorizontal,
+  Upload,
+} from 'lucide-react'
+import { RoleGuard } from '@/components/shared/RoleGuard'
+import { ROUTE_PERMISSIONS, CAN_VIEW_COSTS } from '@/lib/permissions/roles'
+import { VARIANTE_POR_ROL } from '@/lib/permissions/dashboard-variante'
+import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
+import { getDashboardData } from '@/lib/supabase/get-dashboard-data'
+import { fetchProductosBajoStock } from '@/lib/supabase/inventario-actions'
+import { cn } from '@/lib/utils'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { KpiCard } from '@/components/dashboard/KpiCard'
+import { CalendarWidget } from '@/components/dashboard/CalendarWidget'
+import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
+import { ChartSkeletonGrid } from '@/components/dashboard/ChartSkeleton'
+import { DashboardGraficasSection } from '@/components/dashboard/DashboardGraficasSection'
+import { UltimosMovimientosTable } from '@/components/dashboard/UltimosMovimientosTable'
+import { RealtimePanelProvider } from '@/components/realtime/RealtimePanelProvider'
+import { QuickLinksCard } from '@/components/dashboard/QuickLinksCard'
+import { LowStockList } from '@/components/dashboard/LowStockList'
+import { VehiculoTimelineCard } from '@/components/dashboard/VehiculoTimelineCard'
+import { AbrirModoPlantaButton } from '@/components/dashboard/AbrirModoPlantaButton'
+import type { RangoFecha, DashboardFiltros } from '@/lib/types/dashboard-graficas'
+
+// Mismo allow-list y fallback que useDashboardFilters (lib/hooks/use-dashboard-filters.ts),
+// pero resuelto en el servidor: este Server Component no puede usar ese hook de cliente.
+const RANGOS_VALIDOS: RangoFecha[] = ['hoy', '7d', '30d', '90d', 'personalizado']
+
+function parseFiltrosDesdeSearchParams(
+  searchParams: Record<string, string | string[] | undefined>
+): DashboardFiltros {
+  const rangoParam = typeof searchParams.rango === 'string' ? searchParams.rango : undefined
+  const rango: RangoFecha = RANGOS_VALIDOS.includes(rangoParam as RangoFecha)
+    ? (rangoParam as RangoFecha)
+    : '7d'
+
+  const filtros: DashboardFiltros = { rango }
+  if (rango === 'personalizado') {
+    if (typeof searchParams.desde === 'string') filtros.desde = searchParams.desde
+    if (typeof searchParams.hasta === 'string') filtros.hasta = searchParams.hasta
+  }
+  return filtros
+}
+
+type DashboardPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}
+
+export default function DashboardPage({ searchParams }: DashboardPageProps) {
+  return (
+    <RoleGuard allowed={ROUTE_PERMISSIONS.dashboard}>
+      <DashboardContent searchParams={searchParams} />
+    </RoleGuard>
+  )
+}
+
+async function DashboardContent({ searchParams }: DashboardPageProps) {
+  const params = await searchParams
+  const filtros = parseFiltrosDesdeSearchParams(params)
+  const result = await getCurrentProfile()
+
+  if (result.status !== 'authenticated') {
+    // Unreachable in practice — RoleGuard already redirected before this
+    // renders if there's no session or no profile.
+    return null
+  }
+
+  const variante = VARIANTE_POR_ROL[result.profile.rol]
+  const puedeVerCostos = CAN_VIEW_COSTS.includes(result.profile.rol)
+  const data = await getDashboardData(variante === 'bitacora' ? 25 : 10)
+  const productosBajoStock = variante === 'compras' ? await fetchProductosBajoStock(5) : []
+
+  const mostrarCalendario = variante !== 'bitacora' && variante !== 'basico'
+
+  return (
+    <div className="space-y-6">
+      <div className={cn('grid gap-6', mostrarCalendario && 'lg:grid-cols-[minmax(0,1fr)_320px]')}>
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h1 className="text-2xl font-semibold">
+                Bienvenido, {result.profile.nombre ?? result.user.email}
+              </h1>
+              <p className="text-muted-foreground">Rol: {result.profile.rol}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {variante === 'completo' && <AbrirModoPlantaButton />}
+              <RealtimePanelProvider
+                tablas={['movimientos_inventario', 'ajustes_pendientes', 'ordenes_compra', 'mensajes_panel']}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <KpiCard label="Total Unidades en Stock" value={data.totalUnidades} icon={Package} />
+            {puedeVerCostos && (
+              <KpiCard
+                label="Valor Total del Inventario"
+                value={data.valorTotal}
+                format="currency"
+                icon={DollarSign}
+              />
+            )}
+            {variante !== 'basico' && (
+              <KpiCard
+                label="Movimientos del Día"
+                value={data.movimientosHoy}
+                icon={ArrowLeftRight}
+              />
+            )}
+            <KpiCard
+              label="Productos con Stock Bajo"
+              value={data.stockBajo}
+              icon={AlertTriangle}
+            />
+          </div>
+
+          <section className="space-y-4">
+            <Suspense fallback={null}>
+              <DashboardFilters bodegas={[]} categorias={[]} />
+            </Suspense>
+            <Suspense fallback={<ChartSkeletonGrid />}>
+              <DashboardGraficasSection
+                rol={result.profile.rol}
+                filtros={filtros}
+                variante={variante}
+                entradasVsSalidas={data.entradasVsSalidas}
+              />
+            </Suspense>
+          </section>
+
+          <VehiculoTimelineCard rolActual={result.profile.rol} />
+
+          {variante === 'compras' && <LowStockList productos={productosBajoStock} />}
+
+          {variante === 'comercial' && (
+            <QuickLinksCard
+              enlaces={[{ label: 'Inventario', href: '/inventario', icon: Package }]}
+            />
+          )}
+
+          {variante === 'compras' && (
+            <QuickLinksCard
+              enlaces={[
+                { label: 'Importar CSV', href: '/importar', icon: Upload },
+                { label: 'Entradas', href: '/entradas', icon: FilePlus },
+              ]}
+            />
+          )}
+
+          {variante === 'taller' && (
+            <QuickLinksCard
+              enlaces={[
+                { label: 'Inventario', href: '/inventario', icon: Package },
+                { label: 'Formularios', href: '/formularios', icon: ClipboardList },
+                { label: 'Ajustes', href: '/ajustes', icon: SlidersHorizontal },
+              ]}
+            />
+          )}
+
+          {variante === 'instalacion' && (
+            <QuickLinksCard enlaces={[{ label: 'Inventario', href: '/inventario', icon: Package }]} />
+          )}
+
+          {variante !== 'basico' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {variante === 'bitacora'
+                    ? 'Bitácora de actividad'
+                    : variante === 'instalacion'
+                      ? 'Productos con movimiento reciente'
+                      : 'Últimos movimientos'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <UltimosMovimientosTable movimientos={data.ultimosMovimientos} />
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {mostrarCalendario && (
+          <div className="lg:sticky lg:top-6">
+            <CalendarWidget />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

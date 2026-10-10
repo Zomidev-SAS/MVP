@@ -7,7 +7,15 @@
 begin;
 
 insert into movimientos_inventario (codigo_producto, tipo_movimiento, cantidad, valor_unitario, bodega, motivo, actor_id, idempotency_key)
-select v.codigo_producto, v.tipo_movimiento, v.cantidad, v.valor_unitario, v.bodega, v.motivo, v.actor_id::uuid, v.idempotency_key
+select
+  v.codigo_producto,
+  v.tipo_movimiento,
+  v.cantidad,
+  v.valor_unitario,
+  v.bodega,
+  v.motivo,
+  (select p.id from profiles p where p.rol = 'supervisor' and p.activo order by p.created_at limit 1),
+  v.idempotency_key
 from (values
 ('10101100', 'entrada', 2600, 30, 'ALMACEN NIVEL 1', 'Saldo de apertura importado desde Saldos_de_inventario_30_Junio_2026.xlsx', '44444444-4444-4444-4444-444444444444', 'apertura-jun2026-1'),
 ('101011000', 'entrada', 600, 29.2, 'ALMACEN NIVEL 1', 'Saldo de apertura importado desde Saldos_de_inventario_30_Junio_2026.xlsx', '44444444-4444-4444-4444-444444444444', 'apertura-jun2026-2'),
@@ -488,7 +496,7 @@ from (values
 ('95011000', 'entrada', 200, 0, 'DESCANSABRAZOS', 'Saldo de apertura importado desde Saldos_de_inventario_30_Junio_2026.xlsx', '44444444-4444-4444-4444-444444444444', 'apertura-jun2026-477'),
 ('95021000', 'entrada', 9, 1600, 'DESCANSABRAZOS', 'Saldo de apertura importado desde Saldos_de_inventario_30_Junio_2026.xlsx', '44444444-4444-4444-4444-444444444444', 'apertura-jun2026-478'),
 ('95031000', 'entrada', 4, 2424.22, 'DESCANSABRAZOS', 'Saldo de apertura importado desde Saldos_de_inventario_30_Junio_2026.xlsx', '44444444-4444-4444-4444-444444444444', 'apertura-jun2026-479')
-) as v(codigo_producto, tipo_movimiento, cantidad, valor_unitario, bodega, motivo, actor_id, idempotency_key)
+) as v(codigo_producto, tipo_movimiento, cantidad, valor_unitario, bodega, motivo, actor_legacy, idempotency_key)
 where not exists (
   select 1 from movimientos_inventario m where m.idempotency_key = v.idempotency_key
 );

@@ -4,3 +4,15 @@ supabase/functions/**/.env
 .env.local
 node_modules/
 .DS_Store
+.idea/
+*.local
+
+# Datos locales (Excel de inventario, PDFs de referencia, etc.) — no subir a git
+archivos/
+Archivos/
+ArchivosAle/
+OC/
+
+# Supabase local
+supabase/.branches
+supabase/.temp

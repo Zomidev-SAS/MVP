@@ -33,6 +33,12 @@ Deno.serve(async (req) => {
     { global: { headers: { Authorization: authHeader } } }
   )
 
+  const token = authHeader.replace('Bearer ', '')
+  const { data: userData } = await supabaseUser.auth.getUser(token)
+  if (!userData?.user) {
+    return new Response(JSON.stringify({ error: 'Token inválido' }), { status: 401 })
+  }
+
   // 5. Consultar el saldo — usa la MISMA vista que ya tiene el enmascarado
   //    de costos, así que un rol sin permiso ve valor_unitario/valor_total en null
   const { data, error } = await supabaseUser

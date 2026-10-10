@@ -1,0 +1,1 @@
+export const MOVIMIENTOS_PAGE_SIZE = 20
