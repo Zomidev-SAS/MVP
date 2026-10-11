@@ -14,14 +14,18 @@ declare
   api_url text;
   service_key text;
 begin
-  -- vehiculosapp: tipo_formulario = 'ingreso'
-  if coalesce(new.tipo_formulario, new.tipo) is distinct from 'ingreso' then
+  -- vehiculosapp: tipo_formulario = 'ingreso'. Se lee vía to_jsonb(new) en vez
+  -- de new.tipo_formulario directo: así, si la columna no existe (como en el
+  -- stub local de formularios), simplemente da null en vez de reventar el
+  -- trigger con "record 'new' has no field 'tipo_formulario'".
+  if coalesce(to_jsonb(new) ->> 'tipo_formulario', new.tipo) is distinct from 'ingreso' then
     return new;
   end if;
 
-  -- vehiculosapp: columna dg_chasis; fallback JSON del stub local
+  -- vehiculosapp: columna dg_chasis (leída igual, de forma segura); fallback
+  -- JSON del stub local.
   chasis := coalesce(
-    nullif(trim(new.dg_chasis), ''),
+    nullif(trim(to_jsonb(new) ->> 'dg_chasis'), ''),
     nullif(trim(new.data -> 'datosGenerales' ->> 'chasis'), '')
   );
 

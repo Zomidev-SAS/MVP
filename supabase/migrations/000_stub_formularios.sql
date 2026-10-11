@@ -4,7 +4,8 @@
 -- No la apliques nunca contra producción — ahí ya existe con su propio esquema.
 
 create table if not exists formularios (
-  id   text primary key default gen_random_uuid()::text,
-  tipo text,
-  data jsonb not null default '{}'
+  id         text primary key default gen_random_uuid()::text,
+  tipo       text,
+  data       jsonb not null default '{}',
+  created_at timestamptz not null default now()
 );

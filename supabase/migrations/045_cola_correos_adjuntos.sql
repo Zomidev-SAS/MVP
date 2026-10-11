@@ -6,6 +6,15 @@ alter table cola_correos
   add column if not exists adjunto_nombre text,
   add column if not exists adjunto_base64 text;
 
+-- IMPORTANTE: en Postgres una función se identifica por nombre + tipos de
+-- parámetros. La versión de 038 tenía 6 parámetros; esta versión tiene 8
+-- (2 nuevos, con default). Como el número de parámetros cambió, un simple
+-- "create or replace" NO reemplaza la función de 038: crea una SEGUNDA
+-- función con el mismo nombre, y cualquier llamada con los 6 parámetros
+-- originales queda ambigua entre las dos. Por eso primero se borra
+-- explícitamente la firma vieja de 6 parámetros.
+drop function if exists fn_encolar_correo(uuid, text, text, text, text, text);
+
 create or replace function fn_encolar_correo(
   p_usuario_id uuid,
   p_tipo       text,
