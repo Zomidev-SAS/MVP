@@ -52,9 +52,12 @@ export default async function PanelLayout({
           ajustesPendientes={ajustesPendientes}
           notificaciones={notificaciones}
           esSupervisor={result.profile.rol === 'supervisor'}
-          // Placeholder hasta que exista la tabla notificaciones_leidas en el
-          // backend (ver Task 3.1): por ahora el estado "leída" solo vive en
-          // el cliente, sin persistencia entre recargas.
+          // Sigue sin persistir entre recargas: `notificaciones_leidas` no
+          // existe, y el backend construyó un sistema distinto en su lugar
+          // (tabla `notificaciones` por instancia/usuario, migración 033) que
+          // no mapea 1:1 contra estas alertas sintéticas por categoría — ver
+          // la nota en notificaciones-actions.ts. Queda como decisión de
+          // producto, no como algo pendiente de nombrar.
           leidas={new Set<string>()}
         />
         <main className="flex-1 p-6">

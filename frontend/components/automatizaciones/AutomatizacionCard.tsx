@@ -8,6 +8,7 @@ const ICONOS_RESULTADO = {
   error: <AlertCircle className="h-4 w-4 text-destructive" />,
   parcial: <AlertCircle className="h-4 w-4 text-warning" />,
   sin_ejecutar: <CircleSlash className="h-4 w-4 text-muted-foreground" />,
+  en_curso: <Clock className="h-4 w-4 text-muted-foreground" />,
 } as const
 
 export function AutomatizacionCard({ job }: { job: AutomatizacionEstado }) {

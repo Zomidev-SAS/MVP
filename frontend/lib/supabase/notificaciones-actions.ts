@@ -166,17 +166,27 @@ export async function marcarMensajeLeido(
   return { ok: true }
 }
 
-// NOTA PARA BACKEND: los IDs de alerta usados aquí y en marcarTodasLeidas
-// ('stock-bajo', 'ajustes-pendientes', 'ordenes-compra', ver fetchNotificaciones
-// arriba) son fijos por CATEGORÍA de alerta, no por instancia — cubren TODA
-// futura alerta de ese tipo, no una ocurrencia puntual. Cuando exista la
-// tabla real `notificaciones_leidas` (Fase 4.0), marcar "Stock bajo" como
-// leída con el ID 'stock-bajo' dejaría TODAS las futuras alertas de stock
-// bajo ocultas/atenuadas para siempre, lo cual no es el comportamiento
-// esperado. El diseño de esa tabla necesita resolver esto del lado de
-// backend — por ejemplo, con una clave por instancia (id de alerta + hash
-// del contenido + fecha) o con una expiración de la marca de "leída" — antes
-// de que este mecanismo se use en producción con datos reales.
+// NOTA PARA BACKEND — actualizado tras el contrato real (docs/CONTRATO_DATOS_SECCION2.md):
+// el backend NO construyó una tabla `notificaciones_leidas` como se asumía
+// aquí. En su lugar, B3 (migración 033) rediseñó el problema por completo:
+// creó una tabla `notificaciones` real, por INSTANCIA y por USUARIO (no por
+// categoría), con `leida`/`leida_at` propios y RPCs `marcar_notificacion_leida`
+// / `marcar_todas_leidas` — exactamente el problema de diseño que esta nota
+// señalaba (IDs fijos como 'stock-bajo' marcarían TODAS las futuras alertas
+// de esa categoría como leídas para siempre).
+//
+// El problema es que esa tabla real es un sistema DISTINTO al de aquí: son
+// eventos puntuales (ajuste creado, ajuste resuelto, formulario recibido...)
+// generados por triggers, no los agregados sintéticos que construye
+// fetchNotificaciones arriba (conteo de stock bajo, ajustes pendientes, OC
+// pendientes, eventos de hoy). No hay un mapeo 1:1 entre ambos — migrar este
+// centro de notificaciones al sistema real de B3 es una decisión de producto
+// (¿se reemplaza esta vista por `notificaciones` tal cual, perdiendo el
+// detalle de "qué productos" bajo cada alerta? ¿o conviven ambos?), no algo
+// que se resuelva solo reescribiendo esta función. Mientras no se decida,
+// `marcar_notificacion_leida`/`marcar_todas_leidas` de abajo siguen
+// escribiendo a `notificaciones_leidas`, que sigue sin existir — fallan
+// explícito (ok:false) en producción, nunca en silencio.
 export async function marcarNotificacionLeida(
   alertaId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {

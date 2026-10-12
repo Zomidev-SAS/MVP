@@ -1,7 +1,6 @@
 'use server'
 
 import { SignJWT, jwtVerify } from 'jose'
-import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth/require-role'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { PREVIEW_DASHBOARD_GRAFICAS } from '@/lib/dev/preview-dashboard-graficas-data'
@@ -85,17 +84,17 @@ export async function verificarTokenPlanta(token: string): Promise<boolean> {
  * Nunca se piden ni se devuelven datos de costos/valorización aquí.
  *
  * NOTA PARA BACKEND — IMPORTANTE, leer antes de tocar permisos de Supabase:
- * en producción esta función usa el cliente anon de Supabase (sin sesión)
- * para llamar el mismo RPC `dashboard_graficas` que ya es un placeholder
- * pendiente de contrato (ver dashboard-graficas-actions.ts). Ese RPC (y las
- * vistas de las que lee) devuelve `valorización`/costos para otros
- * consumidores autenticados.
+ * a la fecha (ver docs/CONTRATO_DATOS_SECCION2.md, sección 10) NO existe
+ * ninguna vista/RPC con permiso de lectura para el rol `anon`. Las vistas
+ * de B6 (`vista_vehiculos_por_etapa`, etc.) solo tienen
+ * `grant select ... to authenticated` — un cliente anon las recibe
+ * rechazadas por RLS/falta de grant, tal como debe ser.
  *
  * NUNCA se debe otorgar al rol `anon` permiso de lectura sobre
- * `dashboard_graficas` ni sobre ninguna vista/RPC que incluya datos
- * monetarios — `anon` significa literalmente cualquiera con la anon key
- * pública, no solo esta pantalla del taller; hacerlo filtraría costos a
- * cualquier visitante no autenticado, no solo a este kiosk.
+ * `rpc_kpis_dashboard()`, las vistas de B6, ni ninguna otra vista/RPC que
+ * incluya datos monetarios — `anon` significa literalmente cualquiera con
+ * la anon key pública, no solo esta pantalla del taller; hacerlo filtraría
+ * costos a cualquier visitante no autenticado, no solo a este kiosk.
  *
  * La única solución aceptable del lado de backend es un RPC/vista
  * DEDICADO y específico para este kiosk, que devuelva ÚNICAMENTE
@@ -103,9 +102,10 @@ export async function verificarTokenPlanta(token: string): Promise<boolean> {
  * que ese RPC/vista dedicado sea el que obtenga permiso de lectura `anon`
  * — nunca el RPC/vistas que ya exponen costos a otros roles.
  *
- * Mientras ese RPC dedicado no exista, esta función se degrada a listas
- * vacías si la llamada falla (RPC inexistente o RLS la rechaza), en vez de
- * tronar la pantalla del taller.
+ * Mientras ese RPC/vista dedicado no exista, esta función no intenta
+ * llamar nada contra Supabase (no hay nada seguro que llamar todavía) y
+ * se degrada directo a listas vacías, en vez de tronar la pantalla del
+ * taller o arriesgar un error que exponga más de lo debido.
  *
  * El token gatea el acceso a esta página y a esta función, pero una vez que
  * el backend exponga una vista/RPC legible por `anon` para el kiosco,
@@ -133,34 +133,11 @@ export async function fetchDatosPlanta(token: string): Promise<DatosPlanta> {
     }
   }
 
-  let vehiculosPorEtapa: VehiculoPorEtapaPunto[] = []
-  let entradasSalidas: EntradaSalidaDia[] = []
-
-  try {
-    const supabase = await createClient()
-    // Mismo RPC placeholder que fetchDashboardGraficas (pendiente de
-    // confirmar con el contrato de datos de backend) — aquí se llama sin
-    // sesión y solo se toman los dos campos sin costos del payload.
-    const { data, error } = await supabase.rpc('dashboard_graficas', {
-      p_rango: '7d',
-      p_desde: null,
-      p_hasta: null,
-      p_bodega_id: null,
-      p_categoria_id: null,
-    })
-
-    if (!error && data) {
-      const payload = data as {
-        vehiculosPorEtapa?: VehiculoPorEtapaPunto[]
-        entradasSalidas?: EntradaSalidaDia[]
-      }
-      vehiculosPorEtapa = payload.vehiculosPorEtapa ?? []
-      entradasSalidas = payload.entradasSalidas ?? []
-    }
-  } catch {
-    // RPC aún no existe o RLS bloquea la lectura anónima — ver nota arriba.
-    // Se degrada a listas vacías en vez de tronar la pantalla del taller.
-  }
+  // Ningún RPC/vista anon-safe existe todavía (ver nota arriba) — se
+  // degrada directo a listas vacías en vez de llamar algo que expondría
+  // costos a `anon` o que simplemente no tiene permiso para leer nada.
+  const vehiculosPorEtapa: VehiculoPorEtapaPunto[] = []
+  const entradasSalidas: EntradaSalidaDia[] = []
 
   const productosStockBajo = await fetchProductosBajoStock(5)
 

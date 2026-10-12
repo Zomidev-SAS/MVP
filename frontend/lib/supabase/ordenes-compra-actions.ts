@@ -484,25 +484,34 @@ export async function enviarOrdenCompra(): Promise<OrdenCompraResultado> {
 }
 
 /**
- * Envía la orden a Siigo vía Edge Function.
+ * Aprueba la orden y dispara su envío a Siigo.
  *
  * El Server Action ID de esta función se expone al bundle del cliente
  * porque la importa un Client Component (ComprasTable.tsx). La UI solo
  * renderiza el botón "Enviar a Siigo"/"Reintentar" para compras/supervisor,
  * pero eso es un gate de UI nada más — sin este chequeo, cualquier usuario
  * autenticado podría invocar la acción directamente. Por eso `requireRole`
- * se evalúa ANTES de `isDevBypassActive()`.
+ * se evalúa ANTES de `isDevBypassActive()` (el RPC igual vuelve a validar
+ * el rol del lado de backend).
  *
- * NOTA: Edge Function "siigo-enviar-orden" aún no existe en el backend —
- * placeholder explícito pendiente del contrato de datos.
+ * docs/CONTRATO_DATOS_SECCION2.md (sección 9): no existe Edge Function
+ * "siigo-enviar-orden". El punto de entrada real es `rpc_aprobar_oc_siigo`,
+ * que marca `siigo_estado = 'enviando'` y dispara la Edge Function
+ * `siigo-sync-oc` de forma asíncrona — el `ok: true` de esta función solo
+ * confirma que el envío SE INICIÓ, no que ya terminó. El resultado final
+ * llega por `siigo_estado`/`siigo_id` en la fila (Realtime o refetch).
+ * Es idempotente: si la orden ya tiene `siigo_id`, no la reenvía.
  */
 export async function enviarOrdenASiigo(ordenId: number): Promise<OrdenCompraResultado> {
   const auth = await requireRole(['supervisor', 'compras'])
   if (!auth.ok) return { ok: false, error: auth.error }
   if (isDevBypassActive()) return { ok: true }
   const supabase = await createClient()
-  const { error } = await supabase.functions.invoke('siigo-enviar-orden', { body: { ordenId } })
+  const { data, error } = await supabase.rpc('rpc_aprobar_oc_siigo', { p_orden_id: ordenId })
   if (error) return { ok: false, error: `No se pudo enviar a Siigo: ${error.message}` }
+  if (!(data as { ok?: boolean } | null)?.ok) {
+    return { ok: false, error: 'rpc_aprobar_oc_siigo no confirmó el envío.' }
+  }
   return { ok: true }
 }
 

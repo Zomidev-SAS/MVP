@@ -4,23 +4,84 @@ import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth/require-role'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { PREVIEW_CORREOS } from '@/lib/dev/preview-correos-data'
-import type { CorreoEnviado, EnvioPreview, EstadoCorreo } from '@/lib/types/correos'
+import type { CorreoEnviado, EnvioPreview, EstadoCorreo, OrigenCorreo } from '@/lib/types/correos'
 import type { Role } from '@/lib/types/database'
+
+// cola_correos (docs/CONTRATO_DATOS_SECCION2.md, sección 8) no es
+// `vista_correos_enviados` como se asumió antes del contrato: tiene su
+// propio set de estados y no trae nombre/rol del destinatario (solo
+// `usuario_id`), así que se junta con vista_usuarios_panel.
+const ESTADOS_POR_FILTRO: Record<EstadoCorreo, string[]> = {
+  pendiente: ['pendiente', 'enviando'],
+  enviado: ['enviado', 'agrupado'],
+  error: ['error'],
+}
+
+function estadoFrontend(estadoBackend: string): EstadoCorreo {
+  if (estadoBackend === 'enviando') return 'pendiente'
+  if (estadoBackend === 'agrupado') return 'enviado'
+  return estadoBackend as EstadoCorreo
+}
+
+function origenFrontend(origenBackend: string): OrigenCorreo {
+  return origenBackend.startsWith('mensaje_panel:') ? 'mensaje' : 'alerta'
+}
+
+interface FilaColaCorreo {
+  id: number
+  destinatario: string
+  usuario_id: string | null
+  tipo: string
+  asunto: string
+  origen: string
+  estado: string
+  error: string | null
+  enviado_at: string | null
+  created_at: string
+}
 
 export async function fetchCorreosEnviados(filtros?: { estado?: EstadoCorreo }): Promise<CorreoEnviado[]> {
   if (isDevBypassActive()) {
     return filtros?.estado ? PREVIEW_CORREOS.filter((c) => c.estado === filtros.estado) : PREVIEW_CORREOS
   }
+
   const supabase = await createClient()
-  // NOTA: vista `vista_correos_enviados` a confirmar en contrato del backend — aún no existe.
-  let query = supabase.from('vista_correos_enviados').select('*').order('creado_en', { ascending: false })
-  if (filtros?.estado) query = query.eq('estado', filtros.estado)
+  let query = supabase
+    .from('cola_correos')
+    .select('id, destinatario, usuario_id, tipo, asunto, origen, estado, error, enviado_at, created_at')
+    .order('created_at', { ascending: false })
+  if (filtros?.estado) query = query.in('estado', ESTADOS_POR_FILTRO[filtros.estado])
+
   const { data, error } = await query
   if (error) throw new Error(`No se pudieron cargar los correos: ${error.message}`)
-  return data as CorreoEnviado[]
+
+  const filas = (data ?? []) as FilaColaCorreo[]
+  const usuarioIds = Array.from(new Set(filas.map((f) => f.usuario_id).filter((id): id is string => id !== null)))
+
+  const perfilPorId = new Map<string, { nombre: string; rol: string }>()
+  if (usuarioIds.length > 0) {
+    const { data: perfiles } = await supabase
+      .from('vista_usuarios_panel')
+      .select('id, nombre, rol')
+      .in('id', usuarioIds)
+    for (const p of perfiles ?? []) perfilPorId.set(p.id, { nombre: p.nombre, rol: p.rol })
+  }
+
+  return filas.map((f) => ({
+    id: String(f.id),
+    destinatarioEmail: f.destinatario,
+    destinatarioNombre: (f.usuario_id && perfilPorId.get(f.usuario_id)?.nombre) ?? f.destinatario,
+    rolDestino: (f.usuario_id && perfilPorId.get(f.usuario_id)?.rol) ?? '',
+    asunto: f.asunto,
+    origen: origenFrontend(f.origen),
+    estado: estadoFrontend(f.estado),
+    fechaEnvio: f.enviado_at,
+    error: f.error,
+    creadoEn: f.created_at,
+  }))
 }
 
-export async function reenviarCorreo(id: string): Promise<void> {
+export async function reenviarCorreo(_id: string): Promise<void> {
   // Este archivo es 'use server': el Server Action ID de esta función SÍ se
   // expone al bundle del cliente porque la importa un Client Component
   // (CorreosTable.tsx). La UI solo renderiza el botón "Reenviar" para
@@ -29,10 +90,13 @@ export async function reenviarCorreo(id: string): Promise<void> {
   const auth = await requireRole(['supervisor'])
   if (!auth.ok) throw new Error(auth.error)
   if (isDevBypassActive()) return
-  const supabase = await createClient()
-  // NOTA: función/edge function de reenvío a confirmar en contrato (probablemente supabase.functions.invoke('reenviar-correo', { body: { id } }))
-  const { error } = await supabase.functions.invoke('reenviar-correo', { body: { id } })
-  if (error) throw new Error(`No se pudo reenviar el correo: ${error.message}`)
+  // NOTA PARA BACKEND: no existe ninguna RPC/Edge Function de reenvío manual
+  // (docs/CONTRATO_DATOS_SECCION2.md no la documenta). cola_correos solo
+  // tiene reintento automático por cron (`enviar_correos`, hasta 5 intentos)
+  // y el rol `authenticated` solo tiene SELECT sobre esa tabla — ni siquiera
+  // un UPDATE directo a `estado='pendiente'` es posible desde el panel hoy.
+  // Falla explícito en vez de pretender que el botón funciona.
+  throw new Error('Reenvío manual de correo todavía no existe en el backend.')
 }
 
 export async function previsualizarEnvio(rol: Role): Promise<EnvioPreview> {
@@ -44,7 +108,6 @@ export async function previsualizarEnvio(rol: Role): Promise<EnvioPreview> {
   if (!auth.ok) throw new Error(auth.error)
   if (isDevBypassActive()) return { rol, totalDestinatarios: 5 }
   const supabase = await createClient()
-  // NOTA: vista `vista_usuarios_panel` a confirmar en contrato del backend — aún no existe.
   const { count, error } = await supabase
     .from('vista_usuarios_panel')
     .select('*', { count: 'exact', head: true })
