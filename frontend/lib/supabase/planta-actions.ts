@@ -2,6 +2,7 @@
 
 import { SignJWT, jwtVerify } from 'jose'
 import { requireRole } from '@/lib/auth/require-role'
+import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { PREVIEW_DASHBOARD_GRAFICAS } from '@/lib/dev/preview-dashboard-graficas-data'
 import { fetchProductosBajoStock } from '@/lib/supabase/inventario-actions'
@@ -73,57 +74,32 @@ export async function verificarTokenPlanta(token: string): Promise<boolean> {
   }
 }
 
+interface RespuestaRpcDatosPlanta {
+  vehiculos_por_etapa: { etapa: string; cantidad: number }[]
+  entradas_salidas: EntradaSalidaDia[]
+  productos_stock_bajo: ProductoBajoStock[]
+}
+
+const DATOS_PLANTA_VACIOS: DatosPlanta = { vehiculosPorEtapa: [], entradasSalidas: [], productosStockBajo: [] }
+
 /**
  * Datos para el modo pantalla de planta (`/planta/[token]`), una ruta SIN
  * sesión de usuario autenticado (una TV del taller, gateada solo por el
- * token firmado anterior). Por eso esta función no puede reutilizar
- * `fetchDashboardGraficas` (que desde la corrección de la tarea 2.1 exige
- * una sesión real vía `getCurrentProfile()` para decidir el acceso a
- * costos) ni llamar `requireRole`/`getCurrentProfile` en absoluto.
+ * token firmado anterior). Por eso no reutiliza `fetchDashboardGraficas`
+ * ni `requireRole`/`getCurrentProfile`.
  *
- * Nunca se piden ni se devuelven datos de costos/valorización aquí.
+ * Lee de `rpc_datos_planta(p_token)` (migración 048) con el cliente anon.
+ * Ese RPC vuelve a verificar la firma del token en la base contra el
+ * secreto 'PLANTA_KIOSK_SECRET' del Vault, así que la anon key pública sola
+ * no basta para leer estos datos. Solo devuelve datos sin dinero; NUNCA se
+ * debe dar acceso `anon` a `rpc_kpis_dashboard()` ni a las vistas de B6.
  *
- * NOTA PARA BACKEND — IMPORTANTE, leer antes de tocar permisos de Supabase:
- * a la fecha (ver docs/CONTRATO_DATOS_SECCION2.md, sección 10) NO existe
- * ninguna vista/RPC con permiso de lectura para el rol `anon`. Las vistas
- * de B6 (`vista_vehiculos_por_etapa`, etc.) solo tienen
- * `grant select ... to authenticated` — un cliente anon las recibe
- * rechazadas por RLS/falta de grant, tal como debe ser.
- *
- * NUNCA se debe otorgar al rol `anon` permiso de lectura sobre
- * `rpc_kpis_dashboard()`, las vistas de B6, ni ninguna otra vista/RPC que
- * incluya datos monetarios — `anon` significa literalmente cualquiera con
- * la anon key pública, no solo esta pantalla del taller; hacerlo filtraría
- * costos a cualquier visitante no autenticado, no solo a este kiosk.
- *
- * La única solución aceptable del lado de backend es un RPC/vista
- * DEDICADO y específico para este kiosk, que devuelva ÚNICAMENTE
- * `vehiculosPorEtapa`/`entradasSalidas` (sin ningún campo monetario), y
- * que ese RPC/vista dedicado sea el que obtenga permiso de lectura `anon`
- * — nunca el RPC/vistas que ya exponen costos a otros roles.
- *
- * Mientras ese RPC/vista dedicado no exista, esta función no intenta
- * llamar nada contra Supabase (no hay nada seguro que llamar todavía) y
- * se degrada directo a listas vacías, en vez de tronar la pantalla del
- * taller o arriesgar un error que exponga más de lo debido.
- *
- * El token gatea el acceso a esta página y a esta función, pero una vez que
- * el backend exponga una vista/RPC legible por `anon` para el kiosco,
- * cualquier persona con la clave anon pública podría leer esos datos
- * directamente sin pasar por este token — el token protege el acceso vía
- * esta página/función, no los datos en la base si el backend los expone a
- * `anon` de forma más amplia. Por eso esta función NO confía en que quien la
- * llama ya verificó el token (aunque hoy solo la importe el Server
- * Component de `/planta/[token]`, que sí lo hace): recibe el token como
- * parámetro y lo vuelve a verificar aquí mismo, en vez de asumirlo — así
- * sigue siendo segura aunque en el futuro alguien la importe desde otro
- * lugar (ej. un Client Component) sin pasar primero por esa verificación.
+ * El token también se verifica aquí antes de llamar a Supabase, para no
+ * depender de que quien importe esta función lo haya hecho antes.
  */
 export async function fetchDatosPlanta(token: string): Promise<DatosPlanta> {
   const valido = await verificarTokenPlanta(token)
-  if (!valido) {
-    return { vehiculosPorEtapa: [], entradasSalidas: [], productosStockBajo: [] }
-  }
+  if (!valido) return DATOS_PLANTA_VACIOS
 
   if (isDevBypassActive()) {
     return {
@@ -133,13 +109,32 @@ export async function fetchDatosPlanta(token: string): Promise<DatosPlanta> {
     }
   }
 
-  // Ningún RPC/vista anon-safe existe todavía (ver nota arriba) — se
-  // degrada directo a listas vacías en vez de llamar algo que expondría
-  // costos a `anon` o que simplemente no tiene permiso para leer nada.
-  const vehiculosPorEtapa: VehiculoPorEtapaPunto[] = []
-  const entradasSalidas: EntradaSalidaDia[] = []
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('rpc_datos_planta', { p_token: token })
 
-  const productosStockBajo = await fetchProductosBajoStock(5)
+  if (error || !data) {
+    // Lo más común: PLANTA_KIOSK_SECRET del VPS no coincide con el del Vault.
+    console.error('Failed to load rpc_datos_planta:', error)
+    return DATOS_PLANTA_VACIOS
+  }
 
-  return { vehiculosPorEtapa, entradasSalidas, productosStockBajo }
+  const respuesta = data as RespuestaRpcDatosPlanta
+  return {
+    // vehiculo_procesos no registra cuánto dura cada etapa todavía.
+    vehiculosPorEtapa: (respuesta.vehiculos_por_etapa ?? []).map((v) => ({
+      etapa: v.etapa,
+      cantidad: Number(v.cantidad),
+      tiempoPromedioDias: 0,
+    })),
+    entradasSalidas: (respuesta.entradas_salidas ?? []).map((d) => ({
+      fecha: d.fecha,
+      entradas: Number(d.entradas),
+      salidas: Number(d.salidas),
+    })),
+    productosStockBajo: (respuesta.productos_stock_bajo ?? []).map((p) => ({
+      codigo_producto: p.codigo_producto,
+      nombre_producto: p.nombre_producto,
+      saldo: Number(p.saldo),
+    })),
+  }
 }
