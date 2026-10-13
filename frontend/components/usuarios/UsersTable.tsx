@@ -29,14 +29,19 @@ function esEmailValido(email: string | null | undefined): boolean {
 export function UsersTable() {
   const [usuarios, setUsuarios] = useState<UsuarioListado[]>([])
   const [loading, setLoading] = useState(true)
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
   const [procesando, setProcesando] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUsuarios()
-      .then(setUsuarios)
+      .then((data) => {
+        setUsuarios(data)
+        setErrorCarga(null)
+      })
       .catch((error) => {
         console.error('Failed to fetch usuarios:', error)
         setUsuarios([])
+        setErrorCarga(error instanceof Error ? error.message : 'No se pudieron cargar los usuarios.')
       })
       .finally(() => setLoading(false))
   }, [])
@@ -81,8 +86,11 @@ export function UsersTable() {
       <TableBody>
         {usuarios.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={5} className="text-center text-muted-foreground">
-              {loading ? 'Cargando...' : 'Sin usuarios.'}
+            <TableCell
+              colSpan={5}
+              className={errorCarga ? 'text-center text-destructive' : 'text-center text-muted-foreground'}
+            >
+              {loading ? 'Cargando...' : errorCarga ?? 'Sin usuarios.'}
             </TableCell>
           </TableRow>
         ) : (

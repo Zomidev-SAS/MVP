@@ -24,8 +24,12 @@ export async function fetchUsuarios(): Promise<UsuarioListado[]> {
     .order('created_at', { ascending: true })
 
   if (error) {
-    console.error('Failed to load profiles:', error)
-    return []
+    // Falla explícito: antes se devolvía [] y la tabla mostraba "Sin usuarios"
+    // aunque el problema fuera de permisos (ej. vista_usuarios_panel con
+    // security_invoker=on, corregido en la migración 047). UsersTable captura
+    // el error y lo muestra, en vez de confundirlo con una lista vacía.
+    console.error('Failed to load vista_usuarios_panel:', error)
+    throw new Error(`No se pudieron cargar los usuarios: ${error.message}`)
   }
 
   return data ?? []

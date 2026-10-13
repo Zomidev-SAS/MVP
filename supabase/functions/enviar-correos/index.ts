@@ -155,7 +155,13 @@ async function enviarConResend(
   adjunto?: { nombre: string; base64: string }
 ): Promise<void> {
   const apiKey = Deno.env.get('RESEND_API_KEY')
-  const from = Deno.env.get('RESEND_FROM_EMAIL') ?? 'Panel Carrera Arango <notificaciones@carrera-arango.com>'
+  // El proyecto cloud ya tiene el remitente verificado en el secret
+  // RESEND_FROM (lo usa generar-pdf-email); RESEND_FROM_EMAIL se acepta
+  // como alias para no romper entornos que lo hayan configurado así.
+  const from =
+    Deno.env.get('RESEND_FROM_EMAIL') ??
+    Deno.env.get('RESEND_FROM') ??
+    'Panel Carrera Arango <notificaciones@carrera-arango.com>'
 
   if (!apiKey) {
     throw new Error('RESEND_API_KEY no configurado')

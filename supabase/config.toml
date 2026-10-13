@@ -484,3 +484,31 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/siigo-validar/deno.json"
 entrypoint = "./functions/siigo-validar/index.ts"
+
+# Sección 2 (B12-B14). Se invocan desde pg_cron / triggers vía pg_net con el
+# service_role como Bearer (fn_llamar_edge_function, 035) y validan ese token
+# ellas mismas (_shared/internal-auth.ts), por eso verify_jwt = false igual
+# que el resto. siigo-sync-catalogo además acepta JWT de usuario y valida rol.
+[functions.enviar-correos]
+enabled = true
+verify_jwt = false
+import_map = "./functions/enviar-correos/deno.json"
+entrypoint = "./functions/enviar-correos/index.ts"
+
+[functions.reporte-semanal]
+enabled = true
+verify_jwt = false
+import_map = "./functions/reporte-semanal/deno.json"
+entrypoint = "./functions/reporte-semanal/index.ts"
+
+[functions.siigo-sync-oc]
+enabled = true
+verify_jwt = false
+import_map = "./functions/siigo-sync-oc/deno.json"
+entrypoint = "./functions/siigo-sync-oc/index.ts"
+
+[functions.siigo-sync-catalogo]
+enabled = true
+verify_jwt = false
+import_map = "./functions/siigo-sync-catalogo/deno.json"
+entrypoint = "./functions/siigo-sync-catalogo/index.ts"
