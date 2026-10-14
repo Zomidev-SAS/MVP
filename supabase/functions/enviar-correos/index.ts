@@ -200,7 +200,7 @@ function renderPlantilla(items: FilaCorreo[]): string {
           ${escapeHtml(it.asunto)}
         </p>
         <p style="margin:0;font-family:Arial,sans-serif;font-size:13.5px;color:#4B5560;line-height:1.5;">
-          ${escapeHtml(it.cuerpo)}
+          ${escapeHtml(it.cuerpo).replace(/\n/g, '<br>')}
         </p>
         ${it.enlace ? `
         <a href="${base}${it.enlace}"
