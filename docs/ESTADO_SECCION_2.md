@@ -1,8 +1,71 @@
 # Estado de la Sección 2 — Vista Gráfica, Siigo y Correos por Rol
 
-**Fecha:** 2026-10-10 (actualizado 2026-10-11 tras reconciliar contra el backend real; actualizado 2026-10-13 con fixes de frontend puro)
+**Fecha:** 2026-10-10 (actualizado 2026-10-11 tras reconciliar contra el backend real; actualizado 2026-10-13 con fixes de frontend puro; actualizado 2026-10-14 cerrando 3 de los 4 huecos "bloqueado en backend")
 **Rama:** fusionada en `main` (commit `5381209`, pusheado a `origin/main`)
 **Plan original:** `docs/superpowers/plans/2026-10-09-seccion-2-vista-grafica.md`
+
+**Actualización 2026-10-14:** sesión mixta frontend + SQL (con autorización explícita para
+tocar backend, excepción puntual a la regla normal de "solo frontend"). Se cerraron 3 de
+los 4 puntos restantes de la sección "Bloqueado en el equipo de backend":
+
+- **Reenvío manual de correo** (`/correos`, botón Reenviar): se agregó
+  `rpc_reenviar_correo(p_id)` (migración 049) — reabre la fila en `cola_correos`
+  (`estado -> 'pendiente'`), el cron existente (`fn_disparar_envio_correos`, cada
+  minuto) la recoge sola. Solo supervisor. `correos-actions.ts` ya no falla explícito,
+  llama la RPC.
+- **Centro de notificaciones no persistía "leída"**: se creó `notificaciones_leidas`
+  (migración 049) con una diferencia de diseño a propósito respecto a lo que se había
+  descartado antes por peligroso — no guarda solo `(usuario, categoria)`, guarda también
+  una **firma del contenido** (ids ordenados de los productos/OC/eventos que componían la
+  alerta). Si el contenido cambia, la firma ya no coincide y la alerta vuelve a aparecer
+  como no leída aunque la categoría sea la misma — así "marcar leída" nunca esconde
+  alertas futuras que todavía no existían. Esto NO reemplaza el sistema real de
+  notificaciones por instancia de B3 (migración 033, tabla `notificaciones`, sigue sin
+  usarse desde el frontend) — sigue siendo una decisión de producto aparte si algún día
+  se quiere unificar ambos sistemas.
+- **Catálogo Siigo (productos/proveedores)**: resultó que el backend YA tenía todo desde
+  044 (`siigo_catalogo_diferencias` + último estado de `siigo_sync_catalogo` vía
+  `vista_log_automatizaciones_ultimo_estado`) — nunca se construyó pantalla. Se agregó
+  tarjeta "Catálogo Siigo — diferencias" en `/compras` (solo supervisor/compras) y
+  `rpc_marcar_diferencia_siigo_revisada` (migración 050) para marcar una diferencia como
+  revisada sin dar UPDATE directo sobre la tabla.
+- Fix adicional de la sesión anterior (correo HTML): `enviar-correos` ya envía el cuerpo
+  del correo con `<br>` en vez de `\n` crudo (los saltos de línea de alertas con bullets,
+  como el reporte semanal, se veían todos pegados en una sola línea).
+- Fix de UI suelto: input de contraseña en `/login` sin placeholder, agregado
+  ("Ingresa contraseña").
+
+Verificado con navegador real (bypass dev): los 3 flujos nuevos (marcar notificación
+leída, reenviar correo, marcar diferencia Siigo revisada) funcionan sin error. `tsc`,
+`eslint` y `next build` limpios. Las migraciones 049/050 se aplicaron manualmente vía SQL
+Editor (sin CLI) y se verificaron contra el proyecto real por API REST con la anon key
+(las 2 RPC responden "permission denied", no "function not found" — confirma que existen
+y que el chequeo de rol funciona). Se detectó un detalle: la tabla `notificaciones_leidas`
+quedó con `anon` teniendo GRANT de SELECT/INSERT/UPDATE (probablemente se creó desde el
+Table Editor visual en vez de pegar el SQL crudo — Supabase le da acceso a `anon` por
+defecto así). No es hueco real (RLS bloquea todo: `usuario_id = auth.uid()` nunca pasa
+sin sesión, confirmado insertando como anon) pero no sigue la convención del resto del
+proyecto.
+
+**Colisión con trabajo en paralelo:** al momento de pushear, `alecito` (con Cursor) ya
+había mergeado a `origin/main` su propia versión de 049/050 — mismo diseño, prácticamente
+línea por línea igual a lo de arriba — más una **051** que endurece ambas RPC: valida el
+rol de forma null-safe (`is distinct from` / `coalesce`, en vez de `<>` / `not in`, que
+con `get_user_rol()` devolviendo NULL —usuario sin perfil o inactivo— no lanzaban la
+excepción y dejaban pasar el UPDATE) y revoca EXECUTE a `anon` explícitamente en ambas
+funciones. Se resolvió con fast-forward merge (mismo padre, sin conflicto) descartando
+los 049/050 propios en favor de los de la rama remota — el fix null-safe de 051 es
+estrictamente mejor que lo que yo había escrito, y el mismo bug (`not in` sin null-safe)
+sigue latente en `rpc_aprobar_oc_siigo`, 044, sin tocar por ahora. Se agregó **052** solo
+para el hueco que 051 no cubre: el GRANT a `anon` sobre la *tabla* `notificaciones_leidas`
+(051 solo tocó las funciones). **Pendiente: correr 051 y 052 en el SQL Editor** — lo que
+está vivo en el proyecto hoy es mi versión manual sin el null-safe ni el revoke a anon.
+
+Lo que queda pendiente de la lista original (ver abajo) ya no incluye los 3 puntos de
+arriba. Sigue pendiente, sin cambios: catálogo Siigo — fecha de última sync SÍ visible
+(siempre lo estuvo, vía `/automatizaciones`) pero eso es lo único de ese punto que no
+tocó esta sesión; F7 pulido visual en tablet real; QA completo por rol con datos reales;
+deploy a staging + grabaciones para cliente.
 
 **Actualización 2026-10-13:** sesión de arreglos de frontend puro, sin tocar
 backend/migraciones. Resumen (detalle completo en el mensaje de commit):
@@ -118,28 +181,30 @@ Cada feature sigue el mismo patrón que ya usaba el resto del proyecto: Server A
 
 ## Bloqueado en el equipo de backend
 
-Nada de esto se probó contra datos 100% reales porque faltan estas piezas en Supabase:
-
-1. **Función/RPC `dashboard_graficas`** — alimenta las 6 gráficas nuevas + KPIs del dashboard. Sin esto, esa sección muestra "Gráficas no disponibles" (ya no tumba la página entera, se corrigió en la revisión final).
-2. **Vista `vista_automatizaciones_estado`** — alimenta `/automatizaciones`.
-3. **Vista `vista_actividad_auditoria`** — alimenta `/actividad`.
-4. **Vista `vista_correos_enviados`** + función `reenviar-correo` (Edge Function) — alimenta `/correos` y el botón Reenviar.
-5. **Tabla `notificaciones_leidas`** — para que "marcar leída" persista entre recargas (hoy solo vive en el navegador). Importante: los IDs de alerta hoy son por categoría (`'stock-bajo'`, no por instancia) — si se crea esta tabla tal cual, marcar una alerta de stock bajo como leída ocultaría TODAS las futuras alertas de stock bajo para siempre. Hay que diseñar la clave como instancia + fecha, o con expiración. Nota dejada en `notificaciones-actions.ts`.
-6. **Función Edge `siigo-enviar-orden`** — el botón "Enviar a Siigo"/"Reintentar" en `/compras` existe y es clicable, pero fallará hasta que esta función exista. El badge de estado Siigo SÍ funciona ya con datos reales (usa columnas que ya existían: `descargada_siigo_at`, `finalizada_at`, `siigo_referencia`).
-7. **Vista anon-safe para el kiosco** (`/planta`) — el kiosco usa el cliente anónimo (sin sesión). La nota en `planta-actions.ts` es explícita: **nunca** dar acceso `anon` a `dashboard_graficas` ni a ninguna vista con costos; se necesita una vista/RPC dedicada, solo con `vehiculosPorEtapa`/`entradasSalidas`, sin dinero.
+Todo lo de esta sección (7 puntos originales: `dashboard_graficas`, automatizaciones,
+actividad, correos/reenvío, notificaciones leídas, envío a Siigo, vista anon-safe de
+planta) quedó resuelto entre el 2026-10-11 y el 2026-10-14. Detalle de qué se conectó
+contra qué nombre real en `docs/CONTRATO_DATOS_SECCION2.md` y en el bloque "Actualización
+2026-10-14" de arriba (reenvío de correo y notificaciones leídas, los 2 últimos en
+cerrarse). No queda nada bloqueado por backend en esta lista.
 
 ## Pendiente, no bloqueado por backend
 
-- **Siigo — catálogo de productos/proveedores**: fecha de última sincronización y lista de diferencias. No se construyó nada (fuera del alcance de la tarea que sí se hizo).
-- **F7 pulido visual**: solo se hizo una pasada a nivel de código (sin navegador/tablet disponible en el entorno de desarrollo). Falta la revisión visual real en escritorio y tablet de 10 pulgadas que pide el documento del cliente.
-- **QA completo por rol (8 roles × todas las pantallas)** — no se hizo, requiere datos reales y navegador.
+- **F7 pulido visual**: validado en desktop y en navegador con viewport emulado, falta la
+  revisión visual real en tablet de 10 pulgadas (dispositivo físico) que pide el
+  documento del cliente.
+- **QA completo por rol (8 roles × todas las pantallas)** con datos reales — no se hizo.
 - **Deploy a staging (`carrera.zomidev.com`) y grabaciones para el cliente** — no se hizo.
+- Detalle menor sin cerrar: `revoke all on notificaciones_leidas from anon, public;` (ver
+  "Actualización 2026-10-14" arriba) — no es hueco de seguridad (RLS ya bloquea todo),
+  pero rompe la convención del resto de tablas del proyecto.
 
 ## Cómo seguir
 
-1. Backend entrega las vistas/funciones de la sección "Bloqueado" de arriba.
-2. Se reconcilian los nombres reales contra lo que el frontend ya asume (cada archivo tiene un comentario `// NOTA:` señalando exactamente qué falta).
-3. QA por rol con datos reales + pulido visual en dispositivo real.
-4. Deploy.
+1. Correr el `revoke` pendiente de arriba.
+2. QA por rol con datos reales + pulido visual en tablet físico.
+3. Deploy a staging y grabaciones para el cliente.
 
-Si se retoma Siigo (catálogo) o cualquier otro punto pendiente, seguir el mismo patrón: Server Action con bypass dev + rama real explícita, nunca inventar que algo funciona cuando no se puede verificar.
+Si se retoma cualquier punto pendiente, seguir el mismo patrón ya usado en todo el
+proyecto: Server Action con bypass dev + rama real explícita, nunca inventar que algo
+funciona cuando no se puede verificar.

@@ -35,6 +35,7 @@ export default async function PanelLayout({
     alertas: [],
     mensajes: [],
     totalSinLeer: 0,
+    leidas: [],
   }))
   const ajusteAlerta = notificaciones.alertas.find((a) => a.tipo === 'ajustes_pendientes')
   const ajustesPendientes =
@@ -52,13 +53,7 @@ export default async function PanelLayout({
           ajustesPendientes={ajustesPendientes}
           notificaciones={notificaciones}
           esSupervisor={result.profile.rol === 'supervisor'}
-          // Sigue sin persistir entre recargas: `notificaciones_leidas` no
-          // existe, y el backend construyó un sistema distinto en su lugar
-          // (tabla `notificaciones` por instancia/usuario, migración 033) que
-          // no mapea 1:1 contra estas alertas sintéticas por categoría — ver
-          // la nota en notificaciones-actions.ts. Queda como decisión de
-          // producto, no como algo pendiente de nombrar.
-          leidas={new Set<string>()}
+          leidas={new Set(notificaciones.leidas)}
         />
         <main className="flex-1 p-6">
           <PageTransition>{children}</PageTransition>

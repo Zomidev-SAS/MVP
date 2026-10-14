@@ -19,6 +19,7 @@ import type { AlertaNotificacion, MensajePanel } from '@/lib/types/notificacione
 interface NotificacionesHistorialProps {
   alertas: AlertaNotificacion[]
   mensajes: MensajePanel[]
+  leidasIniciales: string[]
 }
 
 type FiltroLeida = 'todas' | 'no_leidas' | 'leidas'
@@ -38,22 +39,22 @@ const DESTINO_LABELS: Record<AlertaNotificacion['tipo'], string> = {
   ajustes_pendientes: 'ajustes',
 }
 
-export function NotificacionesHistorial({ alertas, mensajes }: NotificacionesHistorialProps) {
-  const [leidas, setLeidas] = useState<Set<string>>(new Set())
+export function NotificacionesHistorial({ alertas, mensajes, leidasIniciales }: NotificacionesHistorialProps) {
+  const [leidas, setLeidas] = useState<Set<string>>(new Set(leidasIniciales))
   const [mensajesLeidos, setMensajesLeidos] = useState<Set<number>>(
     new Set(mensajes.filter((m) => m.leido).map((m) => m.id))
   )
   const [filtroLeida, setFiltroLeida] = useState<FiltroLeida>('todas')
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>('todos')
 
-  function marcarAlertaLeida(id: string) {
+  function marcarAlertaLeida(alerta: AlertaNotificacion) {
     setLeidas((prev) => {
-      if (prev.has(id)) return prev
+      if (prev.has(alerta.id)) return prev
       const next = new Set(prev)
-      next.add(id)
+      next.add(alerta.id)
       return next
     })
-    void marcarNotificacionLeida(id)
+    void marcarNotificacionLeida(alerta.id, alerta.firma)
   }
 
   function marcarMensaje(id: number) {
@@ -159,7 +160,7 @@ export function NotificacionesHistorial({ alertas, mensajes }: NotificacionesHis
                     </div>
                     <Link
                       href={alerta.href}
-                      onClick={() => marcarAlertaLeida(alerta.id)}
+                      onClick={() => marcarAlertaLeida(alerta)}
                       className="shrink-0 text-xs font-medium text-primary hover:underline"
                     >
                       Ir a {DESTINO_LABELS[alerta.tipo]} →

@@ -23,5 +23,11 @@ async function NotificacionesContent() {
 
   const payload = await fetchNotificaciones(result.profile.rol)
 
-  return <NotificacionesHistorial alertas={payload.alertas} mensajes={payload.mensajes} />
+  return (
+    <NotificacionesHistorial
+      alertas={payload.alertas}
+      mensajes={payload.mensajes}
+      leidasIniciales={payload.leidas}
+    />
+  )
 }

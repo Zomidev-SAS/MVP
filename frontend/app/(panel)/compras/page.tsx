@@ -1,7 +1,9 @@
 import { RoleGuard } from '@/components/shared/RoleGuard'
 import { ComprasTable } from '@/components/compras/ComprasTable'
+import { SiigoCatalogoDiferencias } from '@/components/compras/SiigoCatalogoDiferencias'
 import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
+import { fetchSiigoCatalogoEstado } from '@/lib/supabase/siigo-catalogo-actions'
 
 interface ComprasPageProps {
   searchParams: Promise<{ producto?: string; nombre?: string }>
@@ -28,6 +30,8 @@ async function ComprasContent({ searchParams }: ComprasPageProps) {
     result.status === 'authenticated' &&
     (result.profile.rol === 'supervisor' || result.profile.rol === 'compras')
 
+  const catalogoSiigo = puedeGestionarSiigo ? await fetchSiigoCatalogoEstado() : null
+
   return (
     <div className="space-y-4">
       <div>
@@ -38,6 +42,7 @@ async function ComprasContent({ searchParams }: ComprasPageProps) {
         </p>
       </div>
       <ComprasTable productoInicial={productoInicial} puedeGestionarSiigo={puedeGestionarSiigo} />
+      {catalogoSiigo && <SiigoCatalogoDiferencias estado={catalogoSiigo} />}
     </div>
   )
 }

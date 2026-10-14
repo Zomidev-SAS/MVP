@@ -24,20 +24,19 @@ export function HeaderNotifications({
 
   const sinLeer = alertas.filter((a) => !leidas.has(a.id)).length
 
-  function marcarUna(id: string) {
+  function marcarUna(alerta: AlertaNotificacion) {
     setLeidas((prev) => {
-      if (prev.has(id)) return prev
+      if (prev.has(alerta.id)) return prev
       const next = new Set(prev)
-      next.add(id)
+      next.add(alerta.id)
       return next
     })
-    void marcarNotificacionLeida(id)
+    void marcarNotificacionLeida(alerta.id, alerta.firma)
   }
 
   function marcarTodas() {
-    const ids = alertas.map((a) => a.id)
-    setLeidas(new Set(ids))
-    void marcarTodasLeidas(ids)
+    setLeidas(new Set(alertas.map((a) => a.id)))
+    void marcarTodasLeidas(alertas.map((a) => ({ id: a.id, firma: a.firma })))
   }
 
   return (
@@ -80,7 +79,7 @@ export function HeaderNotifications({
                   onToggle={() =>
                     setAlertaAbierta(alertaAbierta === alerta.id ? null : alerta.id)
                   }
-                  onMarcarLeida={() => marcarUna(alerta.id)}
+                  onMarcarLeida={() => marcarUna(alerta)}
                 />
               ))}
             </ul>

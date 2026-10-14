@@ -107,6 +107,7 @@ export default function LoginPage() {
                     aria-invalid={!!error}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Ingresa contraseña"
                     className="h-11 border-transparent bg-muted/60 pr-9 focus-visible:bg-background"
                   />
                   <button

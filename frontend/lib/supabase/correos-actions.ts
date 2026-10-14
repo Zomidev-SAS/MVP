@@ -81,22 +81,20 @@ export async function fetchCorreosEnviados(filtros?: { estado?: EstadoCorreo }):
   }))
 }
 
-export async function reenviarCorreo(_id: string): Promise<void> {
+export async function reenviarCorreo(id: string): Promise<void> {
   // Este archivo es 'use server': el Server Action ID de esta función SÍ se
   // expone al bundle del cliente porque la importa un Client Component
   // (CorreosTable.tsx). La UI solo renderiza el botón "Reenviar" para
   // supervisor, pero eso es un gate de UI nada más — sin este chequeo,
   // cualquier usuario autenticado podría invocar la acción directamente.
+  // rpc_reenviar_correo (migración 049) vuelve a validar el rol del lado del
+  // backend de todas formas.
   const auth = await requireRole(['supervisor'])
   if (!auth.ok) throw new Error(auth.error)
   if (isDevBypassActive()) return
-  // NOTA PARA BACKEND: no existe ninguna RPC/Edge Function de reenvío manual
-  // (docs/CONTRATO_DATOS_SECCION2.md no la documenta). cola_correos solo
-  // tiene reintento automático por cron (`enviar_correos`, hasta 5 intentos)
-  // y el rol `authenticated` solo tiene SELECT sobre esa tabla — ni siquiera
-  // un UPDATE directo a `estado='pendiente'` es posible desde el panel hoy.
-  // Falla explícito en vez de pretender que el botón funciona.
-  throw new Error('Reenvío manual de correo todavía no existe en el backend.')
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('rpc_reenviar_correo', { p_id: Number(id) })
+  if (error) throw new Error(`No se pudo reenviar el correo: ${error.message}`)
 }
 
 export async function previsualizarEnvio(rol: Role): Promise<EnvioPreview> {
