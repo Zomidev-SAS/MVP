@@ -23,30 +23,55 @@ function getBogotaTodayStart(): Date {
   return new Date(`${bogotaDateStr}T00:00:00-05:00`)
 }
 
-export async function getDashboardData(limiteMovimientos: number = 10): Promise<DashboardData> {
+export interface DashboardDataFiltros {
+  bodegaId?: string | null
+  categoriaId?: string | null
+}
+
+export async function getDashboardData(
+  limiteMovimientos: number = 10,
+  filtros?: DashboardDataFiltros
+): Promise<DashboardData> {
   if (isDevBypassActive()) {
     return getDevPreviewDashboardData(limiteMovimientos)
   }
 
   const supabase = await createClient()
+  const bodegaId = filtros?.bodegaId ?? null
+  const categoriaId = filtros?.categoriaId ?? null
 
   const todayStart = getBogotaTodayStart()
   const sevenDaysAgo = new Date(todayStart.getTime() - 6 * DAY_MS)
 
+  // Sin filtro de bodega, el stock agregado por producto (todas las bodegas)
+  // sale de vista_inventario_actual. Con bodega seleccionada hace falta la
+  // vista desglosada por bodega (020), que agrega por producto+bodega en vez
+  // de solo por producto.
+  let inventarioQuery = bodegaId
+    ? supabase.from('vista_inventario_por_bodega').select('saldo, valor_total').eq('bodega', bodegaId)
+    : supabase.from('vista_inventario_actual').select('saldo, valor_total')
+  if (categoriaId) inventarioQuery = inventarioQuery.eq('categoria', categoriaId)
+
+  let movimientosHoyQuery = supabase
+    .from('movimientos_inventario')
+    .select('id', { count: 'exact', head: true })
+    .eq('estado', 'aplicado')
+    .gte('created_at', todayStart.toISOString())
+  if (bodegaId) movimientosHoyQuery = movimientosHoyQuery.eq('bodega', bodegaId)
+
+  let entradasSalidasQuery = supabase
+    .from('movimientos_inventario')
+    .select('tipo_movimiento, created_at')
+    .eq('estado', 'aplicado')
+    .in('tipo_movimiento', ['entrada', 'salida_vin'])
+    .gte('created_at', sevenDaysAgo.toISOString())
+  if (bodegaId) entradasSalidasQuery = entradasSalidasQuery.eq('bodega', bodegaId)
+
   const [inventarioResult, movimientosHoyResult, entradasSalidasResult, ultimosResult] =
     await Promise.all([
-      supabase.from('vista_inventario_actual').select('saldo, valor_total'),
-      supabase
-        .from('movimientos_inventario')
-        .select('id', { count: 'exact', head: true })
-        .eq('estado', 'aplicado')
-        .gte('created_at', todayStart.toISOString()),
-      supabase
-        .from('movimientos_inventario')
-        .select('tipo_movimiento, created_at')
-        .eq('estado', 'aplicado')
-        .in('tipo_movimiento', ['entrada', 'salida_vin'])
-        .gte('created_at', sevenDaysAgo.toISOString()),
+      inventarioQuery,
+      movimientosHoyQuery,
+      entradasSalidasQuery,
       supabase
         .from('vista_movimientos_recientes')
         .select('id, codigo_producto, tipo_movimiento, cantidad, actor_nombre, created_at')

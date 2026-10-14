@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { AlertCircle } from 'lucide-react'
 import type { Role } from '@/lib/types/database'
 import type { DashboardFiltros, DashboardGraficasPayload } from '@/lib/types/dashboard-graficas'
@@ -14,6 +13,7 @@ import { TopProductosChart } from '@/components/dashboard/charts/TopProductosCha
 import { VehiculosPorEtapaChart } from '@/components/dashboard/charts/VehiculosPorEtapaChart'
 import { AjustesOCPorEstadoChart } from '@/components/dashboard/charts/AjustesOCPorEstadoChart'
 import { ValorizacionChart } from '@/components/dashboard/charts/ValorizacionChart'
+import { ChartSelector, type ChartSelectorItem } from '@/components/dashboard/ChartSelector'
 
 export async function DashboardGraficasSection({
   rol,
@@ -48,35 +48,50 @@ export async function DashboardGraficasSection({
     )
   }
 
-  const CHARTS_POR_VARIANTE: Record<DashboardVariante, ReactNode[]> = {
-    completo: [
-      <EntradasSalidasChart key="es" data={entradasVsSalidas} />,
-      <StockPorBodegaChart key="sb" data={graficas.stockPorBodega} />,
-      <StockPorCategoriaChart key="sc" data={graficas.stockPorCategoria} />,
-      <TopProductosChart key="tp" data={graficas.topProductos} />,
-      <VehiculosPorEtapaChart key="ve" data={graficas.vehiculosPorEtapa} />,
-      <AjustesOCPorEstadoChart key="ao" data={graficas.ajustesOCPorEstado} />,
-      <ValorizacionChart key="val" data={graficas.valorizacion} />,
-    ],
-    compras: [
-      <StockPorBodegaChart key="sb" data={graficas.stockPorBodega} />,
-      <AjustesOCPorEstadoChart key="ao" data={graficas.ajustesOCPorEstado} />,
-      <ValorizacionChart key="val" data={graficas.valorizacion} />,
-    ],
-    bitacora: [
-      <EntradasSalidasChart key="es" data={entradasVsSalidas} />,
-      <AjustesOCPorEstadoChart key="ao" data={graficas.ajustesOCPorEstado} />,
-      <ValorizacionChart key="val" data={graficas.valorizacion} />,
-    ],
-    comercial: [
-      <StockPorBodegaChart key="sb" data={graficas.stockPorBodega} />,
-      <StockPorCategoriaChart key="sc" data={graficas.stockPorCategoria} />,
-      <TopProductosChart key="tp" data={graficas.topProductos} />,
-      <VehiculosPorEtapaChart key="ve" data={graficas.vehiculosPorEtapa} />,
-    ],
-    taller: [<VehiculosPorEtapaChart key="ve" data={graficas.vehiculosPorEtapa} />],
-    instalacion: [<VehiculosPorEtapaChart key="ve" data={graficas.vehiculosPorEtapa} />],
-    basico: [<StockPorBodegaChart key="sb" data={graficas.stockPorBodega} />],
+  const es: ChartSelectorItem = {
+    id: 'es',
+    label: 'Entradas vs Salidas',
+    node: <EntradasSalidasChart data={entradasVsSalidas} />,
+  }
+  const sb: ChartSelectorItem = {
+    id: 'sb',
+    label: 'Stock por bodega',
+    node: <StockPorBodegaChart data={graficas.stockPorBodega} />,
+  }
+  const sc: ChartSelectorItem = {
+    id: 'sc',
+    label: 'Stock por categoría',
+    node: <StockPorCategoriaChart data={graficas.stockPorCategoria} />,
+  }
+  const tp: ChartSelectorItem = {
+    id: 'tp',
+    label: 'Top 10 productos',
+    node: <TopProductosChart data={graficas.topProductos} />,
+  }
+  const ve: ChartSelectorItem = {
+    id: 've',
+    label: 'Vehículos por etapa',
+    node: <VehiculosPorEtapaChart data={graficas.vehiculosPorEtapa} />,
+  }
+  const ao: ChartSelectorItem = {
+    id: 'ao',
+    label: 'Ajustes y órdenes de compra por estado',
+    node: <AjustesOCPorEstadoChart data={graficas.ajustesOCPorEstado} />,
+  }
+  const val: ChartSelectorItem = {
+    id: 'val',
+    label: 'Tendencia de valorización',
+    node: <ValorizacionChart data={graficas.valorizacion} />,
+  }
+
+  const CHARTS_POR_VARIANTE: Record<DashboardVariante, ChartSelectorItem[]> = {
+    completo: [es, sb, sc, tp, ve, ao, val],
+    compras: [sb, ao, val],
+    bitacora: [es, ao, val],
+    comercial: [sb, sc, tp, ve],
+    taller: [ve],
+    instalacion: [ve],
+    basico: [sb],
   }
 
   return (
@@ -86,9 +101,7 @@ export async function DashboardGraficasSection({
           <IndicadorCard key={k.id} kpi={k} />
         ))}
       </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {CHARTS_POR_VARIANTE[variante]}
-      </div>
+      <ChartSelector items={CHARTS_POR_VARIANTE[variante]} />
     </>
   )
 }

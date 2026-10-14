@@ -2,42 +2,11 @@
 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useOpcionesFiltros } from '@/lib/hooks/use-opciones-filtros'
 import type { InventarioFiltros } from '@/lib/types/inventario'
 
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs'
-
-const BODEGAS_REALES = [
-  'Sin Asignar',
-  'ALMACEN NIVEL 1',
-  'ALMACEN NIVEL 2',
-  'ALMACEN NIVEL 3',
-  'METALMECANICA',
-  'PRODUCTO TERMINADO',
-  'MADERAS',
-  'DESCANSABRAZOS',
-  'AUDIO Y VIDEO',
-]
-
-const CATEGORIAS_REALES = [
-  'TORNILLERIA',
-  'Productos',
-  'MECANIZADOS',
-  'PERFILERIA',
-  'TELAS Y TAPICERIA',
-  'DESCANSABRAZOS',
-  'PRODUCTO TERMINADO',
-  'Productos CA',
-  'Otro CA',
-  'INSUMOS VARIOS',
-  'FIBRA',
-  'ELECTRICOS',
-  'CORTE LASER',
-  'PEGANTES E INFLAMABLES',
-  'AUDIO Y VIDEO',
-  'CA IMPORTACIONES',
-  'Servicios',
-]
 
 export function InventoryFilters({
   filtros,
@@ -46,6 +15,8 @@ export function InventoryFilters({
   filtros: InventarioFiltros
   onChange: (filtros: InventarioFiltros) => void
 }) {
+  const { bodegas, categorias } = useOpcionesFiltros()
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
       <div className="space-y-1 lg:col-span-2">
@@ -67,9 +38,9 @@ export function InventoryFilters({
           className={SELECT_CLASS}
         >
           <option value="">Todas (total)</option>
-          {BODEGAS_REALES.map((bodega) => (
-            <option key={bodega} value={bodega}>
-              {bodega}
+          {bodegas.map((bodega) => (
+            <option key={bodega.id} value={bodega.nombre}>
+              {bodega.nombre}
             </option>
           ))}
         </select>
@@ -84,9 +55,9 @@ export function InventoryFilters({
           className={SELECT_CLASS}
         >
           <option value="">Todas</option>
-          {CATEGORIAS_REALES.map((categoria) => (
-            <option key={categoria} value={categoria}>
-              {categoria}
+          {categorias.map((categoria) => (
+            <option key={categoria.id} value={categoria.nombre}>
+              {categoria.nombre}
             </option>
           ))}
         </select>

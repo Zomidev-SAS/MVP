@@ -6,6 +6,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Tags } from 'lucide-react'
 import { ChartExportMenu } from '@/components/dashboard/ChartExportMenu'
+import { formatCompactNumero, truncarEtiqueta } from '@/lib/format'
 import type { StockPorCategoriaPunto } from '@/lib/types/dashboard-graficas'
 
 const chartConfig = {
@@ -23,10 +24,16 @@ export function StockPorCategoriaChart({ data }: { data: StockPorCategoriaPunto[
         <ChartExportMenu targetId="chart-stock-categoria" data={data} nombreArchivo="chart-stock-categoria" />
       </div>
       <ChartContainer config={chartConfig} className="h-[280px] w-full">
-        <BarChart data={data} layout="vertical" margin={{ left: 16 }}>
+        <BarChart data={data} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
           <CartesianGrid horizontal={false} />
-          <XAxis type="number" />
-          <YAxis type="category" dataKey="categoria" width={100} />
+          <XAxis type="number" tickFormatter={formatCompactNumero} />
+          <YAxis
+            type="category"
+            dataKey="categoria"
+            width={110}
+            interval={0}
+            tickFormatter={truncarEtiqueta}
+          />
           <ChartTooltip content={<ChartTooltipContent />} />
           <Bar dataKey="cantidad" fill="var(--color-cantidad)" radius={4} />
         </BarChart>

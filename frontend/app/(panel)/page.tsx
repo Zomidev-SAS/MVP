@@ -15,6 +15,7 @@ import { VARIANTE_POR_ROL } from '@/lib/permissions/dashboard-variante'
 import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { getDashboardData } from '@/lib/supabase/get-dashboard-data'
 import { fetchProductosBajoStock } from '@/lib/supabase/inventario-actions'
+import { fetchOpcionesFiltrosDashboard } from '@/lib/supabase/dashboard-filtros-actions'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
@@ -47,6 +48,8 @@ function parseFiltrosDesdeSearchParams(
     if (typeof searchParams.desde === 'string') filtros.desde = searchParams.desde
     if (typeof searchParams.hasta === 'string') filtros.hasta = searchParams.hasta
   }
+  if (typeof searchParams.bodega === 'string') filtros.bodegaId = searchParams.bodega
+  if (typeof searchParams.categoria === 'string') filtros.categoriaId = searchParams.categoria
   return filtros
 }
 
@@ -75,7 +78,13 @@ async function DashboardContent({ searchParams }: DashboardPageProps) {
 
   const variante = VARIANTE_POR_ROL[result.profile.rol]
   const puedeVerCostos = CAN_VIEW_COSTS.includes(result.profile.rol)
-  const data = await getDashboardData(variante === 'bitacora' ? 25 : 10)
+  const [data, opcionesFiltros] = await Promise.all([
+    getDashboardData(variante === 'bitacora' ? 25 : 10, {
+      bodegaId: filtros.bodegaId,
+      categoriaId: filtros.categoriaId,
+    }),
+    fetchOpcionesFiltrosDashboard(),
+  ])
   const productosBajoStock = variante === 'compras' ? await fetchProductosBajoStock(5) : []
 
   const mostrarCalendario = variante !== 'bitacora' && variante !== 'basico'
@@ -125,7 +134,10 @@ async function DashboardContent({ searchParams }: DashboardPageProps) {
 
           <section className="space-y-4">
             <Suspense fallback={null}>
-              <DashboardFilters bodegas={[]} categorias={[]} />
+              <DashboardFilters
+                bodegas={opcionesFiltros.bodegas}
+                categorias={opcionesFiltros.categorias}
+              />
             </Suspense>
             <Suspense fallback={<ChartSkeletonGrid />}>
               <DashboardGraficasSection

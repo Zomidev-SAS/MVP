@@ -6,6 +6,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Trophy } from 'lucide-react'
 import { ChartExportMenu } from '@/components/dashboard/ChartExportMenu'
+import { formatCompactNumero, truncarEtiqueta } from '@/lib/format'
 import type { TopProductoPunto } from '@/lib/types/dashboard-graficas'
 
 const chartConfig = {
@@ -23,10 +24,19 @@ export function TopProductosChart({ data }: { data: TopProductoPunto[] }) {
         <ChartExportMenu targetId="chart-top-productos" data={data} nombreArchivo="chart-top-productos" />
       </div>
       <ChartContainer config={chartConfig} className="h-[320px] w-full">
-        <BarChart data={data.slice(0, 10)}>
+        <BarChart data={data.slice(0, 10)} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
           <CartesianGrid vertical={false} />
-          <XAxis dataKey="producto" tickLine={false} axisLine={false} interval={0} angle={-30} textAnchor="end" height={70} />
-          <YAxis />
+          <XAxis
+            dataKey="producto"
+            tickLine={false}
+            axisLine={false}
+            interval={0}
+            angle={-30}
+            textAnchor="end"
+            height={80}
+            tickFormatter={(value: string) => truncarEtiqueta(value, 16)}
+          />
+          <YAxis tickFormatter={formatCompactNumero} width={48} />
           <ChartTooltip content={<ChartTooltipContent />} />
           <Bar dataKey="cantidad" fill="var(--color-cantidad)" radius={4} />
         </BarChart>

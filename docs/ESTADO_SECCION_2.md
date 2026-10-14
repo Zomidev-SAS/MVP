@@ -1,8 +1,32 @@
 # Estado de la Sección 2 — Vista Gráfica, Siigo y Correos por Rol
 
-**Fecha:** 2026-10-10 (actualizado 2026-10-11 tras reconciliar contra el backend real)
+**Fecha:** 2026-10-10 (actualizado 2026-10-11 tras reconciliar contra el backend real; actualizado 2026-10-13 con fixes de frontend puro)
 **Rama:** fusionada en `main` (commit `5381209`, pusheado a `origin/main`)
 **Plan original:** `docs/superpowers/plans/2026-10-09-seccion-2-vista-grafica.md`
+
+**Actualización 2026-10-13:** sesión de arreglos de frontend puro, sin tocar
+backend/migraciones. Resumen (detalle completo en el mensaje de commit):
+- El selector de bodega/categoría del dashboard ahora trae opciones reales
+  (tablas `bodegas`/`categorias_inventario`) en vez de arrays vacíos/hardcodeados,
+  y el mismo bug (lista de opciones copy-pasteada y fija) se encontró y
+  arregló en 4 lugares más: `InventoryFilters`, `MovementsFilters`,
+  `AdjustmentForm`, `EntryForm`.
+- Los filtros de bodega/categoría del dashboard ahora sí llegan al servidor
+  (`parseFiltrosDesdeSearchParams` los ignoraba) y las tarjetas KPI
+  (unidades, valor, stock bajo) ya respetan esos filtros — antes solo las
+  gráficas los usaban, no los KPIs.
+- Gráficas del dashboard: ejes con etiquetas cortadas (nombres de bodega,
+  categoría, producto) arreglado; se cambió el layout de grid 2 columnas a
+  un selector tipo dropdown que muestra una gráfica a la vez (pedido
+  explícito del cliente para que no se vean cortadas).
+- Exportar gráfica: bug real en PNG (fallo silencioso si `canvas.toBlob`
+  devolvía `null`, sin aviso); se agregó opción de exportar como SVG además
+  de PNG/CSV, y errores ahora muestran toast en vez de fallar mudo.
+- `EnvioCorreoPreview` ya no se queda colgado en silencio si falla el
+  cálculo de destinatarios — muestra error visible.
+
+No se probó contra navegador real en esta sesión (sin herramienta de browser
+disponible al momento de los cambios) — pendiente de verificación visual.
 
 **Actualización 2026-10-11:** el equipo de backend entregó B1-B13 (migraciones
 031-046) con nombres distintos a los que el frontend asumía — documentado en
@@ -62,8 +86,6 @@ Nada de esto se probó contra datos 100% reales porque faltan estas piezas en Su
 
 - **Siigo — catálogo de productos/proveedores**: fecha de última sincronización y lista de diferencias. No se construyó nada (fuera del alcance de la tarea que sí se hizo).
 - **F7 pulido visual**: solo se hizo una pasada a nivel de código (sin navegador/tablet disponible en el entorno de desarrollo). Falta la revisión visual real en escritorio y tablet de 10 pulgadas que pide el documento del cliente.
-- **Filtro de bodega/categoría** en el dashboard: el selector existe pero las opciones están vacías — no hay de dónde sacar la lista todavía. El filtro de rango de fecha sí funciona.
-- **`EnvioCorreoPreview`** no maneja el error si falla la consulta al previsualizar destinatarios — queda colgado en silencio en vez de mostrar un mensaje.
 - **QA completo por rol (8 roles × todas las pantallas)** — no se hizo, requiere datos reales y navegador.
 - **Deploy a staging (`carrera.zomidev.com`) y grabaciones para el cliente** — no se hizo.
 

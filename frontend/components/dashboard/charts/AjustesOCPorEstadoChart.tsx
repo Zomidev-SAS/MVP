@@ -40,7 +40,7 @@ export function AjustesOCPorEstadoChart({ data }: { data: AjusteOCPorEstadoPunto
   return (
     <div id="chart-ajustes-oc" className="space-y-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">Ajustes y OC por estado</h3>
+        <h3 className="text-sm font-medium">Ajustes y órdenes de compra por estado</h3>
         <ChartExportMenu targetId="chart-ajustes-oc" data={data} nombreArchivo="chart-ajustes-oc" />
       </div>
       <ChartContainer config={chartConfig} className="h-[280px] w-full">
