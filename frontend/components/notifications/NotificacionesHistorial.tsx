@@ -14,6 +14,7 @@ import {
   marcarMensajeLeido,
   marcarNotificacionLeida,
 } from '@/lib/supabase/notificaciones-actions'
+import { formatFechaHora } from '@/lib/format'
 import type { AlertaNotificacion, MensajePanel } from '@/lib/types/notificaciones'
 
 interface NotificacionesHistorialProps {
@@ -150,9 +151,7 @@ export function NotificacionesHistorial({ alertas, mensajes, leidasIniciales }: 
                           <Mail className="h-3 w-3" />
                           {alerta.correoEnviado.enviado
                             ? `Correo enviado ${
-                                alerta.correoEnviado.fecha
-                                  ? new Date(alerta.correoEnviado.fecha).toLocaleString('es-CO')
-                                  : ''
+                                alerta.correoEnviado.fecha ? formatFechaHora(alerta.correoEnviado.fecha) : ''
                               }`
                             : 'Correo pendiente'}
                         </p>
@@ -193,7 +192,7 @@ export function NotificacionesHistorial({ alertas, mensajes, leidasIniciales }: 
                       <p className="text-sm font-medium">{mensaje.titulo}</p>
                       <p className="text-xs text-muted-foreground">{mensaje.cuerpo}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {new Date(mensaje.created_at).toLocaleString('es-CO')}
+                        {formatFechaHora(mensaje.created_at)}
                       </p>
                     </div>
                     {!leido && (

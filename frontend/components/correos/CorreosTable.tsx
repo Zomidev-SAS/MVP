@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { reenviarCorreo } from '@/lib/supabase/correos-actions'
+import { formatFechaHora } from '@/lib/format'
 import type { CorreoEnviado } from '@/lib/types/correos'
 
 const BADGE_POR_ESTADO: Record<CorreoEnviado['estado'], 'default' | 'destructive' | 'secondary'> = {
@@ -68,7 +69,7 @@ export function CorreosTable({
               {correo.error && <p className="mt-1 text-xs text-destructive">{correo.error}</p>}
             </TableCell>
             <TableCell className="text-xs">
-              {correo.fechaEnvio ? new Date(correo.fechaEnvio).toLocaleString('es-CO') : '—'}
+              {correo.fechaEnvio ? formatFechaHora(correo.fechaEnvio) : '—'}
             </TableCell>
             <TableCell>
               {puedeReenviar && correo.estado === 'error' && (

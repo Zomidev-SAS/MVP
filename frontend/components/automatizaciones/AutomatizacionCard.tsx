@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2, Clock, CircleSlash } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { formatFechaHora } from '@/lib/format'
 import type { AutomatizacionEstado } from '@/lib/types/automatizaciones'
 
 const ICONOS_RESULTADO = {
@@ -24,7 +25,7 @@ export function AutomatizacionCard({ job }: { job: AutomatizacionEstado }) {
           <Clock className="h-3 w-3" /> {job.horario}
         </div>
         <p className="text-xs">
-          Última ejecución: {job.ultimaEjecucion ? new Date(job.ultimaEjecucion).toLocaleString('es-CO') : 'nunca'}
+          Última ejecución: {job.ultimaEjecucion ? formatFechaHora(job.ultimaEjecucion) : 'nunca'}
         </p>
         {job.error && (
           <Badge variant="destructive" className="w-fit text-xs font-normal">

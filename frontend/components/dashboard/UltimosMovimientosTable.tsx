@@ -6,7 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatNumber } from '@/lib/format'
+import { formatFechaHora, formatNumber } from '@/lib/format'
 import type { MovimientoReciente } from '@/lib/types/dashboard'
 
 const TIPO_LABELS: Record<MovimientoReciente['tipo_movimiento'], string> = {
@@ -42,7 +42,7 @@ export function UltimosMovimientosTable({
         ) : (
           movimientos.map((mov) => (
             <TableRow key={mov.id}>
-              <TableCell>{new Date(mov.created_at).toLocaleString('es-CO')}</TableCell>
+              <TableCell>{formatFechaHora(mov.created_at)}</TableCell>
               <TableCell>{TIPO_LABELS[mov.tipo_movimiento]}</TableCell>
               <TableCell>{mov.codigo_producto}</TableCell>
               <TableCell className="text-right">{formatNumber(mov.cantidad)}</TableCell>

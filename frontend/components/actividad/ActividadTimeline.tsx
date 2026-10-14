@@ -1,4 +1,5 @@
 import { Boxes, ClipboardCheck, FileEdit, Package, User } from 'lucide-react'
+import { formatFechaHora } from '@/lib/format'
 import type { EventoActividad } from '@/lib/types/actividad'
 
 const ICONO_POR_RECURSO: Record<string, typeof Boxes> = {
@@ -24,7 +25,7 @@ export function ActividadTimeline({ eventos }: { eventos: EventoActividad[] }) {
                 <span className="font-medium">{evento.actorNombre}</span> {evento.accion}
                 {evento.bodega && <span className="text-muted-foreground"> · {evento.bodega}</span>}
               </p>
-              <p className="text-xs text-muted-foreground">{new Date(evento.creadoEn).toLocaleString('es-CO')}</p>
+              <p className="text-xs text-muted-foreground">{formatFechaHora(evento.creadoEn)}</p>
             </div>
           </li>
         )

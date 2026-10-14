@@ -1,7 +1,7 @@
 'use client'
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { formatCOP, formatNumber } from '@/lib/format'
+import { formatCOP, formatFechaHora, formatNumber } from '@/lib/format'
 import type { MovimientoDetalle } from '@/lib/types/movimientos'
 
 const TIPO_LABELS: Record<MovimientoDetalle['tipo_movimiento'], string> = {
@@ -68,7 +68,7 @@ export function MovementDetailDialog({
             <dd className="col-span-2">{movimiento.motivo ?? '—'}</dd>
             <dt className="text-muted-foreground">Fecha</dt>
             <dd className="col-span-2">
-              {new Date(movimiento.created_at).toLocaleString('es-CO')}
+              {formatFechaHora(movimiento.created_at)}
             </dd>
           </dl>
         )}

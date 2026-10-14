@@ -8,7 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { formatNumber } from '@/lib/format'
+import { formatFechaHora, formatNumber } from '@/lib/format'
 import { marcarNotificacionLeida, marcarTodasLeidas } from '@/lib/supabase/notificaciones-actions'
 import type { AlertaNotificacion } from '@/lib/types/notificaciones'
 
@@ -124,9 +124,7 @@ function AlertaItem({
               <Mail className="h-3 w-3" />
               {alerta.correoEnviado.enviado
                 ? `Correo enviado ${
-                    alerta.correoEnviado.fecha
-                      ? new Date(alerta.correoEnviado.fecha).toLocaleString('es-CO')
-                      : ''
+                    alerta.correoEnviado.fecha ? formatFechaHora(alerta.correoEnviado.fecha) : ''
                   }`
                 : 'Correo pendiente'}
             </p>

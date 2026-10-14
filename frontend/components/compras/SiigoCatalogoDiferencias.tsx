@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { marcarDiferenciaSiigoRevisada } from '@/lib/supabase/siigo-catalogo-actions'
+import { formatFechaHora } from '@/lib/format'
 import type { SiigoCatalogoEstado } from '@/lib/types/siigo'
 
 const TIPO_LABELS = { producto: 'Producto', proveedor: 'Proveedor' } as const
@@ -45,7 +46,7 @@ export function SiigoCatalogoDiferencias({ estado }: { estado: SiigoCatalogoEsta
               <CheckCircle2 className="h-3.5 w-3.5 text-success" />
             )}
             <Clock className="h-3 w-3" />
-            Última sincronización: {sync.fecha ? new Date(sync.fecha).toLocaleString('es-CO') : 'nunca'}
+            Última sincronización: {sync.fecha ? formatFechaHora(sync.fecha) : 'nunca'}
           </div>
         )}
       </CardHeader>
