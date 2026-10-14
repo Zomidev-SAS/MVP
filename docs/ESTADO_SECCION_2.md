@@ -65,12 +65,18 @@ para el hueco que 051 no cubre: el GRANT a `anon` sobre la *tabla* `notificacion
 table" a `anon` (antes daba `[]` con 200 — grant leak cerrado), y ambas RPC siguen
 bloqueando `anon` correctamente. Nada pendiente de este bloque.
 
-**QA ligera con bypass dev (2026-10-14, mismo día):** auditoría estática de los 16
+**QA con bypass dev — los 8 roles (2026-10-14, mismo día):** auditoría estática de los 16
 `page.tsx` contra `ROUTE_PERMISSIONS` (carpeta = clave en los 16, sin mismatch) +
-navegación real con 3 de los 8 roles (supervisor, comercial, lectura) contra rutas
-representativas — RoleGuard redirige bien, y el gating a nivel de componente de la
-tarjeta nueva de catálogo Siigo también funciona (comercial no la ve). Quedan sin probar
-los 5 roles restantes y el resto de la matriz 8×16 — ver "Pendiente" abajo.
+navegación real con los 8 roles (supervisor, comercial, metalmecánica, producción,
+instalación, compras, auditoría, lectura) contra rutas representativas de cada uno
+(denegadas y permitidas). Resultado: los 8 correctos, cero errores de consola nuevos.
+Gating a nivel de componente también correcto en los 2 casos sensibles probados: la
+tarjeta de catálogo Siigo solo la ve supervisor/compras (comercial no), y el botón
+Reenviar de `/correos` solo lo ve supervisor (auditoría ve la tabla pero no el botón).
+No se cubrió la matriz completa 8×16 (128 combinaciones) — se probaron rutas
+representativas por rol, no todas. Sigue pendiente, y es lo que de verdad importa: todo
+esto valida el *wiring* del frontend (RoleGuard, gating de componentes), nunca datos
+reales ni RLS real — bypass dev no toca Supabase. Eso solo se prueba con sesión real.
 
 En esa pasada aparecieron 2 errores de consola reales, sin relación con lo anterior, ya
 arreglados (commit `615284d`):
@@ -216,11 +222,9 @@ cerrarse). No queda nada bloqueado por backend en esta lista.
 - **F7 pulido visual**: validado en desktop y en navegador con viewport emulado, falta la
   revisión visual real en tablet de 10 pulgadas (dispositivo físico) que pide el
   documento del cliente.
-- **QA completo por rol (8 roles × todas las pantallas)** con datos reales — solo se hizo
-  una pasada ligera con bypass dev (3 de 8 roles, rutas representativas, ver arriba).
-  Faltan los 5 roles restantes (metalmecánica, producción, instalación, compras,
-  auditoría), el resto de la matriz, y sobre todo datos/RLS reales (bypass dev no los
-  prueba).
+- **QA completo por rol (8 roles × todas las pantallas) con datos reales** — se hizo con
+  bypass dev (los 8 roles, rutas representativas, ver arriba), pero bypass dev nunca
+  prueba RLS ni datos reales. Falta repetir con sesión real contra Supabase cloud.
 - **Deploy a staging (`carrera.zomidev.com`) y grabaciones para el cliente** — no se hizo.
 
 ## Cómo seguir
