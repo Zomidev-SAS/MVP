@@ -58,8 +58,31 @@ los 049/050 propios en favor de los de la rama remota — el fix null-safe de 05
 estrictamente mejor que lo que yo había escrito, y el mismo bug (`not in` sin null-safe)
 sigue latente en `rpc_aprobar_oc_siigo`, 044, sin tocar por ahora. Se agregó **052** solo
 para el hueco que 051 no cubre: el GRANT a `anon` sobre la *tabla* `notificaciones_leidas`
-(051 solo tocó las funciones). **Pendiente: correr 051 y 052 en el SQL Editor** — lo que
-está vivo en el proyecto hoy es mi versión manual sin el null-safe ni el revoke a anon.
+(051 solo tocó las funciones).
+
+**051 y 052 ya se corrieron en el SQL Editor y se verificaron contra el proyecto real**
+(API REST con anon key): `notificaciones_leidas` ahora responde "permission denied for
+table" a `anon` (antes daba `[]` con 200 — grant leak cerrado), y ambas RPC siguen
+bloqueando `anon` correctamente. Nada pendiente de este bloque.
+
+**QA ligera con bypass dev (2026-10-14, mismo día):** auditoría estática de los 16
+`page.tsx` contra `ROUTE_PERMISSIONS` (carpeta = clave en los 16, sin mismatch) +
+navegación real con 3 de los 8 roles (supervisor, comercial, lectura) contra rutas
+representativas — RoleGuard redirige bien, y el gating a nivel de componente de la
+tarjeta nueva de catálogo Siigo también funciona (comercial no la ve). Quedan sin probar
+los 5 roles restantes y el resto de la matriz 8×16 — ver "Pendiente" abajo.
+
+En esa pasada aparecieron 2 errores de consola reales, sin relación con lo anterior, ya
+arreglados (commit `615284d`):
+- **Hydration mismatch en casi toda fecha de la app** (correos, notificaciones,
+  automatizaciones, actividad, movimientos, catálogo Siigo): el ICU de Node (SSR) usa un
+  espacio normal antes de "a. m."/"p. m." y el de Chrome usa NBSP — mismo texto visual,
+  React lo marcaba como mismatch en cada una. Se agregó `formatFechaHora()` en
+  `lib/format.ts` (normaliza el espacio) y se reemplazaron los 9 sitios que llamaban
+  `new Date(x).toLocaleString('es-CO')` a mano.
+- **`/acceso-denegado`**: el botón usaba `Button render={<Link>}`, que Base UI rechaza
+  explícitamente (un `<a>` no es un `<button>` nativo). Cambiado a `buttonVariants()`
+  sobre un `Link` real — mismo patrón que ya usaba `ChartExportMenu`.
 
 Lo que queda pendiente de la lista original (ver abajo) ya no incluye los 3 puntos de
 arriba. Sigue pendiente, sin cambios: catálogo Siigo — fecha de última sync SÍ visible
@@ -193,17 +216,18 @@ cerrarse). No queda nada bloqueado por backend en esta lista.
 - **F7 pulido visual**: validado en desktop y en navegador con viewport emulado, falta la
   revisión visual real en tablet de 10 pulgadas (dispositivo físico) que pide el
   documento del cliente.
-- **QA completo por rol (8 roles × todas las pantallas)** con datos reales — no se hizo.
+- **QA completo por rol (8 roles × todas las pantallas)** con datos reales — solo se hizo
+  una pasada ligera con bypass dev (3 de 8 roles, rutas representativas, ver arriba).
+  Faltan los 5 roles restantes (metalmecánica, producción, instalación, compras,
+  auditoría), el resto de la matriz, y sobre todo datos/RLS reales (bypass dev no los
+  prueba).
 - **Deploy a staging (`carrera.zomidev.com`) y grabaciones para el cliente** — no se hizo.
-- Detalle menor sin cerrar: `revoke all on notificaciones_leidas from anon, public;` (ver
-  "Actualización 2026-10-14" arriba) — no es hueco de seguridad (RLS ya bloquea todo),
-  pero rompe la convención del resto de tablas del proyecto.
 
 ## Cómo seguir
 
-1. Correr el `revoke` pendiente de arriba.
-2. QA por rol con datos reales + pulido visual en tablet físico.
-3. Deploy a staging y grabaciones para el cliente.
+1. QA por rol con datos reales (los 5 roles que faltan + matriz completa) + pulido visual
+   en tablet físico.
+2. Deploy a staging y grabaciones para el cliente.
 
 Si se retoma cualquier punto pendiente, seguir el mismo patrón ya usado en todo el
 proyecto: Server Action con bypass dev + rama real explícita, nunca inventar que algo
