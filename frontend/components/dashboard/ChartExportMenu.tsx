@@ -58,11 +58,11 @@ export function ChartExportMenu<T extends object>({
         <Download className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => void descargarPng()}>
+        <DropdownMenuItem onClick={() => void descargarPng()}>
           Descargar imagen (PNG)
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={descargarSvg}>Descargar vector (SVG)</DropdownMenuItem>
-        <DropdownMenuItem onSelect={descargarCsv}>Descargar datos (CSV)</DropdownMenuItem>
+        <DropdownMenuItem onClick={descargarSvg}>Descargar vector (SVG)</DropdownMenuItem>
+        <DropdownMenuItem onClick={descargarCsv}>Descargar datos (CSV)</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

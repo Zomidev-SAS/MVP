@@ -61,11 +61,18 @@ contra la app real (login real, sin bypass dev). Se encontraron y arreglaron
   las tarjetas.
 
 Verificado con capturas de pantalla y archivos PNG/SVG descargados y leídos
-de vuelta (colores y contenido correctos). Único método de verificación que
-quedó pendiente: el click real en el menú "Exportar" de la UI no disparaba
-el handler de forma confiable dentro del browser integrado de VS Code (sí
-funciona disparando la misma lógica directo); recomendado reconfirmar con un
-clic manual del usuario.
+de vuelta (colores y contenido correctos), incluyendo el click real del menú
+"Exportar" en la UI (no solo invocando la lógica directo).
+
+**4to bug, el que realmente rompía el click del usuario:**
+`ChartExportMenu.tsx` usaba `<DropdownMenuItem onSelect={...}>` — `onSelect`
+es convención de Radix UI, pero el proyecto usa `@base-ui/react/menu`, cuyo
+`Menu.Item` no tiene prop `onSelect`, solo `onClick`. TypeScript no lo marcó
+porque `onSelect` SÍ es un evento DOM válido de `<div>` (selección de texto,
+nada que ver), así que el handler quedaba completamente inerte: el menú se
+abría y cerraba bien, pero la descarga nunca se disparaba. Cambiado a
+`onClick` en los 3 items; confirmado con un click real vía CDP que ahora sí
+descarga el archivo con el nombre correcto (`chart-entradas-salidas.png`).
 
 **Actualización 2026-10-11:** el equipo de backend entregó B1-B13 (migraciones
 031-046) con nombres distintos a los que el frontend asumía — documentado en
