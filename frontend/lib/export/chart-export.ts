@@ -15,8 +15,39 @@ import Papa from 'papaparse'
 // :root/.dark en app/globals.css, que tampoco viaja con el SVG
 // independiente. Aquí aplanamos la cadena reemplazando cada var(--xxx) por
 // su valor computado real, tomado del propio wrapper en vivo.
+//
+// app/globals.css define esos colores en oklch()/lab() (CSS Color 4).
+// getComputedStyle() devuelve el valor ya en esa misma notación, pero el
+// decodificador de imágenes que rasteriza el SVG standalone (el <img
+// src="blob:..."> de abajo) no la entiende — en vez de fallar entero,
+// silenciosamente trata el color como inválido y el fill cae a negro.
+// Canvas2D sí entiende oklch()/lab() como fillStyle, pero Chrome moderno lo
+// conserva tal cual al releerlo (no lo normaliza a rgb() como antes), así
+// que un simple round-trip por fillStyle no alcanza. Lo que sí es estable:
+// pintar 1 pixel con ese color y leer sus bytes reales vía getImageData,
+// que siempre vuelve en sRGB 0-255 sin importar el espacio de color de
+// entrada — de ahí se arma un rgb()/rgba() plano, universalmente soportado.
+function normalizarColor(valor: string): string {
+  const canvas = document.createElement('canvas')
+  canvas.width = 1
+  canvas.height = 1
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return valor
+  try {
+    ctx.fillStyle = valor
+    ctx.fillRect(0, 0, 1, 1)
+  } catch {
+    return valor
+  }
+  const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+  return a === 255 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`
+}
+
 function construirSvgStandalone(nodo: HTMLElement): { svgOriginal: SVGSVGElement; xml: string } {
-  const svgOriginal = nodo.querySelector('svg')
+  // nodo también contiene el ícono de descarga (otro <svg>, de lucide-react)
+  // en el header de la gráfica; .recharts-surface apunta puntualmente al SVG
+  // que dibuja recharts, nunca al ícono.
+  const svgOriginal = nodo.querySelector<SVGSVGElement>('svg.recharts-surface')
   if (!svgOriginal) throw new Error('La gráfica no tiene un SVG renderizado todavía')
 
   const wrapper = svgOriginal.closest('[data-chart]')
@@ -28,7 +59,7 @@ function construirSvgStandalone(nodo: HTMLElement): { svgOriginal: SVGSVGElement
         const computedStyle = getComputedStyle(wrapper)
         return cssText.replace(/var\((--[\w-]+)\)/g, (match, varName: string) => {
           const valor = computedStyle.getPropertyValue(varName).trim()
-          return valor || match
+          return valor ? normalizarColor(valor) : match
         })
       })()
     : cssText

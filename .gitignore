@@ -16,3 +16,6 @@ OC/
 # Supabase local
 supabase/.branches
 supabase/.temp
+
+# Descargas del browser tool integrado (verificación en VS Code)
+tmp/

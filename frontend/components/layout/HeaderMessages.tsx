@@ -125,6 +125,7 @@ export function HeaderMessages({
               <p className="mb-2 text-xs font-medium text-muted-foreground">Publicar aviso</p>
               <div className="space-y-2">
                 <Select
+                  items={{ todos: 'Todos', ...ROLE_LABELS }}
                   value={rolDestino}
                   onValueChange={(v) => setRolDestino(v as Role | 'todos')}
                 >

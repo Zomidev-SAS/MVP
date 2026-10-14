@@ -18,15 +18,19 @@ export function IndicadorCard({ kpi }: { kpi: IndicadorKpi }) {
   const esNegativo = variacion !== null && variacion < 0
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{kpi.etiqueta}</CardTitle>
+        <CardTitle className="truncate text-sm font-medium text-muted-foreground">
+          {kpi.etiqueta}
+        </CardTitle>
       </CardHeader>
-      <CardContent className="flex items-baseline justify-between">
-        <span className="text-2xl font-semibold">{formatearValor(kpi.valor, kpi.unidad)}</span>
+      <CardContent className="flex items-baseline justify-between gap-2">
+        <span className="min-w-0 break-words text-2xl font-semibold">
+          {formatearValor(kpi.valor, kpi.unidad)}
+        </span>
         {variacion !== null && (
           <span
-            className={`flex items-center gap-1 text-xs font-medium ${
+            className={`flex shrink-0 items-center gap-1 text-xs font-medium ${
               esPositivo ? 'text-success' : esNegativo ? 'text-destructive' : 'text-muted-foreground'
             }`}
           >

@@ -94,7 +94,11 @@ export function NotificacionesHistorial({ alertas, mensajes }: NotificacionesHis
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Select value={filtroLeida} onValueChange={(v) => setFiltroLeida(v as FiltroLeida)}>
+        <Select
+          items={{ todas: 'Todas', no_leidas: 'No leídas', leidas: 'Leídas' }}
+          value={filtroLeida}
+          onValueChange={(v) => setFiltroLeida(v as FiltroLeida)}
+        >
           <SelectTrigger className="w-40">
             <SelectValue />
           </SelectTrigger>
@@ -105,7 +109,11 @@ export function NotificacionesHistorial({ alertas, mensajes }: NotificacionesHis
           </SelectContent>
         </Select>
 
-        <Select value={filtroTipo} onValueChange={(v) => setFiltroTipo(v as FiltroTipo)}>
+        <Select
+          items={{ todos: 'Todos los tipos', ...TIPO_LABELS }}
+          value={filtroTipo}
+          onValueChange={(v) => setFiltroTipo(v as FiltroTipo)}
+        >
           <SelectTrigger className="w-52">
             <SelectValue placeholder="Todos los tipos" />
           </SelectTrigger>

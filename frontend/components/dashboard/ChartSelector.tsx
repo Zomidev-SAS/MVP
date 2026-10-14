@@ -21,10 +21,16 @@ export function ChartSelector({ items }: { items: ChartSelectorItem[] }) {
 
   if (!actual) return null
 
+  const opcionesSelect = Object.fromEntries(items.map((item) => [item.id, item.label]))
+
   return (
     <div className="space-y-4">
-      <Select value={actual.id} onValueChange={(value) => value && setSeleccionadoId(value)}>
-        <SelectTrigger className="w-64">
+      <Select
+        items={opcionesSelect}
+        value={actual.id}
+        onValueChange={(value) => value && setSeleccionadoId(value)}
+      >
+        <SelectTrigger className="w-full sm:w-80">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

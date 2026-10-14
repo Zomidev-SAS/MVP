@@ -25,8 +25,47 @@ backend/migraciones. Resumen (detalle completo en el mensaje de commit):
 - `EnvioCorreoPreview` ya no se queda colgado en silencio si falla el
   cálculo de destinatarios — muestra error visible.
 
-No se probó contra navegador real en esta sesión (sin herramienta de browser
-disponible al momento de los cambios) — pendiente de verificación visual.
+La parte de arriba se escribió sin navegador real disponible. Más tarde en la
+misma sesión se habilitó el browser integrado de VS Code y se verificó todo
+contra la app real (login real, sin bypass dev). Se encontraron y arreglaron
+3 bugs adicionales que el código por sí solo no delataba:
+
+- **Dropdowns de toda la app mostraban el `value` crudo, no la etiqueta**
+  (ej. "7d" en vez de "Últimos 7 días", "es" en vez de "Entradas vs
+  Salidas"). Causa: `@base-ui/react/select`'s `<Select.Value>` solo resuelve
+  el label si `<Select.Root items={...}>` recibe el mapeo value→label — sin
+  eso muestra el value tal cual. Bug preexistente en los 4 usos de `Select`
+  del proyecto (`DashboardFilters`, `ChartSelector`, `NotificacionesHistorial`,
+  `HeaderMessages`), no introducido en esta sesión pero tampoco detectado
+  hasta probar en navegador real.
+- **Export de gráfica a PNG/SVG rompía por 3 motivos distintos, cada uno
+  enmascarando al siguiente:**
+  1. `nodo.querySelector('svg')` agarraba el ícono de descarga (16×16, el
+     primer `<svg>` del contenedor) en vez de `.recharts-surface` (el
+     gráfico real) — exportaba el ícono, nunca el gráfico.
+  2. El CSP del proyecto (`next.config.ts`) tenía `img-src 'self' data:
+     https:` sin `blob:` — el `<img src="blob:...">` usado para rasterizar
+     el SVG a PNG quedaba bloqueado por política, siempre fallaba.
+  3. Los colores del tema están en `oklch()`/`lab()` (CSS Color 4,
+     `app/globals.css`); el renderizador de imágenes que rasteriza el SVG
+     standalone no los entiende y el `fill` caía a negro — las barras
+     exportaban negras en vez de rojas/el color real.
+  Arreglado: selector corregido a `svg.recharts-surface`, `blob:` agregado
+  al CSP, y los colores se normalizan pintando 1 pixel en un canvas oculto y
+  leyendo los bytes reales vía `getImageData` (siempre vuelve en sRGB
+  0-255 sin importar el espacio de color de entrada).
+- **Overflow horizontal real en viewport de celular (375px)**: las tarjetas
+  KPI (`KpiCard`, `IndicadorCard`) no tenían `min-w-0`, así que un grid de
+  2-4 columnas con `$ 1.174.609.038` no podía encoger y forzaba scroll
+  horizontal en toda la página. Arreglado con `min-w-0` + `break-words` en
+  las tarjetas.
+
+Verificado con capturas de pantalla y archivos PNG/SVG descargados y leídos
+de vuelta (colores y contenido correctos). Único método de verificación que
+quedó pendiente: el click real en el menú "Exportar" de la UI no disparaba
+el handler de forma confiable dentro del browser integrado de VS Code (sí
+funciona disparando la misma lógica directo); recomendado reconfirmar con un
+clic manual del usuario.
 
 **Actualización 2026-10-11:** el equipo de backend entregó B1-B13 (migraciones
 031-046) con nombres distintos a los que el frontend asumía — documentado en

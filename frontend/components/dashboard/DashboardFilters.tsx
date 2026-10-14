@@ -30,9 +30,22 @@ const RANGO_LABELS: Record<string, string> = {
 export function DashboardFilters({ bodegas, categorias }: DashboardFiltersProps) {
   const { filtros, setRango, setBodega, setCategoria } = useDashboardFilters()
 
+  const bodegaItems = {
+    todas: 'Todas las bodegas',
+    ...Object.fromEntries(bodegas.map((b) => [b.id, b.nombre])),
+  }
+  const categoriaItems = {
+    todas: 'Todas las categorías',
+    ...Object.fromEntries(categorias.map((c) => [c.id, c.nombre])),
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <Select value={filtros.rango} onValueChange={(v) => setRango(v as typeof filtros.rango)}>
+      <Select
+        items={RANGO_LABELS}
+        value={filtros.rango}
+        onValueChange={(v) => setRango(v as typeof filtros.rango)}
+      >
         <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
         <SelectContent>
           {Object.entries(RANGO_LABELS).map(([valor, label]) => (
@@ -41,7 +54,11 @@ export function DashboardFilters({ bodegas, categorias }: DashboardFiltersProps)
         </SelectContent>
       </Select>
 
-      <Select value={filtros.bodegaId ?? 'todas'} onValueChange={(v) => setBodega(v === 'todas' ? null : v)}>
+      <Select
+        items={bodegaItems}
+        value={filtros.bodegaId ?? 'todas'}
+        onValueChange={(v) => setBodega(v === 'todas' ? null : v)}
+      >
         <SelectTrigger className="w-48"><SelectValue placeholder="Todas las bodegas" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="todas">Todas las bodegas</SelectItem>
@@ -51,7 +68,11 @@ export function DashboardFilters({ bodegas, categorias }: DashboardFiltersProps)
         </SelectContent>
       </Select>
 
-      <Select value={filtros.categoriaId ?? 'todas'} onValueChange={(v) => setCategoria(v === 'todas' ? null : v)}>
+      <Select
+        items={categoriaItems}
+        value={filtros.categoriaId ?? 'todas'}
+        onValueChange={(v) => setCategoria(v === 'todas' ? null : v)}
+      >
         <SelectTrigger className="w-48"><SelectValue placeholder="Todas las categorías" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="todas">Todas las categorías</SelectItem>

@@ -12,7 +12,11 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
-            value: `default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;`,
+            // img-src incluye blob: porque el export de gráficas a PNG
+            // (lib/export/chart-export.ts) rasteriza el SVG cargándolo en un
+            // <img src="blob:..."> — sin blob: aquí, el navegador bloquea esa
+            // carga por CSP y el export de PNG falla siempre (img.onerror).
+            value: `default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:;`,
           },
         ],
       },
