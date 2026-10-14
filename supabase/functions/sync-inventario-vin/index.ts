@@ -55,6 +55,23 @@ Deno.serve(async (req) => {
       })
     }
 
+    // El catálogo real excluye vehículos: si el chasis no es un producto, no
+    // hay nada que descontar. No es una falla técnica (reintentar no lo
+    // arregla), así que no se encola ni se notifica.
+    const { data: producto } = await supabaseAdmin
+      .from('productos')
+      .select('codigo_producto')
+      .eq('codigo_producto', codigo_producto)
+      .maybeSingle()
+
+    if (!producto) {
+      await marcarResuelto(supabaseAdmin, sync_pendiente_id)
+      return new Response(
+        JSON.stringify({ ok: true, omitido: true, motivo: `${codigo_producto} no está en el catálogo de productos` }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Saldo de ESA bodega específica, no el total agregado
     const { data: inventario } = await supabaseAdmin
       .from('vista_inventario_por_bodega')
