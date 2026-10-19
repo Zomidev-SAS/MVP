@@ -10,7 +10,7 @@ import type { Role } from '@/lib/types/database'
 // cola_correos (docs/CONTRATO_DATOS_SECCION2.md, sección 8) no es
 // `vista_correos_enviados` como se asumió antes del contrato: tiene su
 // propio set de estados y no trae nombre/rol del destinatario (solo
-// `usuario_id`), así que se junta con vista_usuarios_panel.
+// `usuario_id`), así que se junta con rpc_usuarios_panel.
 const ESTADOS_POR_FILTRO: Record<EstadoCorreo, string[]> = {
   pendiente: ['pendiente', 'enviando'],
   enviado: ['enviado', 'agrupado'],
@@ -61,10 +61,11 @@ export async function fetchCorreosEnviados(filtros?: { estado?: EstadoCorreo }):
   const perfilPorId = new Map<string, { nombre: string; rol: string }>()
   if (usuarioIds.length > 0) {
     const { data: perfiles } = await supabase
-      .from('vista_usuarios_panel')
+      .rpc('rpc_usuarios_panel')
       .select('id, nombre, rol')
       .in('id', usuarioIds)
-    for (const p of perfiles ?? []) perfilPorId.set(p.id, { nombre: p.nombre, rol: p.rol })
+    const lista = (perfiles ?? []) as unknown as { id: string; nombre: string; rol: string }[]
+    for (const p of lista) perfilPorId.set(p.id, { nombre: p.nombre, rol: p.rol })
   }
 
   return filas.map((f) => ({
@@ -107,8 +108,7 @@ export async function previsualizarEnvio(rol: Role): Promise<EnvioPreview> {
   if (isDevBypassActive()) return { rol, totalDestinatarios: 5 }
   const supabase = await createClient()
   const { count, error } = await supabase
-    .from('vista_usuarios_panel')
-    .select('*', { count: 'exact', head: true })
+    .rpc('rpc_usuarios_panel', undefined, { count: 'exact', head: true })
     .eq('rol', rol)
     .eq('activo', true)
   if (error) throw new Error(`No se pudo calcular destinatarios: ${error.message}`)
