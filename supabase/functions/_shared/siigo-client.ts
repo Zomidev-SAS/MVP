@@ -231,6 +231,8 @@ export async function crearDocumentoCompraSiigo(
       `Panel Carrera Arango · OC #${orden.id}`,
     ].filter(Boolean).join(' — '),
     items: orden.items.map((it) => ({
+      // Siigo exige el tipo de cada línea (Product | FixedAsset | Account).
+      type: 'Product',
       code: it.codigo_producto,
       description: it.descripcion,
       quantity: it.cantidad,
