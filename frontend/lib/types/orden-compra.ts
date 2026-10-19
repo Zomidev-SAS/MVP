@@ -19,6 +19,7 @@ export const ordenCompraItemSchema = z
     codigo_producto: z.string().trim().min(1, 'Indica el código'),
     nombre_producto: z.string().trim(),
     cantidad: z.number().positive('Cantidad mayor a cero'),
+    precio_unitario: z.number().positive('Precio mayor a cero'),
     cantidad_recibida: z.union([z.number().min(0), z.null()]).optional(),
     descripcion: z.string().trim().min(1, 'Describe el ítem'),
     proveedor_nit: z.string().trim(),
@@ -56,6 +57,8 @@ export interface OrdenCompraItem {
   codigo_producto: string
   nombre_producto: string | null
   cantidad: number
+  /** Costo unitario pactado con el proveedor; null en OC anteriores a la 056. */
+  precio_unitario: number | null
   cantidad_recibida: number | null
   descripcion: string
   proveedor_nit: string | null
@@ -117,6 +120,7 @@ export function itemVacio(): OrdenCompraItemInput {
     codigo_producto: '',
     nombre_producto: '',
     cantidad: 1,
+    precio_unitario: 0,
     cantidad_recibida: null,
     descripcion: '',
     proveedor_nit: '',

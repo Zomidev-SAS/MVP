@@ -76,6 +76,7 @@ function ordenToForm(orden: OrdenCompra): GuardarOrdenCompraPedidoInput {
       codigo_producto: item.codigo_producto,
       nombre_producto: item.nombre_producto ?? '',
       cantidad: item.cantidad,
+      precio_unitario: item.precio_unitario ?? 0,
       cantidad_recibida: item.cantidad_recibida,
       descripcion: item.descripcion,
       proveedor_nit: item.proveedor_nit ?? '',
@@ -262,7 +263,7 @@ export function ComprasPedidoDialog({
                     )}
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-3">
                     <FormField
                       control={form.control}
                       name={`items.${indice}.codigo_producto`}
@@ -282,6 +283,25 @@ export function ComprasPedidoDialog({
                       render={({ field: f }) => (
                         <FormItem>
                           <FormLabel>Cantidad pedida</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0.01}
+                              step="any"
+                              value={f.value}
+                              onChange={(e) => f.onChange(e.target.valueAsNumber || 0)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`items.${indice}.precio_unitario`}
+                      render={({ field: f }) => (
+                        <FormItem>
+                          <FormLabel>Precio unitario (COP)</FormLabel>
                           <FormControl>
                             <Input
                               type="number"

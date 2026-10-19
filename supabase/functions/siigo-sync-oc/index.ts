@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
 
   const { data: items, error: itemsErr } = await admin
     .from('orden_compra_items')
-    .select('codigo_producto, descripcion, cantidad')
+    .select('codigo_producto, descripcion, cantidad, precio_unitario')
     .eq('orden_id', ordenId)
 
   if (itemsErr) {
@@ -72,6 +72,7 @@ Deno.serve(async (req) => {
       codigo_producto: it.codigo_producto,
       descripcion: it.descripcion,
       cantidad: Number(it.cantidad),
+      precio_unitario: it.precio_unitario != null ? Number(it.precio_unitario) : undefined,
     })),
   }
 

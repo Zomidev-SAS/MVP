@@ -208,6 +208,14 @@ export async function crearDocumentoCompraSiigo(
     throw new Error(`La orden ${orden.id} no tiene líneas, no se envía a Siigo`)
   }
 
+  const sinPrecio = orden.items.filter((it) => !(it.precio_unitario && it.precio_unitario > 0))
+  if (sinPrecio.length > 0) {
+    throw new Error(
+      `La orden ${orden.id} tiene ítems sin precio unitario (${sinPrecio.map((it) => it.codigo_producto).join(', ')}). ` +
+      'Edita la OC en el panel y agrega el precio antes de enviarla a Siigo.'
+    )
+  }
+
   const payments = buildPayments(orden.medio_pago)
 
   const body: Record<string, unknown> = {
@@ -223,7 +231,7 @@ export async function crearDocumentoCompraSiigo(
       code: it.codigo_producto,
       description: it.descripcion,
       quantity: it.cantidad,
-      price: it.precio_unitario ?? 0,
+      price: it.precio_unitario,
     })),
   }
 

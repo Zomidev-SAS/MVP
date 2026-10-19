@@ -25,7 +25,7 @@ const SELECT_ORDEN =
   'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, medio_pago, creado_por, descargada_siigo_at, finalizada_at, siigo_id, siigo_estado, siigo_referencia, created_at, updated_at'
 
 const SELECT_ITEM =
-  'id, orden_id, codigo_producto, nombre_producto, cantidad, cantidad_recibida, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
+  'id, orden_id, codigo_producto, nombre_producto, cantidad, precio_unitario, cantidad_recibida, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
 
 type OrdenRow = Omit<OrdenCompra, 'items' | 'codigo_producto' | 'nombre_producto' | 'cantidad' | 'descripcion' | 'proveedor_nit' | 'proveedor_nombre'>
 
@@ -192,6 +192,7 @@ function mapItemsInsert(ordenId: number, datos: GuardarOrdenCompraPedidoInput) {
     codigo_producto: item.codigo_producto,
     nombre_producto: item.nombre_producto.trim() || null,
     cantidad: item.cantidad,
+    precio_unitario: item.precio_unitario,
     cantidad_recibida: item.cantidad_recibida ?? null,
     descripcion: item.descripcion,
     proveedor_nit: item.proveedor_nit.trim() || null,
