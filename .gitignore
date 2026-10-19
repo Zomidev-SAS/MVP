@@ -19,3 +19,6 @@ supabase/.temp
 
 # Descargas del browser tool integrado (verificación en VS Code)
 tmp/
+
+# Grafo graphify (local)
+graphify-out/

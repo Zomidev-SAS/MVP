@@ -31,6 +31,7 @@ import {
   CLASE_ESTADO_OC,
   ESTADOS_ORDEN_COMPRA,
   ETIQUETA_ESTADO_OC,
+  ETIQUETA_MEDIO_PAGO,
   tituloOrdenDisplay,
   type EstadoOrdenCompra,
   type OrdenCompra,
@@ -230,6 +231,9 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
         <TableCell>
           <div>
             <SiigoStatusBadge estado={siigo.estado} />
+            {orden.medio_pago && (
+              <p className="mt-0.5 text-xs text-muted-foreground">{ETIQUETA_MEDIO_PAGO[orden.medio_pago]}</p>
+            )}
             {siigo.referencia && (
               <p className="mt-1 text-xs text-muted-foreground">Ref. {siigo.referencia}</p>
             )}
@@ -250,7 +254,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
             <Button type="button" variant="ghost" size="sm" onClick={() => handleCsv(orden)}>
               <Download className="h-3 w-3" />
             </Button>
-            {puedeGestionarSiigo && siigo.estado === 'pendiente' && (
+            {puedeGestionarSiigo && siigo.estado === 'pendiente' && orden.estado === 'listo' && (
               <Button
                 type="button"
                 variant="outline"

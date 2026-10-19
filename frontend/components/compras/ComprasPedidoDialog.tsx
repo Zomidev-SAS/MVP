@@ -20,6 +20,8 @@ import {
 import {
   guardarOrdenCompraPedidoSchema,
   itemVacio,
+  MEDIOS_PAGO_OC,
+  ETIQUETA_MEDIO_PAGO,
   type GuardarOrdenCompraPedidoInput,
   type OrdenCompra,
 } from '@/lib/types/orden-compra'
@@ -57,6 +59,7 @@ function valoresNueva(productoInicial?: { codigo: string; nombre: string } | nul
     fecha_vencimiento: '',
     observaciones: '',
     observaciones_entrega: '',
+    medio_pago: null,
     items: [item],
   }
 }
@@ -68,6 +71,7 @@ function ordenToForm(orden: OrdenCompra): GuardarOrdenCompraPedidoInput {
     fecha_vencimiento: orden.fecha_vencimiento ?? '',
     observaciones: orden.observaciones ?? '',
     observaciones_entrega: orden.observaciones_entrega ?? '',
+    medio_pago: orden.medio_pago ?? null,
     items: orden.items.map((item) => ({
       codigo_producto: item.codigo_producto,
       nombre_producto: item.nombre_producto ?? '',
@@ -209,6 +213,29 @@ export function ComprasPedidoDialog({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="medio_pago"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Medio de pago (Siigo)</FormLabel>
+                  <FormControl>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={field.value ?? ''}
+                      onChange={(e) => field.onChange(e.target.value || null)}
+                    >
+                      <option value="">Sin especificar</option>
+                      {MEDIOS_PAGO_OC.map((m) => (
+                        <option key={m} value={m}>{ETIQUETA_MEDIO_PAGO[m]}</option>
+                      ))}
+                    </select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">

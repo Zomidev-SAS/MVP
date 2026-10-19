@@ -3,6 +3,14 @@ import { z } from 'zod'
 export const ESTADOS_ORDEN_COMPRA = ['en_curso', 'listo', 'cancelada'] as const
 export type EstadoOrdenCompra = (typeof ESTADOS_ORDEN_COMPRA)[number]
 
+export const MEDIOS_PAGO_OC = ['credito', 'contado'] as const
+export type MedioPagoOC = (typeof MEDIOS_PAGO_OC)[number]
+
+export const ETIQUETA_MEDIO_PAGO: Record<MedioPagoOC, string> = {
+  credito: 'Crédito',
+  contado: 'Contado',
+}
+
 const fechaSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
 const fechaOpcionalSchema = z.union([fechaSchema, z.literal('')])
 
@@ -36,6 +44,7 @@ export const guardarOrdenCompraPedidoSchema = z.object({
   fecha_vencimiento: fechaOpcionalSchema,
   observaciones: z.string().trim(),
   observaciones_entrega: z.string().trim(),
+  medio_pago: z.enum(['credito', 'contado']).nullable().optional(),
   items: z.array(ordenCompraItemSchema).min(1, 'Agrega al menos un producto'),
 })
 
@@ -64,9 +73,12 @@ export interface OrdenCompra {
   estado: EstadoOrdenCompra
   observaciones: string | null
   observaciones_entrega: string | null
+  medio_pago: MedioPagoOC | null
   creado_por: string
   descargada_siigo_at: string | null
   finalizada_at: string | null
+  siigo_id: string | null
+  siigo_estado: 'pendiente' | 'enviando' | 'sincronizada' | 'error' | null
   siigo_referencia: string | null
   created_at: string
   updated_at: string

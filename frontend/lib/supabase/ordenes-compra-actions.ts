@@ -22,7 +22,7 @@ import {
 } from '@/lib/types/orden-compra'
 
 const SELECT_ORDEN =
-  'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, creado_por, descargada_siigo_at, finalizada_at, siigo_referencia, created_at, updated_at'
+  'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, medio_pago, creado_por, descargada_siigo_at, finalizada_at, siigo_id, siigo_estado, siigo_referencia, created_at, updated_at'
 
 const SELECT_ITEM =
   'id, orden_id, codigo_producto, nombre_producto, cantidad, cantidad_recibida, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
@@ -33,6 +33,9 @@ function enriquecerOrden(orden: OrdenRow, items: OrdenCompraItem[]): OrdenCompra
   const primero = items[0]
   return {
     ...orden,
+    siigo_id: orden.siigo_id ?? null,
+    siigo_estado: orden.siigo_estado ?? null,
+    medio_pago: orden.medio_pago ?? null,
     items,
     codigo_producto: primero?.codigo_producto ?? null,
     nombre_producto: primero?.nombre_producto ?? null,
@@ -177,6 +180,7 @@ function mapPedidoHeader(datos: GuardarOrdenCompraPedidoInput, userId: string) {
     fecha_vencimiento: datos.fecha_vencimiento?.trim() || null,
     observaciones: datos.observaciones.trim() || null,
     observaciones_entrega: datos.observaciones_entrega.trim() || null,
+    medio_pago: datos.medio_pago ?? null,
     creado_por: userId,
     updated_at: new Date().toISOString(),
   }
@@ -213,6 +217,8 @@ export async function crearOrdenCompraPedido(
       estado: 'en_curso',
       descargada_siigo_at: null,
       finalizada_at: null,
+      siigo_id: null,
+      siigo_estado: null,
       siigo_referencia: null,
       items: parsed.data.items.map((item, idx) => ({
         ...item,
@@ -333,17 +339,51 @@ export async function actualizarOrdenCompraPedido(
   return { ok: true, id }
 }
 
-export async function actualizarEstadoOrdenCompra(
+/**
+ * Marca la OC como 'listo' Y dispara el envío automático a Siigo (FC).
+ * Requiere rol compras o supervisor (validado en el RPC del backend).
+ * En dev bypass solo actualiza el estado local sin llamar al backend.
+ */
+export async function marcarOcListoConSiigo(
   id: number,
-  estado: EstadoOrdenCompra
+  medioPago?: 'credito' | 'contado' | null
 ): Promise<OrdenCompraResultado> {
   const ahora = new Date().toISOString()
 
   if (isDevBypassActive()) {
     devPreviewUpdateOrden(id, {
-      estado,
-      finalizada_at: estado === 'listo' ? ahora : null,
+      estado: 'listo',
+      finalizada_at: ahora,
+      medio_pago: medioPago ?? null,
     })
+    return { ok: true }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('rpc_marcar_oc_listo', {
+    p_orden_id: id,
+    p_medio_pago: medioPago ?? null,
+  })
+
+  if (error) return { ok: false, error: `No se pudo marcar como lista: ${error.message}` }
+  if (!(data as { ok?: boolean } | null)?.ok) {
+    return { ok: false, error: 'rpc_marcar_oc_listo no confirmó el cambio.' }
+  }
+  return { ok: true }
+}
+
+export async function actualizarEstadoOrdenCompra(
+  id: number,
+  estado: EstadoOrdenCompra
+): Promise<OrdenCompraResultado> {
+  if (estado === 'listo') {
+    return marcarOcListoConSiigo(id)
+  }
+
+  const ahora = new Date().toISOString()
+
+  if (isDevBypassActive()) {
+    devPreviewUpdateOrden(id, { estado, finalizada_at: null })
     return { ok: true }
   }
 
@@ -351,13 +391,10 @@ export async function actualizarEstadoOrdenCompra(
   if (!user) return { ok: false, error: 'Sesión expirada.' }
 
   const supabase = await createClient()
-  const patch: Record<string, string | null> = {
-    estado,
-    updated_at: ahora,
-    finalizada_at: estado === 'listo' ? ahora : null,
-  }
-
-  const { error } = await supabase.from('ordenes_compra').update(patch).eq('id', id)
+  const { error } = await supabase
+    .from('ordenes_compra')
+    .update({ estado, updated_at: ahora, finalizada_at: null })
+    .eq('id', id)
 
   if (error) {
     return { ok: false, error: 'No se pudo actualizar el estado.' }

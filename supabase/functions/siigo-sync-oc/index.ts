@@ -1,7 +1,7 @@
-// B12: crea el documento de compra en Siigo al aprobar una OC
-// (ver rpc_aprobar_oc_siigo en 044_siigo_aprobacion_oc.sql — el panel nunca
-// llama esta función directo, siempre a través de ese RPC o del reintento
-// automático de B7).
+// B12: crea la factura de compra (FC) en Siigo cuando la OC se marca como
+// 'listo' (rpc_marcar_oc_listo, 053). rpc_aprobar_oc_siigo (044/054) queda
+// como reintento manual. El panel nunca llama esta función directo, siempre
+// a través de esos RPC o del reintento automático de B7.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
 import { isValidServiceRoleRequest } from '../_shared/internal-auth.ts'
 import { crearDocumentoCompraSiigo, type OrdenCompraParaSiigo } from '../_shared/siigo-client.ts'
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
 
   const { data: orden, error: ordenErr } = await admin
     .from('ordenes_compra')
-    .select('id, titulo, fecha_pedido, proveedor_nit, observaciones, siigo_id, siigo_estado')
+    .select('id, titulo, fecha_pedido, proveedor_nit, observaciones, medio_pago, siigo_id, siigo_estado')
     .eq('id', ordenId)
     .maybeSingle()
 
@@ -67,6 +67,7 @@ Deno.serve(async (req) => {
     fecha_pedido: orden.fecha_pedido,
     proveedor_nit: orden.proveedor_nit,
     observaciones: orden.observaciones,
+    medio_pago: orden.medio_pago ?? null,
     items: (items ?? []).map((it) => ({
       codigo_producto: it.codigo_producto,
       descripcion: it.descripcion,

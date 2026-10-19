@@ -150,9 +150,6 @@ export interface SiigoItemCompra {
   codigo_producto: string
   descripcion: string
   cantidad: number
-  // Costo unitario: si en algún momento una OC trae costo (hoy el panel no
-  // lo pide en compras), se puede pasar aquí; Siigo exige un price > 0, así
-  // que por defecto se manda 0 y el ajuste de costo real se hace en Siigo.
   precio_unitario?: number
 }
 
@@ -162,6 +159,8 @@ export interface OrdenCompraParaSiigo {
   fecha_pedido: string | null
   proveedor_nit: string | null
   observaciones: string | null
+  // 'credito' | 'contado' — usar SIIGO_PAYMENT_TYPE_ID_CREDITO/CONTADO si están configurados
+  medio_pago: string | null
   items: SiigoItemCompra[]
 }
 
@@ -170,28 +169,38 @@ export interface SiigoDocumentoCreado {
   numero: string | null
 }
 
-// NOTA (3.12 del AVANCE_2_BACKEND.pdf): "El tipo de documento de Siigo se
-// confirma con contabilidad el viernes 9." Mientras esa confirmación no
-// llegue, SIIGO_DOCUMENT_TYPE_ID se deja sin valor por defecto a propósito:
-// esta función falla con un mensaje claro (y la Edge Function que la llama
-// deja la orden en estado 'error' + notifica a compras) en vez de adivinar
-// un id de tipo de documento y crear algo incorrecto en la cuenta real de
-// Siigo. Una vez contabilidad confirme el tipo, basta con:
-//   supabase secrets set SIIGO_DOCUMENT_TYPE_ID=<id-confirmado>
+// Tipo de documento: Factura de compra (FC). Confirmado con contabilidad.
+// Configurar: supabase secrets set SIIGO_DOCUMENT_TYPE_ID=<id-del-tipo-FC-en-Siigo>
 function tipoDocumentoCompra(): string {
   const id = Deno.env.get('SIIGO_DOCUMENT_TYPE_ID')?.trim()
   if (!id) {
     throw new Error(
-      'SIIGO_DOCUMENT_TYPE_ID no está configurado todavía (pendiente de confirmación ' +
-      'con contabilidad, ver 3.12 del documento de Avance 2). No se crea el documento en Siigo.'
+      'SIIGO_DOCUMENT_TYPE_ID no está configurado. ' +
+      'Busca el ID del tipo "Factura de compra" (FC) en tu cuenta Siigo y ' +
+      'ejecuta: supabase secrets set SIIGO_DOCUMENT_TYPE_ID=<id>'
     )
   }
   return id
 }
 
-// Crea el documento de compra en Siigo para una orden ya aprobada. Idempotente
-// a nivel de llamador: siigo-sync-oc solo invoca esto si ordenes_compra.siigo_id
-// todavía es null, así que una OC nunca se crea dos veces en Siigo.
+// Devuelve el array de payments para el documento Siigo según el medio de pago
+// de la OC. Si los secretos correspondientes no están configurados, Siigo usa
+// su propio valor por defecto (típicamente crédito a proveedor).
+function buildPayments(medioPago: string | null): Array<{ id: number }> | undefined {
+  if (medioPago === 'credito') {
+    const id = Deno.env.get('SIIGO_PAYMENT_TYPE_ID_CREDITO')?.trim()
+    if (id) return [{ id: Number(id) }]
+  }
+  if (medioPago === 'contado') {
+    const id = Deno.env.get('SIIGO_PAYMENT_TYPE_ID_CONTADO')?.trim()
+    if (id) return [{ id: Number(id) }]
+  }
+  return undefined
+}
+
+// Crea la factura de compra (FC) en Siigo cuando la OC se marca como 'listo'.
+// Idempotente a nivel de llamador: siigo-sync-oc solo invoca esto si
+// ordenes_compra.siigo_id todavía es null.
 export async function crearDocumentoCompraSiigo(
   orden: OrdenCompraParaSiigo
 ): Promise<SiigoDocumentoCreado> {
@@ -199,7 +208,9 @@ export async function crearDocumentoCompraSiigo(
     throw new Error(`La orden ${orden.id} no tiene líneas, no se envía a Siigo`)
   }
 
-  const body = {
+  const payments = buildPayments(orden.medio_pago)
+
+  const body: Record<string, unknown> = {
     document: { id: Number(tipoDocumentoCompra()) },
     date: orden.fecha_pedido ?? new Date().toISOString().slice(0, 10),
     supplier: orden.proveedor_nit ? { identification: orden.proveedor_nit } : undefined,
@@ -214,6 +225,10 @@ export async function crearDocumentoCompraSiigo(
       quantity: it.cantidad,
       price: it.precio_unitario ?? 0,
     })),
+  }
+
+  if (payments) {
+    body.payments = payments
   }
 
   const res = await siigoPost('/v1/purchases', body)
