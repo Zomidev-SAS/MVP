@@ -30,6 +30,8 @@ async function ComprasContent({ searchParams }: ComprasPageProps) {
     result.status === 'authenticated' &&
     (result.profile.rol === 'supervisor' || result.profile.rol === 'compras')
 
+  const puedeFirmar = result.status === 'authenticated' && result.profile.rol === 'supervisor'
+
   const catalogoSiigo = puedeGestionarSiigo ? await fetchSiigoCatalogoEstado() : null
 
   return (
@@ -37,11 +39,15 @@ async function ComprasContent({ searchParams }: ComprasPageProps) {
       <div>
         <h1 className="text-2xl font-semibold">Compras — pedidos</h1>
         <p className="text-sm text-muted-foreground">
-          Gestiona órdenes de compra con varios proveedores y productos. Genera el PDF para Siigo y
-          registra entregas parciales en el campo de texto.
+          Sube la orden de compra que genera Siigo (PDF) para visualizarla aquí; el administrador la
+          firma y se avisa por correo. También puedes registrar entregas parciales por cantidad.
         </p>
       </div>
-      <ComprasTable productoInicial={productoInicial} puedeGestionarSiigo={puedeGestionarSiigo} />
+      <ComprasTable
+        productoInicial={productoInicial}
+        puedeGestionarSiigo={puedeGestionarSiigo}
+        puedeFirmar={puedeFirmar}
+      />
       {catalogoSiigo && <SiigoCatalogoDiferencias estado={catalogoSiigo} />}
     </div>
   )

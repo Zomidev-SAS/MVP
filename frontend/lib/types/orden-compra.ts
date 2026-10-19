@@ -87,6 +87,14 @@ export interface OrdenCompra {
   siigo_id: string | null
   siigo_estado: 'pendiente' | 'enviando' | 'sincronizada' | 'error' | null
   siigo_referencia: string | null
+  /** Número de la OC en Siigo (OC-1-3195) cuando se cargó desde el documento. */
+  numero_oc?: string | null
+  origen?: 'panel' | 'documento_siigo'
+  documento_path?: string | null
+  documento_firmado_path?: string | null
+  firmada_at?: string | null
+  firmada_por?: string | null
+  total_pagar?: number | null
   created_at: string
   updated_at: string
   items: OrdenCompraItem[]
@@ -116,6 +124,7 @@ export const CLASE_ESTADO_OC: Record<EstadoOrdenCompra, string> = {
 export function tituloOrdenDisplay(orden: OrdenCompra): string {
   if (orden.titulo?.trim()) return orden.titulo.trim()
   const prov = orden.items[0]?.proveedor_nombre ?? orden.proveedor_nombre
+  if (orden.numero_oc) return prov ? `${prov} · ${orden.numero_oc}` : orden.numero_oc
   return prov ? `${prov} OC ${orden.id}` : `OC ${orden.id}`
 }
 
@@ -175,4 +184,22 @@ export interface UltimaCompraProducto {
   proveedor_nit: string | null
   proveedor_nombre: string | null
   proveedor_email: string | null
+}
+
+export type TipoEventoOrden = 'inicio' | 'parcial' | 'fin' | 'cancelada'
+
+export interface EventoLineaTiempoOrden {
+  tipo: TipoEventoOrden
+  fecha: string
+  /** Texto corto: producto y cantidades. */
+  detalle: string
+}
+
+export interface OrdenLineaTiempo {
+  id: number
+  titulo: string
+  estado: EstadoOrdenCompra
+  pedidas: number
+  recibidas: number
+  eventos: EventoLineaTiempoOrden[]
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertCircle,
@@ -13,6 +13,7 @@ import {
   Search,
   Send,
   Trash2,
+  Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -51,6 +52,8 @@ import { descargarPdfOrdenCompra } from '@/lib/export/orden-compra-pdf'
 import { ComprasPedidoDialog } from '@/components/compras/ComprasPedidoDialog'
 import { SiigoStatusBadge, ETIQUETA_SIIGO_SYNC } from '@/components/compras/SiigoStatusBadge'
 import { RecepcionLineas } from '@/components/compras/RecepcionLineas'
+import { DocumentoOc } from '@/components/compras/DocumentoOc'
+import { subirOrdenCompraDocumento } from '@/lib/supabase/ordenes-compra-documento-actions'
 import type { EstadoSyncSiigo } from '@/lib/types/siigo'
 
 function formatearVencimiento(fecha: string | null): string {
@@ -78,9 +81,11 @@ function iconoVencimiento(orden: OrdenCompra) {
 interface ComprasTableProps {
   productoInicial?: { codigo: string; nombre: string } | null
   puedeGestionarSiigo: boolean
+  /** El administrador (supervisor) puede firmar las OC cargadas desde Siigo. */
+  puedeFirmar: boolean
 }
 
-export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTableProps) {
+export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar }: ComprasTableProps) {
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
@@ -91,6 +96,8 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
   const [editandoTextoId, setEditandoTextoId] = useState<number | null>(null)
   const [textoEntrega, setTextoEntrega] = useState('')
   const [enviandoSiigoId, setEnviandoSiigoId] = useState<number | null>(null)
+  const [subiendoDocumento, setSubiendoDocumento] = useState(false)
+  const inputDocumentoRef = useRef<HTMLInputElement>(null)
 
   const recargar = useCallback(async () => {
     setLoading(true)
@@ -169,6 +176,31 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
       }
     } finally {
       setEnviandoSiigoId(null)
+    }
+  }
+
+  async function handleSubirDocumento(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0]
+    e.target.value = ''
+    if (!archivo) return
+    setSubiendoDocumento(true)
+    try {
+      const formData = new FormData()
+      formData.set('archivo', archivo)
+      const res = await subirOrdenCompraDocumento(formData)
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      toast.success(`Orden ${res.numero} cargada. Queda pendiente de firma.`)
+      if (res.sinCodigo.length > 0) {
+        toast.warning(
+          `Sin código en el catálogo (quedaron como SIN-CODIGO): ${res.sinCodigo.join(', ')}`
+        )
+      }
+      recargar()
+    } finally {
+      setSubiendoDocumento(false)
     }
   }
 
@@ -256,14 +288,21 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
           <RecepcionLineas orden={orden} onActualizado={recargar} />
         </TableCell>
         <TableCell>
+          {orden.documento_path && (
+            <DocumentoOc orden={orden} puedeFirmar={puedeFirmar} onActualizado={recargar} />
+          )}
           <div className="flex flex-wrap gap-1">
-            <Button type="button" variant="outline" size="sm" onClick={() => handlePdf(orden)}>
-              <FileText className="mr-1 h-3 w-3 text-red-600" />
-              PDF
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => handleCsv(orden)}>
-              <Download className="h-3 w-3" />
-            </Button>
+            {!orden.documento_path && (
+              <>
+                <Button type="button" variant="outline" size="sm" onClick={() => handlePdf(orden)}>
+                  <FileText className="mr-1 h-3 w-3 text-red-600" />
+                  PDF
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => handleCsv(orden)}>
+                  <Download className="h-3 w-3" />
+                </Button>
+              </>
+            )}
             {puedeGestionarSiigo && siigo.estado === 'pendiente' && orden.estado === 'listo' && (
               <Button
                 type="button"
@@ -343,10 +382,32 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Button type="button" onClick={abrirNueva}>
-          <Plus className="mr-1 h-4 w-4" />
-          Agregar pedido
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={abrirNueva}>
+            <Plus className="mr-1 h-4 w-4" />
+            Agregar pedido
+          </Button>
+          {puedeGestionarSiigo && (
+            <>
+              <input
+                ref={inputDocumentoRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={handleSubirDocumento}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={subiendoDocumento}
+                onClick={() => inputDocumentoRef.current?.click()}
+              >
+                <Upload className="mr-1 h-4 w-4" />
+                {subiendoDocumento ? 'Leyendo documento…' : 'Subir OC (PDF de Siigo)'}
+              </Button>
+            </>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           <div className="relative min-w-[200px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

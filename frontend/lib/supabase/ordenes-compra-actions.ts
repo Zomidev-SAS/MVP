@@ -19,13 +19,16 @@ import {
   type OrdenCompraItem,
   type OrdenCompraResultado,
   type EstadoOrdenCompra,
+  type EventoLineaTiempoOrden,
+  type OrdenLineaTiempo,
   type ProductoSugerido,
   type ProveedorSugerido,
   type UltimaCompraProducto,
+  tituloOrdenDisplay,
 } from '@/lib/types/orden-compra'
 
 const SELECT_ORDEN =
-  'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, medio_pago, creado_por, descargada_siigo_at, finalizada_at, siigo_id, siigo_estado, siigo_referencia, created_at, updated_at'
+  'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, medio_pago, creado_por, descargada_siigo_at, finalizada_at, siigo_id, siigo_estado, siigo_referencia, numero_oc, origen, documento_path, documento_firmado_path, firmada_at, firmada_por, total_pagar, created_at, updated_at'
 
 const SELECT_ITEM =
   'id, orden_id, codigo_producto, nombre_producto, cantidad, precio_unitario, cantidad_recibida, cantidad_recibida_at, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
@@ -228,6 +231,39 @@ function mapItemsInsert(
   }))
 }
 
+/**
+ * Si al guardar la OC subió la cantidad recibida de una línea, deja un evento
+ * por la diferencia para la línea de tiempo (entregas parciales).
+ */
+async function registrarEventosRecepcion(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ordenId: number,
+  datos: GuardarOrdenCompraPedidoInput,
+  previas: Map<number, RecepcionPrevia> | undefined,
+  userId: string
+) {
+  const eventos = datos.items.flatMap((item, idx) => {
+    const nueva = Number(item.cantidad_recibida ?? 0)
+    const anterior = Number(previas?.get(idx + 1)?.cantidad_recibida ?? 0)
+    const delta = nueva - anterior
+    if (!(delta > 0)) return []
+    return [
+      {
+        orden_id: ordenId,
+        codigo_producto: item.codigo_producto,
+        cantidad: delta,
+        acumulada: nueva,
+        pedida: item.cantidad,
+        creado_por: userId,
+      },
+    ]
+  })
+  if (eventos.length === 0) return
+
+  const { error } = await supabase.from('orden_compra_recepciones').insert(eventos)
+  if (error) console.error('Failed to insert orden_compra_recepciones:', error)
+}
+
 export async function crearOrdenCompraPedido(
   datos: GuardarOrdenCompraPedidoInput
 ): Promise<OrdenCompraResultado> {
@@ -293,6 +329,8 @@ export async function crearOrdenCompraPedido(
     await supabase.from('ordenes_compra').delete().eq('id', inserted.id)
     return { ok: false, error: 'No se pudieron guardar los ítems de la orden.' }
   }
+
+  await registrarEventosRecepcion(supabase, inserted.id, parsed.data, undefined, user.id)
 
   return { ok: true, id: inserted.id }
 }
@@ -372,6 +410,8 @@ export async function actualizarOrdenCompraPedido(
     console.error('Failed to update orden_compra_items:', itemsError)
     return { ok: false, error: 'No se pudieron actualizar los ítems.' }
   }
+
+  await registrarEventosRecepcion(supabase, id, parsed.data, previas, user.id)
 
   return { ok: true, id }
 }
@@ -656,14 +696,30 @@ export async function registrarRecepcionItem(
   }
 
   const ahora = new Date().toISOString()
-  const { error } = await supabase
+  const { data: actualizadas, error } = await supabase
     .from('orden_compra_items')
     .update({ cantidad_recibida: total, cantidad_recibida_at: ahora })
     .eq('id', itemId)
+    .select('id, codigo_producto')
   if (error) {
     console.error('Failed to register reception:', error)
     return { ok: false, error: 'No se pudo registrar la recepción.' }
   }
+  // RLS no devuelve error cuando no deja actualizar: simplemente no toca filas.
+  if (!actualizadas || actualizadas.length === 0) {
+    return { ok: false, error: 'No tienes permiso para registrar recepciones en esta orden.' }
+  }
+
+  const { error: eventoError } = await supabase.from('orden_compra_recepciones').insert({
+    orden_id: ordenId,
+    item_id: itemId,
+    codigo_producto: actualizadas[0].codigo_producto,
+    cantidad: cantidadLlegada,
+    acumulada: total,
+    pedida,
+    creado_por: user.id,
+  })
+  if (eventoError) console.error('Failed to insert orden_compra_recepciones:', eventoError)
 
   await supabase.from('ordenes_compra').update({ updated_at: ahora }).eq('id', ordenId)
   return { ok: true }
@@ -765,4 +821,91 @@ export async function buscarProveedoresOC(q: string): Promise<ProveedorSugerido[
     porNit.set(nit, { nit, nombre: r.proveedor_nombre, email: r.proveedor_email })
   }
   return [...porNit.values()].slice(0, 8)
+}
+
+
+// ---------------------------------------------------------------------------
+// Línea de tiempo (dashboard)
+// ---------------------------------------------------------------------------
+
+function formatoCantidad(n: number): string {
+  return n.toLocaleString('es-CO', { maximumFractionDigits: 2 })
+}
+
+/**
+ * Órdenes recientes con sus hitos: inicio → entregas parciales → finalización.
+ * Las que siguen en curso van primero.
+ */
+export async function fetchLineaTiempoOrdenesCompra(limite = 8): Promise<OrdenLineaTiempo[]> {
+  const ordenes = await fetchOrdenesCompra()
+  if (ordenes.length === 0) return []
+
+  const seleccion = [...ordenes]
+    .sort((a, b) => {
+      const pesoA = a.estado === 'en_curso' ? 0 : 1
+      const pesoB = b.estado === 'en_curso' ? 0 : 1
+      if (pesoA !== pesoB) return pesoA - pesoB
+      return b.created_at.localeCompare(a.created_at)
+    })
+    .slice(0, limite)
+
+  const recepcionesPorOrden = new Map<number, EventoLineaTiempoOrden[]>()
+
+  if (isDevBypassActive()) {
+    for (const orden of seleccion) {
+      const eventos = orden.items
+        .filter((i) => Number(i.cantidad_recibida ?? 0) > 0)
+        .map((i) => ({
+          tipo: 'parcial' as const,
+          fecha: i.cantidad_recibida_at ?? orden.updated_at,
+          detalle: `${i.codigo_producto}: ${formatoCantidad(Number(i.cantidad_recibida))} de ${formatoCantidad(Number(i.cantidad))}`,
+        }))
+      recepcionesPorOrden.set(orden.id, eventos)
+    }
+  } else {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('orden_compra_recepciones')
+      .select('orden_id, codigo_producto, cantidad, acumulada, pedida, created_at')
+      .in('orden_id', seleccion.map((o) => o.id))
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('Failed to load orden_compra_recepciones:', error)
+    }
+    for (const r of data ?? []) {
+      const lista = recepcionesPorOrden.get(Number(r.orden_id)) ?? []
+      const acumulada = r.acumulada != null ? Number(r.acumulada) : null
+      const pedida = r.pedida != null ? Number(r.pedida) : null
+      lista.push({
+        tipo: 'parcial',
+        fecha: r.created_at,
+        detalle:
+          acumulada != null && pedida != null
+            ? `${r.codigo_producto}: +${formatoCantidad(Number(r.cantidad))} (${formatoCantidad(acumulada)} de ${formatoCantidad(pedida)})`
+            : `${r.codigo_producto}: +${formatoCantidad(Number(r.cantidad))}`,
+      })
+      recepcionesPorOrden.set(Number(r.orden_id), lista)
+    }
+  }
+
+  return seleccion.map((orden) => {
+    const eventos: EventoLineaTiempoOrden[] = [
+      { tipo: 'inicio', fecha: orden.fecha_pedido, detalle: 'Inicio de la orden' },
+      ...(recepcionesPorOrden.get(orden.id) ?? []),
+    ]
+    if (orden.estado === 'listo') {
+      eventos.push({ tipo: 'fin', fecha: orden.finalizada_at ?? orden.updated_at, detalle: 'Finalizada' })
+    } else if (orden.estado === 'cancelada') {
+      eventos.push({ tipo: 'cancelada', fecha: orden.updated_at, detalle: 'Cancelada' })
+    }
+    return {
+      id: orden.id,
+      titulo: tituloOrdenDisplay(orden),
+      estado: orden.estado,
+      pedidas: orden.items.reduce((acc, i) => acc + Number(i.cantidad || 0), 0),
+      recibidas: orden.items.reduce((acc, i) => acc + Number(i.cantidad_recibida ?? 0), 0),
+      eventos,
+    }
+  })
 }

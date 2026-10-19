@@ -4,6 +4,7 @@ import type { DashboardFiltros, DashboardGraficasPayload } from '@/lib/types/das
 import type { DashboardVariante } from '@/lib/permissions/dashboard-variante'
 import type { EntradaSalidaDia } from '@/lib/types/dashboard'
 import { fetchDashboardGraficas } from '@/lib/supabase/dashboard-graficas-actions'
+import { fetchLineaTiempoOrdenesCompra } from '@/lib/supabase/ordenes-compra-actions'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { IndicadorCard } from '@/components/dashboard/charts/IndicadorCard'
 import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChart'
@@ -11,7 +12,7 @@ import { StockPorBodegaChart } from '@/components/dashboard/charts/StockPorBodeg
 import { StockPorCategoriaChart } from '@/components/dashboard/charts/StockPorCategoriaChart'
 import { TopProductosChart } from '@/components/dashboard/charts/TopProductosChart'
 import { VehiculosPorEtapaChart } from '@/components/dashboard/charts/VehiculosPorEtapaChart'
-import { AjustesOCPorEstadoChart } from '@/components/dashboard/charts/AjustesOCPorEstadoChart'
+import { OrdenesCompraTimeline } from '@/components/dashboard/charts/OrdenesCompraTimeline'
 import { ValorizacionChart } from '@/components/dashboard/charts/ValorizacionChart'
 import { ChartSelector, type ChartSelectorItem } from '@/components/dashboard/ChartSelector'
 
@@ -27,6 +28,10 @@ export async function DashboardGraficasSection({
   entradasVsSalidas: EntradaSalidaDia[]
 }) {
   let graficas: DashboardGraficasPayload | null = null
+  const lineaTiempoOrdenes = await fetchLineaTiempoOrdenesCompra().catch((error) => {
+    console.error('Error al cargar la línea de tiempo de órdenes de compra:', error)
+    return []
+  })
   try {
     graficas = await fetchDashboardGraficas(rol, filtros)
   } catch (error) {
@@ -75,8 +80,8 @@ export async function DashboardGraficasSection({
   }
   const ao: ChartSelectorItem = {
     id: 'ao',
-    label: 'Ajustes y órdenes de compra por estado',
-    node: <AjustesOCPorEstadoChart data={graficas.ajustesOCPorEstado} />,
+    label: 'Órdenes de compra (línea de tiempo)',
+    node: <OrdenesCompraTimeline ordenes={lineaTiempoOrdenes} />,
   }
   const val: ChartSelectorItem = {
     id: 'val',

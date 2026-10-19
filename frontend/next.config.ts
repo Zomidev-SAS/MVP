@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  experimental: {
+    // La subida del PDF de la OC (hasta 5 MB) viaja en una Server Action.
+    serverActions: { bodySizeLimit: '6mb' },
+  },
   async headers() {
     return [
       {
