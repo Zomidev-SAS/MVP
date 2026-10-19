@@ -9,7 +9,8 @@ export async function leerOcSiigoDesdePdf(bytes: Uint8Array): Promise<OcSiigoLei
   let pdf
   try {
     pdf = await getDocumentProxy(new Uint8Array(bytes))
-  } catch {
+  } catch (error) {
+    console.error('No se pudo abrir el PDF de la OC:', error)
     throw new ErrorLecturaOc('No pude abrir el PDF. Verifica que no esté dañado ni protegido con contraseña.')
   }
 
