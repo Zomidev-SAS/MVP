@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
 import { VehiculosPorEtapaChart } from '@/components/dashboard/charts/VehiculosPorEtapaChart'
 import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChart'
 import { LowStockList, type ProductoBajoStock } from '@/components/dashboard/LowStockList'
+import { VehiculoTimelineCard } from '@/components/dashboard/VehiculoTimelineCard'
 import { cn } from '@/lib/utils'
 import type { VehiculoPorEtapaPunto } from '@/lib/types/dashboard-graficas'
 import type { EntradaSalidaDia } from '@/lib/types/dashboard'
@@ -14,9 +15,12 @@ interface PlantaKioskViewProps {
   vehiculosPorEtapa: VehiculoPorEtapaPunto[]
   entradasSalidas: EntradaSalidaDia[]
   productosStockBajo: ProductoBajoStock[]
+  token: string
 }
 
 const ROTACION_MS = 30_000
+// La vista interactiva (elegir vehículo) tiene más tiempo antes de rotar.
+const ROTACION_INTERACTIVA_MS = 120_000
 const VISTAS = [
   { id: 'resumen', titulo: 'Resumen' },
   { id: 'etapas', titulo: 'Vehículos por etapa' },
@@ -38,10 +42,12 @@ export function PlantaKioskView({
   vehiculosPorEtapa,
   entradasSalidas,
   productosStockBajo,
+  token,
 }: PlantaKioskViewProps) {
   const router = useRouter()
   const [indice, setIndice] = useState(0)
   const [automatico, setAutomatico] = useState(true)
+  const [actividad, setActividad] = useState(0)
   // Esta pantalla corre SIN sesión (cliente anon de Supabase): las políticas
   // RLS de `postgres_changes` casi seguro escopan la entrega de eventos
   // realtime a roles autenticados, así que un canal realtime aquí reportaría
@@ -62,9 +68,10 @@ export function PlantaKioskView({
   // Reinicia el temporizador tras cada cambio (manual o automático).
   useEffect(() => {
     if (!automatico) return
-    const id = setTimeout(() => ir(1), ROTACION_MS)
+    const ms = VISTAS[indice].id === 'etapas' ? ROTACION_INTERACTIVA_MS : ROTACION_MS
+    const id = setTimeout(() => ir(1), ms)
     return () => clearTimeout(id)
-  }, [automatico, indice, ir])
+  }, [automatico, indice, ir, actividad])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -106,7 +113,11 @@ export function PlantaKioskView({
           <ChevronLeft aria-hidden="true" className="h-9 w-9" />
         </button>
 
-        <div className="h-full min-w-0 flex-1 overflow-y-auto">
+        <div
+          className="h-full min-w-0 flex-1 overflow-y-auto"
+          onPointerDown={() => setActividad((a) => a + 1)}
+          onKeyDown={() => setActividad((a) => a + 1)}
+        >
           {vista.id === 'resumen' && (
             <div className="grid h-full grid-cols-1 content-center gap-6 lg:grid-cols-2">
               <div className="grid grid-cols-2 gap-6">
@@ -144,8 +155,8 @@ export function PlantaKioskView({
             </div>
           )}
           {vista.id === 'etapas' && (
-            <div className="mx-auto w-full max-w-6xl text-2xl">
-              <VehiculosPorEtapaChart data={vehiculosPorEtapa} />
+            <div className="mx-auto w-full max-w-6xl">
+              <VehiculoTimelineCard tokenPlanta={token} />
             </div>
           )}
           {vista.id === 'entradas-salidas' && (

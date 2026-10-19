@@ -9,6 +9,19 @@ import { fetchProductosBajoStock } from '@/lib/supabase/inventario-actions'
 import type { ProductoBajoStock } from '@/components/dashboard/LowStockList'
 import type { VehiculoPorEtapaPunto } from '@/lib/types/dashboard-graficas'
 import type { EntradaSalidaDia } from '@/lib/types/dashboard'
+import { getDevPreviewFormulariosData } from '@/lib/dev/preview-formularios-data'
+import { getDevPreviewProcesosVehiculo } from '@/lib/dev/preview-procesos-vehiculo-data'
+import { normalizarFormularios } from '@/lib/formularios/normalize'
+import { normalizarTextoBusqueda } from '@/lib/formularios/busqueda'
+import { vistaFormulario, type FormularioListado } from '@/lib/types/formularios'
+import type { VehiculoProceso } from '@/lib/types/vehiculo-proceso'
+import {
+  construirEventosLineaTiempo,
+  extraerSugerenciasVehiculo,
+  listarVehiculosRecientes,
+  type EventoLineaTiempo,
+  type VehiculoSugerencia,
+} from '@/lib/formularios/linea-tiempo'
 
 // El secreto de firma es el ÚNICO control de acceso de /planta/* (no hay
 // sesión, no hay chequeo de rol a nivel de ruta). El fallback de desarrollo
@@ -137,4 +150,73 @@ export async function fetchDatosPlanta(token: string): Promise<DatosPlanta> {
       saldo: Number(p.saldo),
     })),
   }
+}
+
+// ── Vehículos (vista "Vehículos por etapa" de la TV, solo lectura) ──────────
+
+async function cargarFormulariosPlanta(token: string): Promise<FormularioListado[]> {
+  if (!(await verificarTokenPlanta(token))) return []
+  if (isDevBypassActive()) return getDevPreviewFormulariosData()
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('rpc_planta_formularios', { p_token: token })
+  if (error || !Array.isArray(data)) {
+    console.error('Failed to load rpc_planta_formularios:', error)
+    return []
+  }
+  return normalizarFormularios(data)
+}
+
+export async function fetchVehiculosRecientesPlanta(
+  token: string,
+  limite = 40
+): Promise<VehiculoSugerencia[]> {
+  return listarVehiculosRecientes(await cargarFormulariosPlanta(token), limite)
+}
+
+export async function buscarVehiculosPlanta(
+  token: string,
+  termino: string,
+  limite = 40
+): Promise<VehiculoSugerencia[]> {
+  return extraerSugerenciasVehiculo(await cargarFormulariosPlanta(token), termino, limite)
+}
+
+export async function fetchDetalleVehiculoPlanta(
+  token: string,
+  chasis: string
+): Promise<{ eventos: EventoLineaTiempo[]; procesos: VehiculoProceso[] }> {
+  const chasisNorm = normalizarTextoBusqueda(chasis)
+  if (!chasisNorm || !(await verificarTokenPlanta(token))) return { eventos: [], procesos: [] }
+
+  const filas = await cargarFormulariosPlanta(token)
+  const eventos = construirEventosLineaTiempo(
+    filas.filter((f) => normalizarTextoBusqueda(vistaFormulario(f).chasis) === chasisNorm)
+  )
+
+  if (isDevBypassActive()) {
+    return { eventos, procesos: await getDevPreviewProcesosVehiculo(chasis) }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('rpc_planta_procesos_vehiculo', {
+    p_token: token,
+    p_chasis: chasis,
+  })
+  if (error || !Array.isArray(data)) {
+    console.error('Failed to load rpc_planta_procesos_vehiculo:', error)
+    return { eventos, procesos: [] }
+  }
+
+  const procesos: VehiculoProceso[] = data.map((row) => ({
+    id: row.id,
+    chasis: row.chasis,
+    titulo: row.titulo,
+    procesoEstado: row.proceso_estado,
+    observaciones: row.observaciones,
+    seccionSiguiente: row.seccion_siguiente,
+    creadoPorNombre: row.creado_por_nombre,
+    creadoEn: row.creado_en,
+  }))
+  return { eventos, procesos }
 }

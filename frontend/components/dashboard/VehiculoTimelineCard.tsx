@@ -33,6 +33,11 @@ import {
   type EventoLineaTiempo,
   type VehiculoSugerencia,
 } from '@/lib/formularios/linea-tiempo'
+import {
+  buscarVehiculosPlanta,
+  fetchDetalleVehiculoPlanta,
+  fetchVehiculosRecientesPlanta,
+} from '@/lib/supabase/planta-actions'
 import { VehiculoProcesoDialog } from '@/components/dashboard/VehiculoProcesoDialog'
 
 function iconoPorEtapa(etapa: string) {
@@ -115,8 +120,16 @@ function DetalleProceso({ proceso }: { proceso: VehiculoProceso }) {
   )
 }
 
-export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
-  const puedeAgregarProceso = ROLES_PROCESO_VEHICULO.includes(rolActual)
+interface VehiculoTimelineCardProps {
+  rolActual?: Role
+  /** Modo pantalla de planta: solo lectura, datos vía token firmado y sin sesión. */
+  tokenPlanta?: string
+}
+
+export function VehiculoTimelineCard({ rolActual, tokenPlanta }: VehiculoTimelineCardProps) {
+  const soloLectura = tokenPlanta !== undefined
+  const puedeAgregarProceso =
+    !soloLectura && rolActual !== undefined && ROLES_PROCESO_VEHICULO.includes(rolActual)
   const [termino, setTermino] = useState('')
   const [procesoDialogAbierto, setProcesoDialogAbierto] = useState(false)
   const [vehiculosRecientes, setVehiculosRecientes] = useState<VehiculoSugerencia[]>([])
@@ -133,14 +146,17 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
 
   useEffect(() => {
     setCargandoLista(true)
-    fetchVehiculosRecientes(40)
+    const peticion = tokenPlanta
+      ? fetchVehiculosRecientesPlanta(tokenPlanta, 40)
+      : fetchVehiculosRecientes(40)
+    peticion
       .then(setVehiculosRecientes)
       .catch((error) => {
         console.error('Failed to load recent vehiculos:', error)
         setVehiculosRecientes([])
       })
       .finally(() => setCargandoLista(false))
-  }, [])
+  }, [tokenPlanta])
 
   useEffect(() => {
     const q = termino.trim()
@@ -151,7 +167,10 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
     }
     setBuscando(true)
     const id = setTimeout(() => {
-      buscarVehiculosFormulario(q)
+      const peticion = tokenPlanta
+        ? buscarVehiculosPlanta(tokenPlanta, q)
+        : buscarVehiculosFormulario(q)
+      peticion
         .then(setResultadosBusqueda)
         .catch((error) => {
           console.error('Failed to search vehiculos:', error)
@@ -160,7 +179,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
         .finally(() => setBuscando(false))
     }, 300)
     return () => clearTimeout(id)
-  }, [termino])
+  }, [termino, tokenPlanta])
 
   const buscandoActivamente = termino.trim().length > 0
   const listaVisible = buscandoActivamente ? resultadosBusqueda : vehiculosRecientes
@@ -168,10 +187,12 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
   const cargarDetalleVehiculo = useCallback(async (chasis: string) => {
     setCargandoEventos(true)
     try {
-      const [listaEventos, listaProcesos] = await Promise.all([
-        fetchLineaTiempoVehiculo(chasis),
-        fetchProcesosVehiculo(chasis),
-      ])
+      const { eventos: listaEventos, procesos: listaProcesos } = tokenPlanta
+        ? await fetchDetalleVehiculoPlanta(tokenPlanta, chasis)
+        : {
+            eventos: await fetchLineaTiempoVehiculo(chasis),
+            procesos: await fetchProcesosVehiculo(chasis),
+          }
       setEventos(listaEventos)
       setEtapas(construirEtapasVehiculo(listaEventos))
       setProcesos(listaProcesos)
@@ -183,7 +204,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
     } finally {
       setCargandoEventos(false)
     }
-  }, [])
+  }, [tokenPlanta])
 
   function seleccionarVehiculo(sugerencia: VehiculoSugerencia) {
     setVehiculoSeleccionado(sugerencia)
@@ -410,7 +431,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
         )}
       </CardContent>
 
-      {vehiculoSeleccionado && (
+      {vehiculoSeleccionado && !soloLectura && rolActual && (
         <VehiculoProcesoDialog
           abierto={procesoDialogAbierto}
           onOpenChange={setProcesoDialogAbierto}

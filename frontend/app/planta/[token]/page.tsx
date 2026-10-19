@@ -14,6 +14,7 @@ export default async function PlantaPage({ params }: { params: Promise<{ token: 
       vehiculosPorEtapa={vehiculosPorEtapa}
       entradasSalidas={entradasSalidas}
       productosStockBajo={productosStockBajo}
+      token={token}
     />
   )
 }
