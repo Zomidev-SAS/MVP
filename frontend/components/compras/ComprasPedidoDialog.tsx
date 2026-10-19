@@ -24,11 +24,17 @@ import {
   ETIQUETA_MEDIO_PAGO,
   type GuardarOrdenCompraPedidoInput,
   type OrdenCompra,
+  type ProductoSugerido,
+  type ProveedorSugerido,
 } from '@/lib/types/orden-compra'
 import {
   actualizarOrdenCompraPedido,
+  buscarProductosOC,
+  buscarProveedoresOC,
   crearOrdenCompraPedido,
+  obtenerUltimaCompraProducto,
 } from '@/lib/supabase/ordenes-compra-actions'
+import { CampoSugerencias } from '@/components/compras/CampoSugerencias'
 import { validarSiigoOrdenCompra } from '@/lib/supabase/siigo-actions'
 import type { SiigoValidacionResultado } from '@/lib/types/siigo'
 import { useState } from 'react'
@@ -54,7 +60,7 @@ function valoresNueva(productoInicial?: { codigo: string; nombre: string } | nul
     item.descripcion = productoInicial.nombre
   }
   return {
-    titulo: productoInicial ? `${productoInicial.nombre} OC` : '',
+    titulo: '',
     fecha_pedido: hoyIso(),
     fecha_vencimiento: '',
     observaciones: '',
@@ -128,6 +134,42 @@ export function ComprasPedidoDialog({
     }
   }
 
+  async function aplicarProducto(indice: number, p: ProductoSugerido) {
+    form.setValue(`items.${indice}.codigo_producto`, p.codigo_producto, { shouldValidate: true })
+    form.setValue(`items.${indice}.nombre_producto`, p.nombre_producto)
+    form.setValue(`items.${indice}.descripcion`, p.nombre_producto, { shouldValidate: true })
+
+    // Trae el precio y el proveedor de la última compra de este producto.
+    const ultima = await obtenerUltimaCompraProducto(p.codigo_producto)
+    if (!ultima) return
+    if (!form.getValues(`items.${indice}.precio_unitario`) && ultima.precio_unitario != null) {
+      form.setValue(`items.${indice}.precio_unitario`, ultima.precio_unitario)
+    }
+    if (!form.getValues(`items.${indice}.proveedor_nit`) && ultima.proveedor_nit) {
+      form.setValue(`items.${indice}.proveedor_nit`, ultima.proveedor_nit)
+      if (ultima.proveedor_nombre) form.setValue(`items.${indice}.proveedor_nombre`, ultima.proveedor_nombre)
+      if (ultima.proveedor_email) form.setValue(`items.${indice}.proveedor_email`, ultima.proveedor_email)
+    }
+  }
+
+  function aplicarProveedor(indice: number, p: ProveedorSugerido) {
+    form.setValue(`items.${indice}.proveedor_nit`, p.nit)
+    form.setValue(`items.${indice}.proveedor_nombre`, p.nombre ?? '')
+    if (p.email) form.setValue(`items.${indice}.proveedor_email`, p.email)
+  }
+
+  // Al terminar de escribir un NIT que no estaba en el historial, se consulta Siigo.
+  async function completarProveedorDesdeSiigo(indice: number) {
+    const nit = form.getValues(`items.${indice}.proveedor_nit`).replace(/\D/g, '')
+    if (nit.length < 5 || form.getValues(`items.${indice}.proveedor_nombre`)) return
+    const res = await validarSiigoOrdenCompra({ proveedor_nit: nit })
+    if (res.ok && res.proveedor?.encontrado && res.proveedor.name) {
+      if (!form.getValues(`items.${indice}.proveedor_nombre`)) {
+        form.setValue(`items.${indice}.proveedor_nombre`, res.proveedor.name)
+      }
+    }
+  }
+
   async function handleValidarSiigo(indice: number) {
     const codigo = form.getValues(`items.${indice}.codigo_producto`)
     const nit = form.getValues(`items.${indice}.proveedor_nit`)
@@ -172,20 +214,6 @@ export function ComprasPedidoDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="titulo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nombre / tarea</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ej. COAUTOPARTES OC 3674" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             <div className="grid gap-3 sm:grid-cols-2">
               <FormField
                 control={form.control}
@@ -263,7 +291,7 @@ export function ComprasPedidoDialog({
                     )}
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <FormField
                       control={form.control}
                       name={`items.${indice}.codigo_producto`}
@@ -271,12 +299,56 @@ export function ComprasPedidoDialog({
                         <FormItem>
                           <FormLabel>Código producto</FormLabel>
                           <FormControl>
-                            <Input {...f} />
+                            <CampoSugerencias<ProductoSugerido>
+                              value={f.value}
+                              onChange={f.onChange}
+                              onBlur={f.onBlur}
+                              buscar={buscarProductosOC}
+                              onSeleccionar={(p) => aplicarProducto(indice, p)}
+                              claveItem={(p) => p.codigo_producto}
+                              renderItem={(p) => (
+                                <span>
+                                  <span className="font-medium">{p.codigo_producto}</span>
+                                  <span className="text-muted-foreground"> — {p.nombre_producto}</span>
+                                </span>
+                              )}
+                              placeholder="Escribe código o nombre"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
+                    <FormField
+                      control={form.control}
+                      name={`items.${indice}.nombre_producto`}
+                      render={({ field: f }) => (
+                        <FormItem>
+                          <FormLabel>Nombre producto</FormLabel>
+                          <FormControl>
+                            <CampoSugerencias<ProductoSugerido>
+                              value={f.value}
+                              onChange={f.onChange}
+                              onBlur={f.onBlur}
+                              buscar={buscarProductosOC}
+                              onSeleccionar={(p) => aplicarProducto(indice, p)}
+                              claveItem={(p) => p.codigo_producto}
+                              renderItem={(p) => (
+                                <span>
+                                  <span className="font-medium">{p.nombre_producto}</span>
+                                  <span className="text-muted-foreground"> — {p.codigo_producto}</span>
+                                </span>
+                              )}
+                              placeholder="Busca por nombre"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <FormField
                       control={form.control}
                       name={`items.${indice}.cantidad`}
@@ -305,7 +377,7 @@ export function ComprasPedidoDialog({
                           <FormControl>
                             <Input
                               type="number"
-                              min={0.01}
+                              min={0}
                               step="any"
                               value={f.value}
                               onChange={(e) => f.onChange(e.target.valueAsNumber || 0)}
@@ -339,7 +411,26 @@ export function ComprasPedidoDialog({
                         <FormItem>
                           <FormLabel>Proveedor NIT</FormLabel>
                           <FormControl>
-                            <Input {...f} />
+                            <CampoSugerencias<ProveedorSugerido>
+                              value={f.value}
+                              onChange={f.onChange}
+                              onBlur={() => {
+                                f.onBlur()
+                                void completarProveedorDesdeSiigo(indice)
+                              }}
+                              buscar={buscarProveedoresOC}
+                              onSeleccionar={(p) => aplicarProveedor(indice, p)}
+                              claveItem={(p) => p.nit}
+                              renderItem={(p) => (
+                                <span>
+                                  <span className="font-medium">{p.nit}</span>
+                                  <span className="text-muted-foreground"> — {p.nombre ?? 'Sin nombre'}</span>
+                                </span>
+                              )}
+                              minimo={3}
+                              inputMode="numeric"
+                              placeholder="Escribe el NIT"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -352,7 +443,21 @@ export function ComprasPedidoDialog({
                         <FormItem>
                           <FormLabel>Proveedor nombre</FormLabel>
                           <FormControl>
-                            <Input {...f} />
+                            <CampoSugerencias<ProveedorSugerido>
+                              value={f.value}
+                              onChange={f.onChange}
+                              onBlur={f.onBlur}
+                              buscar={buscarProveedoresOC}
+                              onSeleccionar={(p) => aplicarProveedor(indice, p)}
+                              claveItem={(p) => p.nit}
+                              renderItem={(p) => (
+                                <span>
+                                  <span className="font-medium">{p.nombre ?? 'Sin nombre'}</span>
+                                  <span className="text-muted-foreground"> — NIT {p.nit}</span>
+                                </span>
+                              )}
+                              placeholder="Escribe el nombre"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

@@ -50,6 +50,7 @@ import { descargarCsvSiigo } from '@/lib/export/orden-compra-siigo'
 import { descargarPdfOrdenCompra } from '@/lib/export/orden-compra-pdf'
 import { ComprasPedidoDialog } from '@/components/compras/ComprasPedidoDialog'
 import { SiigoStatusBadge, ETIQUETA_SIIGO_SYNC } from '@/components/compras/SiigoStatusBadge'
+import { RecepcionLineas } from '@/components/compras/RecepcionLineas'
 import type { EstadoSyncSiigo } from '@/lib/types/siigo'
 
 function formatearVencimiento(fecha: string | null): string {
@@ -129,7 +130,13 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
   async function cambiarEstado(id: number, estado: EstadoOrdenCompra) {
     const res = await actualizarEstadoOrdenCompra(id, estado)
     if (res.ok) {
-      toast.success('Estado actualizado.')
+      if (estado === 'listo') {
+        toast.success('Orden lista. Enviando la factura de compra a Siigo…')
+        // El envío a Siigo es asíncrono: se vuelve a consultar para mostrar el resultado.
+        setTimeout(() => recargar(), 6000)
+      } else {
+        toast.success('Estado actualizado.')
+      }
       recargar()
     } else {
       toast.error(res.error)
@@ -244,6 +251,9 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
             {iconoVencimiento(orden)}
             <span>{formatearVencimiento(orden.fecha_vencimiento)}</span>
           </div>
+        </TableCell>
+        <TableCell className="min-w-[210px]">
+          <RecepcionLineas orden={orden} onActualizado={recargar} />
         </TableCell>
         <TableCell>
           <div className="flex flex-wrap gap-1">
@@ -390,10 +400,11 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Tarea</TableHead>
+                      <TableHead>Orden</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Siigo</TableHead>
                       <TableHead>Vencimiento</TableHead>
+                      <TableHead>Recepción</TableHead>
                       <TableHead>Archivo</TableHead>
                       <TableHead>Texto</TableHead>
                       <TableHead className="w-[80px]" />
@@ -402,7 +413,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
                   <TableBody>
                     {pendientes.map(renderFila)}
                     <TableRow className="hover:bg-muted/50">
-                      <TableCell colSpan={7} className="p-0">
+                      <TableCell colSpan={8} className="p-0">
                         <button
                           type="button"
                           onClick={abrirNueva}
@@ -429,10 +440,11 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo }: ComprasTa
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Tarea</TableHead>
+                      <TableHead>Orden</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Siigo</TableHead>
                       <TableHead>Vencimiento</TableHead>
+                      <TableHead>Recepción</TableHead>
                       <TableHead>Archivo</TableHead>
                       <TableHead>Texto</TableHead>
                       <TableHead className="w-[80px]" />

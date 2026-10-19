@@ -208,7 +208,10 @@ export async function crearDocumentoCompraSiigo(
     throw new Error(`La orden ${orden.id} no tiene líneas, no se envía a Siigo`)
   }
 
-  const sinPrecio = orden.items.filter((it) => !(it.precio_unitario && it.precio_unitario > 0))
+  // El precio 0 es válido (producto sin costo); solo falta precio si es null o negativo.
+  const sinPrecio = orden.items.filter(
+    (it) => it.precio_unitario == null || !Number.isFinite(it.precio_unitario) || it.precio_unitario < 0
+  )
   if (sinPrecio.length > 0) {
     throw new Error(
       `La orden ${orden.id} tiene ítems sin precio unitario (${sinPrecio.map((it) => it.codigo_producto).join(', ')}). ` +

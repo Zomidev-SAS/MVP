@@ -19,13 +19,16 @@ import {
   type OrdenCompraItem,
   type OrdenCompraResultado,
   type EstadoOrdenCompra,
+  type ProductoSugerido,
+  type ProveedorSugerido,
+  type UltimaCompraProducto,
 } from '@/lib/types/orden-compra'
 
 const SELECT_ORDEN =
   'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, medio_pago, creado_por, descargada_siigo_at, finalizada_at, siigo_id, siigo_estado, siigo_referencia, created_at, updated_at'
 
 const SELECT_ITEM =
-  'id, orden_id, codigo_producto, nombre_producto, cantidad, precio_unitario, cantidad_recibida, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
+  'id, orden_id, codigo_producto, nombre_producto, cantidad, precio_unitario, cantidad_recibida, cantidad_recibida_at, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
 
 type OrdenRow = Omit<OrdenCompra, 'items' | 'codigo_producto' | 'nombre_producto' | 'cantidad' | 'descripcion' | 'proveedor_nit' | 'proveedor_nombre'>
 
@@ -175,7 +178,7 @@ export async function fetchOrdenesCompraPendientesCount(): Promise<number> {
 
 function mapPedidoHeader(datos: GuardarOrdenCompraPedidoInput, userId: string) {
   return {
-    titulo: datos.titulo.trim(),
+    titulo: datos.titulo.trim() || null,
     fecha_pedido: datos.fecha_pedido,
     fecha_vencimiento: datos.fecha_vencimiento?.trim() || null,
     observaciones: datos.observaciones.trim() || null,
@@ -186,7 +189,28 @@ function mapPedidoHeader(datos: GuardarOrdenCompraPedidoInput, userId: string) {
   }
 }
 
-function mapItemsInsert(ordenId: number, datos: GuardarOrdenCompraPedidoInput) {
+type RecepcionPrevia = { cantidad_recibida: number | null; cantidad_recibida_at: string | null }
+
+/**
+ * La fecha de recepción solo cambia cuando cambia la cantidad recibida: al
+ * reemplazar las líneas al editar se conserva la fecha de las que no cambiaron.
+ */
+function fechaRecepcion(
+  nueva: number | null | undefined,
+  previa: RecepcionPrevia | undefined
+): string | null {
+  if (nueva == null) return null
+  if (previa && Number(previa.cantidad_recibida) === Number(nueva) && previa.cantidad_recibida_at) {
+    return previa.cantidad_recibida_at
+  }
+  return new Date().toISOString()
+}
+
+function mapItemsInsert(
+  ordenId: number,
+  datos: GuardarOrdenCompraPedidoInput,
+  previas?: Map<number, RecepcionPrevia>
+) {
   return datos.items.map((item, idx) => ({
     orden_id: ordenId,
     codigo_producto: item.codigo_producto,
@@ -194,6 +218,7 @@ function mapItemsInsert(ordenId: number, datos: GuardarOrdenCompraPedidoInput) {
     cantidad: item.cantidad,
     precio_unitario: item.precio_unitario,
     cantidad_recibida: item.cantidad_recibida ?? null,
+    cantidad_recibida_at: fechaRecepcion(item.cantidad_recibida, previas?.get(idx + 1)),
     descripcion: item.descripcion,
     proveedor_nit: item.proveedor_nit.trim() || null,
     proveedor_nombre: item.proveedor_nombre.trim() || null,
@@ -327,10 +352,21 @@ export async function actualizarOrdenCompraPedido(
     return { ok: false, error: 'No se pudo actualizar la orden.' }
   }
 
+  const { data: previasRows } = await supabase
+    .from('orden_compra_items')
+    .select('orden_linea, cantidad_recibida, cantidad_recibida_at')
+    .eq('orden_id', id)
+  const previas = new Map<number, RecepcionPrevia>(
+    (previasRows ?? []).map((r) => [
+      Number(r.orden_linea),
+      { cantidad_recibida: r.cantidad_recibida, cantidad_recibida_at: r.cantidad_recibida_at },
+    ])
+  )
+
   await supabase.from('orden_compra_items').delete().eq('orden_id', id)
   const { error: itemsError } = await supabase
     .from('orden_compra_items')
-    .insert(mapItemsInsert(id, parsed.data))
+    .insert(mapItemsInsert(id, parsed.data, previas))
 
   if (itemsError) {
     console.error('Failed to update orden_compra_items:', itemsError)
@@ -555,4 +591,178 @@ export async function enviarOrdenASiigo(ordenId: number): Promise<OrdenCompraRes
 
 export async function reintentarEnvioSiigo(ordenId: number): Promise<OrdenCompraResultado> {
   return enviarOrdenASiigo(ordenId)
+}
+
+
+/**
+ * Parciales por número: suma lo que llegó ahora a la cantidad recibida de la
+ * línea y registra la fecha. Pedidas 100, llegan 50 → recibida 50, restan 50.
+ */
+export async function registrarRecepcionItem(
+  ordenId: number,
+  itemId: number,
+  cantidadLlegada: number
+): Promise<OrdenCompraResultado> {
+  if (!Number.isFinite(cantidadLlegada) || cantidadLlegada <= 0) {
+    return { ok: false, error: 'Indica una cantidad mayor a cero.' }
+  }
+
+  if (isDevBypassActive()) {
+    const orden = getDevPreviewOrdenById(ordenId)
+    const item = orden?.items.find((i) => i.id === itemId)
+    if (!orden || !item || orden.estado !== 'en_curso') {
+      return { ok: false, error: 'Esta orden ya no admite recepciones.' }
+    }
+    const total = Number(item.cantidad_recibida ?? 0) + cantidadLlegada
+    if (total > Number(item.cantidad)) {
+      return { ok: false, error: `Supera lo pedido (faltan ${Number(item.cantidad) - Number(item.cantidad_recibida ?? 0)}).` }
+    }
+    devPreviewUpdateOrden(ordenId, {
+      items: orden.items.map((i) =>
+        i.id === itemId
+          ? { ...i, cantidad_recibida: total, cantidad_recibida_at: new Date().toISOString() }
+          : i
+      ),
+    })
+    return { ok: true }
+  }
+
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sesión expirada.' }
+
+  const supabase = await createClient()
+  const { data: orden } = await supabase
+    .from('ordenes_compra')
+    .select('estado')
+    .eq('id', ordenId)
+    .maybeSingle()
+  if (!orden || orden.estado !== 'en_curso') {
+    return { ok: false, error: 'Esta orden ya no admite recepciones.' }
+  }
+
+  const { data: item } = await supabase
+    .from('orden_compra_items')
+    .select('cantidad, cantidad_recibida')
+    .eq('id', itemId)
+    .eq('orden_id', ordenId)
+    .maybeSingle()
+  if (!item) return { ok: false, error: 'No se encontró la línea.' }
+
+  const pedida = Number(item.cantidad)
+  const previa = Number(item.cantidad_recibida ?? 0)
+  const total = previa + cantidadLlegada
+  if (total > pedida) {
+    return { ok: false, error: `Supera lo pedido (faltan ${pedida - previa}).` }
+  }
+
+  const ahora = new Date().toISOString()
+  const { error } = await supabase
+    .from('orden_compra_items')
+    .update({ cantidad_recibida: total, cantidad_recibida_at: ahora })
+    .eq('id', itemId)
+  if (error) {
+    console.error('Failed to register reception:', error)
+    return { ok: false, error: 'No se pudo registrar la recepción.' }
+  }
+
+  await supabase.from('ordenes_compra').update({ updated_at: ahora }).eq('id', ordenId)
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
+// Autorrelleno del formulario de OC
+// ---------------------------------------------------------------------------
+
+/** Quita caracteres que rompen los filtros .or() de PostgREST y los comodines. */
+function limpiarBusqueda(q: string): string {
+  return q.replace(/[,()%*\\]/g, ' ').trim()
+}
+
+export async function buscarProductosOC(q: string): Promise<ProductoSugerido[]> {
+  const termino = limpiarBusqueda(q)
+  if (termino.length < 2) return []
+  if (isDevBypassActive()) return []
+
+  const user = await getSessionUser()
+  if (!user) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('productos')
+    .select('codigo_producto, nombre_producto, unidad_medida, categoria')
+    .or(`codigo_producto.ilike.%${termino}%,nombre_producto.ilike.%${termino}%`)
+    .order('codigo_producto', { ascending: true })
+    .limit(15)
+
+  if (error) {
+    console.error('Failed to search productos:', error)
+    return []
+  }
+  return (data ?? []) as ProductoSugerido[]
+}
+
+export async function obtenerUltimaCompraProducto(
+  codigo: string
+): Promise<UltimaCompraProducto | null> {
+  if (!codigo.trim() || isDevBypassActive()) return null
+
+  const user = await getSessionUser()
+  if (!user) return null
+
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('orden_compra_items')
+    .select('precio_unitario, proveedor_nit, proveedor_nombre, proveedor_email')
+    .eq('codigo_producto', codigo.trim())
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!data) return null
+  return {
+    precio_unitario: data.precio_unitario != null ? Number(data.precio_unitario) : null,
+    proveedor_nit: data.proveedor_nit,
+    proveedor_nombre: data.proveedor_nombre,
+    proveedor_email: data.proveedor_email,
+  }
+}
+
+/** Proveedores ya usados en órdenes anteriores, por NIT (prefijo) o por nombre. */
+export async function buscarProveedoresOC(q: string): Promise<ProveedorSugerido[]> {
+  const termino = limpiarBusqueda(q)
+  if (termino.length < 2) return []
+  if (isDevBypassActive()) return []
+
+  const user = await getSessionUser()
+  if (!user) return []
+
+  const esNumerico = /^[\d.\-\s]+$/.test(termino)
+  const soloDigitos = termino.replace(/\D/g, '')
+
+  const supabase = await createClient()
+  let consulta = supabase
+    .from('orden_compra_items')
+    .select('proveedor_nit, proveedor_nombre, proveedor_email')
+    .not('proveedor_nit', 'is', null)
+    .order('id', { ascending: false })
+    .limit(200)
+
+  consulta = esNumerico
+    ? consulta.ilike('proveedor_nit', `${soloDigitos}%`)
+    : consulta.ilike('proveedor_nombre', `%${termino}%`)
+
+  const { data, error } = await consulta
+  if (error) {
+    console.error('Failed to search proveedores:', error)
+    return []
+  }
+
+  // Más reciente primero; un solo registro por NIT.
+  const porNit = new Map<string, ProveedorSugerido>()
+  for (const r of data ?? []) {
+    const nit = (r.proveedor_nit ?? '').trim()
+    if (!nit || porNit.has(nit)) continue
+    porNit.set(nit, { nit, nombre: r.proveedor_nombre, email: r.proveedor_email })
+  }
+  return [...porNit.values()].slice(0, 8)
 }

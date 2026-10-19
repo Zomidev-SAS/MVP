@@ -14,7 +14,7 @@ export interface SiigoValidacionProveedor {
 
 export interface SiigoValidacionResultado {
   ok: boolean
-  producto?: SiigoValidacionProducto
+  producto?: SiigoValidacionProducto | null
   proveedor?: SiigoValidacionProveedor | null
   error?: string
 }
