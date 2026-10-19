@@ -87,8 +87,8 @@ function DetalleEventoFormulario({ evento }: { evento: EventoLineaTiempo }) {
     formatearFechaConHora(evento.fecha) ?? formatearFechaFormulario(evento.fecha) ?? 'Sin fecha'
 
   return (
-    <div className="rounded border bg-muted/30 px-2 py-1.5 text-[10px] leading-snug">
-      <p className="font-medium text-foreground">{evento.tipoLabel}</p>
+    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm leading-snug">
+      <p className="font-semibold text-foreground">{evento.tipoLabel}</p>
       <p className="text-muted-foreground">{fechaTexto}</p>
       {evento.ciudad && <p className="text-muted-foreground">{evento.ciudad}</p>}
       {evento.marca && <p className="text-muted-foreground">{evento.marca}</p>}
@@ -98,8 +98,8 @@ function DetalleEventoFormulario({ evento }: { evento: EventoLineaTiempo }) {
 
 function DetalleProceso({ proceso }: { proceso: VehiculoProceso }) {
   return (
-    <div className="rounded border bg-muted/30 px-2 py-1.5 text-[10px] leading-snug">
-      <p className="font-medium text-foreground">{proceso.titulo}</p>
+    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm leading-snug">
+      <p className="font-semibold text-foreground">{proceso.titulo}</p>
       <p className="text-muted-foreground">{proceso.procesoEstado}</p>
       {proceso.observaciones?.trim() && (
         <p className="mt-0.5 text-foreground">{proceso.observaciones}</p>
@@ -127,6 +127,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
     null
   )
   const [etapas, setEtapas] = useState<EtapaVehiculo[]>([])
+  const [eventos, setEventos] = useState<EventoLineaTiempo[]>([])
   const [procesos, setProcesos] = useState<VehiculoProceso[]>([])
   const [cargandoEventos, setCargandoEventos] = useState(false)
 
@@ -167,14 +168,16 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
   const cargarDetalleVehiculo = useCallback(async (chasis: string) => {
     setCargandoEventos(true)
     try {
-      const [eventos, listaProcesos] = await Promise.all([
+      const [listaEventos, listaProcesos] = await Promise.all([
         fetchLineaTiempoVehiculo(chasis),
         fetchProcesosVehiculo(chasis),
       ])
-      setEtapas(construirEtapasVehiculo(eventos))
+      setEventos(listaEventos)
+      setEtapas(construirEtapasVehiculo(listaEventos))
       setProcesos(listaProcesos)
     } catch (error) {
       console.error('Failed to load vehicle detail:', error)
+      setEventos([])
       setEtapas([])
       setProcesos([])
     } finally {
@@ -190,6 +193,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
 
   function limpiarSeleccion() {
     setVehiculoSeleccionado(null)
+    setEventos([])
     setEtapas([])
     setProcesos([])
     setTermino('')
@@ -222,6 +226,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
               setTermino(e.target.value)
               if (vehiculoSeleccionado && e.target.value !== vehiculoSeleccionado.chasis) {
                 setVehiculoSeleccionado(null)
+                setEventos([])
                 setEtapas([])
                 setProcesos([])
               }
@@ -238,7 +243,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
                 ? `Resultados ${buscando ? '' : `(${listaVisible.length})`}`
                 : `Vehículos recientes ${cargandoLista ? '' : `(${listaVisible.length})`}`}
             </p>
-            <div className="max-h-48 overflow-y-auto rounded-md border border-border">
+            <div className="max-h-80 overflow-y-auto rounded-md border border-border">
               {cargandoLista || buscando ? (
                 <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
                   <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
@@ -301,7 +306,8 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
               </p>
             ) : (
               <div className="overflow-x-auto pb-1">
-                <div className="grid min-w-[640px] grid-cols-4 gap-3">
+                <div className="relative grid min-w-[880px] grid-cols-4 gap-5">
+                  <div aria-hidden="true" className="absolute left-[12.5%] right-[12.5%] top-7 h-0.5 bg-border" />
                   {etapas.map((etapa) => {
                     const Icono = iconoPorEtapa(etapa.etapa)
                     const esProceso = etapa.etapa === 'En proceso'
@@ -310,17 +316,17 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
                       <div key={etapa.etapa} className="flex min-w-0 flex-col items-center">
                         <span
                           className={cn(
-                            'flex h-9 w-9 items-center justify-center rounded-full border-2',
+                            'relative z-10 flex h-14 w-14 items-center justify-center rounded-full border-2 bg-background',
                             etapa.completada || esProceso
                               ? 'border-primary bg-primary/15 text-primary'
                               : 'border-dashed border-border bg-muted text-muted-foreground'
                           )}
                         >
-                          <Icono aria-hidden="true" className="h-4 w-4" />
+                          <Icono aria-hidden="true" className="h-6 w-6" />
                         </span>
                         <span
                           className={cn(
-                            'mt-1 text-center text-[11px] font-medium',
+                            'mt-2 text-center text-base font-semibold',
                             etapa.completada || esProceso
                               ? 'text-foreground'
                               : 'text-muted-foreground'
@@ -329,11 +335,11 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
                           {etapa.etapa}
                         </span>
 
-                        <div className="mt-2 w-full space-y-1.5">
+                        <div className="mt-3 w-full space-y-2">
                           {esProceso ? (
                             <>
                               {procesos.length === 0 ? (
-                                <p className="text-center text-[10px] text-muted-foreground">
+                                <p className="text-center text-sm text-muted-foreground">
                                   {textoEtapaSinFormulario(etapa.etapa)}
                                 </p>
                               ) : (
@@ -346,7 +352,7 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  className="mt-1 h-7 w-full text-[10px]"
+                                  className="mt-1 h-9 w-full text-sm"
                                   onClick={() => setProcesoDialogAbierto(true)}
                                 >
                                   <Plus aria-hidden="true" className="mr-1 h-3 w-3" />
@@ -357,17 +363,47 @@ export function VehiculoTimelineCard({ rolActual }: { rolActual: Role }) {
                           ) : etapa.evento ? (
                             <DetalleEventoFormulario evento={etapa.evento} />
                           ) : etapa.completada ? (
-                            <p className="text-center text-[10px] text-muted-foreground">
+                            <p className="text-center text-sm text-muted-foreground">
                               {textoEtapaSinFormulario(etapa.etapa)}
                             </p>
                           ) : (
-                            <p className="text-center text-[10px] text-muted-foreground">Pendiente</p>
+                            <p className="text-center text-sm text-muted-foreground">Pendiente</p>
                           )}
                         </div>
                       </div>
                     )
                   })}
                 </div>
+              </div>
+            )}
+
+            {!cargandoEventos && (eventos.length > 0 || procesos.length > 0) && (
+              <div className="space-y-2 border-t pt-4">
+                <p className="text-sm font-semibold">Cronología completa</p>
+                <ol className="space-y-2 border-l-2 border-border pl-4">
+                  {[
+                    ...eventos.map((e) => ({
+                      key: `f-${e.id}`,
+                      fecha: e.fecha,
+                      nodo: <DetalleEventoFormulario evento={e} />,
+                    })),
+                    ...procesos.map((p) => ({
+                      key: `p-${p.id}`,
+                      fecha: p.creadoEn,
+                      nodo: <DetalleProceso proceso={p} />,
+                    })),
+                  ]
+                    .sort((a, b) => (a.fecha ?? '').localeCompare(b.fecha ?? ''))
+                    .map((item) => (
+                      <li key={item.key} className="relative">
+                        <span
+                          aria-hidden="true"
+                          className="absolute -left-[22px] top-3 h-2.5 w-2.5 rounded-full bg-primary"
+                        />
+                        {item.nodo}
+                      </li>
+                    ))}
+                </ol>
               </div>
             )}
           </div>

@@ -189,52 +189,62 @@ async function enviarConResend(
 
 function renderPlantilla(items: FilaCorreo[]): string {
   const base = Deno.env.get('PANEL_BASE_URL') ?? 'https://carrera.zomidev.com'
-  const navy = '#1F3A5C'
-  const amber = '#BE6A22'
-  const paper = '#E9ECEC'
+  const rojo = '#D91F26'
+  const negro = '#111111'
+  const fondo = '#F4F4F5'
+  const linea = '#E4E4E7'
+  const fuente = "Inter,'Helvetica Neue',Arial,sans-serif"
 
   const bloques = items.map((it) => `
     <tr>
-      <td style="padding:16px 0;border-bottom:1px solid #D7DBDC;">
-        <p style="margin:0 0 6px 0;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:${navy};">
+      <td style="padding:22px 0;border-bottom:1px solid ${linea};">
+        <p style="margin:0 0 8px 0;font-family:${fuente};font-size:17px;font-weight:700;color:${negro};line-height:1.3;">
           ${escapeHtml(it.asunto)}
         </p>
-        <p style="margin:0;font-family:Arial,sans-serif;font-size:13.5px;color:#4B5560;line-height:1.5;">
+        <p style="margin:0;font-family:${fuente};font-size:14px;color:#3F3F46;line-height:1.6;">
           ${escapeHtml(it.cuerpo).replace(/\n/g, '<br>')}
         </p>
         ${it.enlace ? `
         <a href="${base}${it.enlace}"
-           style="display:inline-block;margin-top:10px;padding:8px 16px;background:${amber};
-                  color:#fff;text-decoration:none;font-family:Arial,sans-serif;font-size:12.5px;
-                  font-weight:700;border-radius:3px;">
+           style="display:inline-block;margin-top:16px;padding:11px 22px;background:${rojo};
+                  color:#FFFFFF;text-decoration:none;font-family:${fuente};font-size:13px;
+                  font-weight:700;letter-spacing:0.3px;border-radius:6px;">
           Ver en el panel
         </a>` : ''}
       </td>
     </tr>`).join('')
 
-  return `
-  <!DOCTYPE html>
+  return `<!DOCTYPE html>
   <html lang="es">
-  <body style="margin:0;padding:24px;background:${paper};">
-    <table role="presentation" width="100%" style="max-width:560px;margin:0 auto;background:#FCFCFB;
-           border:1px solid #CBD1D3;border-radius:2px;" cellpadding="0" cellspacing="0">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body style="margin:0;padding:32px 16px;background:${fondo};">
+    <table role="presentation" width="100%" style="max-width:600px;margin:0 auto;background:#FFFFFF;
+           border-radius:10px;overflow:hidden;border:1px solid ${linea};" cellpadding="0" cellspacing="0">
       <tr>
-        <td style="padding:20px 24px;background:${navy};">
-          <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;letter-spacing:1px;
-                     text-transform:uppercase;color:#fff;">Panel Carrera Arango</p>
+        <td align="center" style="padding:28px 24px 20px 24px;background:#FFFFFF;">
+          <img src="${base}/logo.png" alt="Carrera Arango Transformaciones" width="96"
+               style="display:block;width:96px;height:auto;border:0;">
         </td>
       </tr>
+      <tr><td style="height:5px;background:${rojo};font-size:0;line-height:0;">&nbsp;</td></tr>
       <tr>
-        <td style="padding:4px 24px 8px 24px;">
+        <td style="padding:6px 32px 12px 32px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             ${bloques}
           </table>
         </td>
       </tr>
       <tr>
-        <td style="padding:16px 24px;border-top:1px solid #E6E8E9;">
-          <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#8A9199;">
-            Este correo se generó automáticamente desde el panel de Carrera Arango.
+        <td style="padding:20px 32px;background:${negro};">
+          <p style="margin:0 0 4px 0;font-family:${fuente};font-size:12px;font-weight:700;color:#FFFFFF;">
+            Panel Carrera Arango
+          </p>
+          <p style="margin:0;font-family:${fuente};font-size:11px;color:#A1A1AA;line-height:1.5;">
+            Este correo se generó automáticamente desde el panel de Carrera Arango.<br>
             Zomidev S.A.S. · "El lujo del detalle"
           </p>
         </td>
