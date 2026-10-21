@@ -42,8 +42,8 @@ const ETIQUETAS_REGLA: Record<string, { nombre: string; descripcion: string; hor
   },
   siigo_sync_catalogo: {
     nombre: 'Catálogo Siigo',
-    descripcion: 'Sincroniza catálogo de productos y proveedores con Siigo.',
-    horario: 'Diario 2:30 a.m.',
+    descripcion: 'Baja lo nuevo de Siigo (productos y proveedores) y lo compara con el panel para validar.',
+    horario: 'Diario 12:00 a.m.',
   },
   enviar_correos: {
     nombre: 'Cola de correos',
