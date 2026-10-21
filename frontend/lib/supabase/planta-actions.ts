@@ -8,6 +8,7 @@ import { PREVIEW_DASHBOARD_GRAFICAS } from '@/lib/dev/preview-dashboard-graficas
 import { fetchProductosBajoStock } from '@/lib/supabase/inventario-actions'
 import type { ProductoBajoStock } from '@/components/dashboard/LowStockList'
 import type { VehiculoPorEtapaPunto } from '@/lib/types/dashboard-graficas'
+import type { DatosPlantaCompras } from '@/lib/types/planta-compras'
 import type { EntradaSalidaDia } from '@/lib/types/dashboard'
 import { getDevPreviewFormulariosData } from '@/lib/dev/preview-formularios-data'
 import { getDevPreviewProcesosVehiculo } from '@/lib/dev/preview-procesos-vehiculo-data'
@@ -52,18 +53,35 @@ export interface DatosPlanta {
   productosStockBajo: ProductoBajoStock[]
 }
 
-export async function generarTokenPlanta(): Promise<string> {
-  const auth = await requireRole(['supervisor'])
-  if (!auth.ok) throw new Error(auth.error)
+const TIPO_PLANTA_GENERAL = 'planta-kiosk'
+const TIPO_PLANTA_COMPRAS = 'planta-compras'
+
+async function firmarTokenPlanta(tipo: string): Promise<string> {
   const secret = getSecretParaFirmar()
-  return new SignJWT({ tipo: 'planta-kiosk' })
+  return new SignJWT({ tipo })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('30d')
     .sign(secret)
 }
 
-export async function verificarTokenPlanta(token: string): Promise<boolean> {
+export async function generarTokenPlanta(): Promise<string> {
+  const auth = await requireRole(['supervisor'])
+  if (!auth.ok) throw new Error(auth.error)
+  return firmarTokenPlanta(TIPO_PLANTA_GENERAL)
+}
+
+/** Enlace de la TV de compras: lo pueden generar compras y supervisor. */
+export async function generarTokenPlantaCompras(): Promise<string> {
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) throw new Error(auth.error)
+  return firmarTokenPlanta(TIPO_PLANTA_COMPRAS)
+}
+
+export async function verificarTokenPlanta(
+  token: string,
+  tipo: string = TIPO_PLANTA_GENERAL
+): Promise<boolean> {
   // La TV del taller corre con DEV_SKIP_AUTH en entornos de desarrollo/demo
   // sin que exista un flujo para generar un JWT firmado real ahí — igual
   // patrón que el resto del código: isDevBypassActive() evita exigir
@@ -80,8 +98,9 @@ export async function verificarTokenPlanta(token: string): Promise<boolean> {
     const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] })
     // Rechaza tokens que verifican correctamente pero no fueron emitidos
     // por generarTokenPlanta (ej. otro JWT firmado con la misma variable
-    // de entorno reutilizada en otra parte del sistema).
-    return payload.tipo === 'planta-kiosk'
+    // de entorno reutilizada en otra parte del sistema) o que son de otra
+    // pantalla: un token de la TV del taller no abre la de compras.
+    return payload.tipo === tipo
   } catch {
     return false
   }
@@ -219,4 +238,75 @@ export async function fetchDetalleVehiculoPlanta(
     creadoEn: row.creado_en,
   }))
   return { eventos, procesos }
+}
+
+
+// ── Modo planta de compras (TV de compras, sin sesión) ──────────────────────
+
+const DATOS_PLANTA_COMPRAS_VACIOS: DatosPlantaCompras = {
+  kpis: { en_curso: 0, vencidas: 0, pendientes_firma: 0, con_entregas_parciales: 0 },
+  ordenes: [],
+  productosStockBajo: [],
+}
+
+interface RespuestaRpcPlantaCompras {
+  kpis: DatosPlantaCompras['kpis']
+  ordenes: DatosPlantaCompras['ordenes']
+  productos_stock_bajo: ProductoBajoStock[]
+}
+
+/**
+ * Datos de la TV de compras. Igual que la del taller, no tiene sesión: se
+ * protege con un token firmado (tipo 'planta-compras') que también verifica
+ * la base dentro de rpc_planta_compras. No devuelve precios ni valores.
+ */
+export async function fetchDatosPlantaCompras(token: string): Promise<DatosPlantaCompras> {
+  const valido = await verificarTokenPlanta(token, TIPO_PLANTA_COMPRAS)
+  if (!valido) return DATOS_PLANTA_COMPRAS_VACIOS
+
+  if (isDevBypassActive()) {
+    return {
+      kpis: { en_curso: 2, vencidas: 1, pendientes_firma: 1, con_entregas_parciales: 1 },
+      ordenes: [
+        {
+          id: 1, numero: 'OC-1-3195', proveedor: 'MATRICES TROQUELES Y MOLDES MATROMOL',
+          fecha_pedido: '2026-01-26', fecha_vencimiento: '2026-02-10', requiere_firma: true,
+          firmada: false, pedidas: 48, recibidas: 16, ultima_entrega: null,
+        },
+        {
+          id: 2, numero: null, proveedor: 'COAUTOPARTES', fecha_pedido: '2026-01-20',
+          fecha_vencimiento: null, requiere_firma: false, firmada: false, pedidas: 100,
+          recibidas: 0, ultima_entrega: null,
+        },
+      ],
+      productosStockBajo: await fetchProductosBajoStock(5),
+    }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('rpc_planta_compras', { p_token: token })
+  if (error || !data) {
+    console.error('Failed to load rpc_planta_compras:', error)
+    return DATOS_PLANTA_COMPRAS_VACIOS
+  }
+
+  const r = data as RespuestaRpcPlantaCompras
+  return {
+    kpis: {
+      en_curso: Number(r.kpis?.en_curso ?? 0),
+      vencidas: Number(r.kpis?.vencidas ?? 0),
+      pendientes_firma: Number(r.kpis?.pendientes_firma ?? 0),
+      con_entregas_parciales: Number(r.kpis?.con_entregas_parciales ?? 0),
+    },
+    ordenes: (r.ordenes ?? []).map((o) => ({
+      ...o,
+      pedidas: Number(o.pedidas),
+      recibidas: Number(o.recibidas),
+    })),
+    productosStockBajo: (r.productos_stock_bajo ?? []).map((p) => ({
+      codigo_producto: p.codigo_producto,
+      nombre_producto: p.nombre_producto,
+      saldo: Number(p.saldo),
+    })),
+  }
 }

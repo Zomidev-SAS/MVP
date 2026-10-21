@@ -271,11 +271,18 @@ export interface SiigoProductoCatalogo {
   precio_lista: number | null
 }
 
-export async function listarProductosSiigo(page: number, pageSize = 100): Promise<{
+export async function listarProductosSiigo(
+  page: number,
+  pageSize = 100,
+  actualizadoDesde?: string
+): Promise<{
   productos: SiigoProductoCatalogo[]
   totalPaginas: number
 }> {
-  const res = await siigoGet('/v1/products', { page: String(page), page_size: String(pageSize) })
+  const params: Record<string, string> = { page: String(page), page_size: String(pageSize) }
+  // Bajada incremental: solo lo creado o modificado desde esa fecha (ISO).
+  if (actualizadoDesde) params.updated_start = actualizadoDesde
+  const res = await siigoGet('/v1/products', params)
   if (!res.ok) {
     const body = await res.text()
     throw new Error(`Siigo products (${res.status}): ${body.slice(0, 200)}`)
@@ -307,11 +314,17 @@ export async function listarProductosSiigo(page: number, pageSize = 100): Promis
   return { productos, totalPaginas }
 }
 
-export async function listarProveedoresSiigo(page: number, pageSize = 100): Promise<{
+export async function listarProveedoresSiigo(
+  page: number,
+  pageSize = 100,
+  actualizadoDesde?: string
+): Promise<{
   proveedores: SiigoProveedorResumen[]
   totalPaginas: number
 }> {
-  const res = await siigoGet('/v1/customers', { page: String(page), page_size: String(pageSize) })
+  const params: Record<string, string> = { page: String(page), page_size: String(pageSize) }
+  if (actualizadoDesde) params.updated_start = actualizadoDesde
+  const res = await siigoGet('/v1/customers', params)
   if (!res.ok) {
     const body = await res.text()
     throw new Error(`Siigo customers (${res.status}): ${body.slice(0, 200)}`)

@@ -1,4 +1,5 @@
 import { RoleGuard } from '@/components/shared/RoleGuard'
+import { AbrirModoPlantaButton } from '@/components/dashboard/AbrirModoPlantaButton'
 import { ComprasTable } from '@/components/compras/ComprasTable'
 import { SiigoCatalogoDiferencias } from '@/components/compras/SiigoCatalogoDiferencias'
 import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
@@ -36,12 +37,15 @@ async function ComprasContent({ searchParams }: ComprasPageProps) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Compras — pedidos</h1>
-        <p className="text-sm text-muted-foreground">
-          Sube la orden de compra que genera Siigo (PDF) para visualizarla aquí; el administrador la
-          firma y se avisa por correo. También puedes registrar entregas parciales por cantidad.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Compras — pedidos</h1>
+          <p className="text-sm text-muted-foreground">
+            Sube la orden de compra que genera Siigo (PDF) para visualizarla aquí; el administrador la
+            firma y se avisa por correo. También puedes registrar entregas parciales por cantidad.
+          </p>
+        </div>
+        {puedeGestionarSiigo && <AbrirModoPlantaButton tipo="compras" />}
       </div>
       <ComprasTable
         productoInicial={productoInicial}
