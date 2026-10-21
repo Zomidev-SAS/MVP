@@ -77,7 +77,10 @@ export async function fetchAutomatizaciones(): Promise<AutomatizacionEstado[]> {
 
   if (error) throw new Error(`No se pudo cargar el estado de automatizaciones: ${error.message}`)
 
-  return ((data ?? []) as FilaLogAutomatizacion[]).map((fila) => {
+  // Las pruebas en seco (regla *_prueba) no son automatizaciones del sistema.
+  const filas = ((data ?? []) as FilaLogAutomatizacion[]).filter((f) => !f.regla.endsWith('_prueba'))
+
+  return filas.map((fila) => {
     const etiqueta = ETIQUETAS_REGLA[fila.regla]
     return {
       id: fila.regla,
