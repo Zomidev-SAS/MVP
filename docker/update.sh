@@ -45,13 +45,12 @@ echo "==> docker/.env restaurado"
 cd "$SCRIPT_DIR"
 "${COMPOSE[@]}" up -d --build
 
-# La configuración de nginx es un volumen: si cambió, el contenedor sigue
-# corriendo con la anterior hasta recargarlo.
-if "${COMPOSE[@]}" exec -T nginx nginx -t >/dev/null 2>&1; then
-  "${COMPOSE[@]}" exec -T nginx nginx -s reload && echo "==> nginx recargado"
-else
-  echo "AVISO: la configuración de nginx no es válida, no se recargó."
-fi
+# La configuración de nginx se monta como archivos sueltos: al hacer git pull
+# esos archivos se reemplazan y el contenedor sigue viendo la versión anterior
+# (ni siquiera `nginx -s reload` la recoge). Se recrea el contenedor de nginx
+# para que siempre use la configuración del repo (corte de ~2 s).
+"${COMPOSE[@]}" up -d --force-recreate nginx
+echo "==> nginx recreado con la configuración del repo"
 
 echo "==> Estado"
 "${COMPOSE[@]}" ps
