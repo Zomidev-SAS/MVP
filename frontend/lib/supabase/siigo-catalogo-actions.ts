@@ -84,3 +84,55 @@ export async function marcarDiferenciaSiigoRevisada(
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
+
+
+type ResultadoSimple = { ok: true } | { ok: false; error: string }
+
+/** Lleva al panel el dato de Siigo de UNA diferencia (agrega el producto o corrige el nombre). */
+export async function aplicarDiferenciaSiigo(id: number): Promise<ResultadoSimple> {
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+  if (isDevBypassActive()) return { ok: true }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('rpc_aplicar_diferencia_siigo', { p_id: id })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+/** Aplica en bloque todas las diferencias pendientes de un tipo y campo. */
+export async function aplicarDiferenciasSiigo(
+  tipo: 'producto' | 'proveedor',
+  campo: string
+): Promise<{ ok: true; aplicadas: number; omitidas: number } | { ok: false; error: string }> {
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+  if (isDevBypassActive()) return { ok: true, aplicadas: 0, omitidas: 0 }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('rpc_aplicar_diferencias_siigo', {
+    p_tipo: tipo,
+    p_campo: campo,
+  })
+  if (error) return { ok: false, error: error.message }
+  const r = data as { aplicadas?: number; omitidas?: number } | null
+  return { ok: true, aplicadas: Number(r?.aplicadas ?? 0), omitidas: Number(r?.omitidas ?? 0) }
+}
+
+/** Ignora en bloque (sin tocar el panel) las diferencias pendientes de un tipo y campo. */
+export async function marcarDiferenciasSiigoRevisadas(
+  tipo: 'producto' | 'proveedor',
+  campo: string
+): Promise<{ ok: true; revisadas: number } | { ok: false; error: string }> {
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+  if (isDevBypassActive()) return { ok: true, revisadas: 0 }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('rpc_marcar_diferencias_siigo_revisadas', {
+    p_tipo: tipo,
+    p_campo: campo,
+  })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, revisadas: Number((data as { revisadas?: number } | null)?.revisadas ?? 0) }
+}

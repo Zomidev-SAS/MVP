@@ -97,10 +97,14 @@ Deno.serve(async (req) => {
         vistosProductos++
         const local = productosLocales.get(prod.code)
         if (local === undefined) {
-          agregar({
-            tipo: 'producto', codigo: prod.code, campo: 'existencia',
-            valor_panel: null, valor_siigo: 'existe en Siigo, no en el panel',
-          })
+          // Un producto inactivo en Siigo no le hace falta al panel. Se guarda el
+          // nombre para poder agregarlo al catálogo con un clic.
+          if (prod.active) {
+            agregar({
+              tipo: 'producto', codigo: prod.code, campo: 'existencia',
+              valor_panel: null, valor_siigo: prod.name,
+            })
+          }
         } else if (normalizar(local) !== normalizar(prod.name)) {
           agregar({
             tipo: 'producto', codigo: prod.code, campo: 'nombre',
