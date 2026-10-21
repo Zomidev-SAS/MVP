@@ -45,6 +45,14 @@ echo "==> docker/.env restaurado"
 cd "$SCRIPT_DIR"
 "${COMPOSE[@]}" up -d --build
 
+# La configuración de nginx es un volumen: si cambió, el contenedor sigue
+# corriendo con la anterior hasta recargarlo.
+if "${COMPOSE[@]}" exec -T nginx nginx -t >/dev/null 2>&1; then
+  "${COMPOSE[@]}" exec -T nginx nginx -s reload && echo "==> nginx recargado"
+else
+  echo "AVISO: la configuración de nginx no es válida, no se recargó."
+fi
+
 echo "==> Estado"
 "${COMPOSE[@]}" ps
 
