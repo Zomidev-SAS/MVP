@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
 
   const { data: orden, error: ordenErr } = await admin
     .from('ordenes_compra')
-    .select('id, titulo, fecha_pedido, proveedor_nit, observaciones, medio_pago, siigo_id, siigo_estado')
+    .select('id, titulo, fecha_pedido, proveedor_nit, observaciones, medio_pago, siigo_id, siigo_estado, factura_proveedor_prefijo, factura_proveedor_numero')
     .eq('id', ordenId)
     .maybeSingle()
 
@@ -68,6 +68,8 @@ Deno.serve(async (req) => {
     proveedor_nit: orden.proveedor_nit,
     observaciones: orden.observaciones,
     medio_pago: orden.medio_pago ?? null,
+    factura_proveedor_prefijo: orden.factura_proveedor_prefijo ?? null,
+    factura_proveedor_numero: orden.factura_proveedor_numero ?? null,
     items: (items ?? []).map((it) => ({
       codigo_producto: it.codigo_producto,
       descripcion: it.descripcion,

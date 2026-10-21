@@ -161,6 +161,9 @@ export interface OrdenCompraParaSiigo {
   observaciones: string | null
   // 'credito' | 'contado' — usar SIIGO_PAYMENT_TYPE_ID_CREDITO/CONTADO si están configurados
   medio_pago: string | null
+  // Factura que emitió el proveedor: Siigo la exige para crear la factura de compra.
+  factura_proveedor_prefijo?: string | null
+  factura_proveedor_numero?: string | null
   items: SiigoItemCompra[]
 }
 
@@ -219,12 +222,24 @@ export async function crearDocumentoCompraSiigo(
     )
   }
 
+  const numeroFacturaProveedor = orden.factura_proveedor_numero?.trim()
+  if (!numeroFacturaProveedor) {
+    throw new Error(
+      `La orden ${orden.id} no tiene el número de la factura del proveedor. ` +
+      'Siigo lo exige (provider_invoice): agrégalo en el panel y reintenta.'
+    )
+  }
+
   const payments = buildPayments(orden.medio_pago)
 
   const body: Record<string, unknown> = {
     document: { id: Number(tipoDocumentoCompra()) },
     date: orden.fecha_pedido ?? new Date().toISOString().slice(0, 10),
     supplier: orden.proveedor_nit ? { identification: orden.proveedor_nit } : undefined,
+    provider_invoice: {
+      ...(orden.factura_proveedor_prefijo?.trim() ? { prefix: orden.factura_proveedor_prefijo.trim() } : {}),
+      number: numeroFacturaProveedor,
+    },
     observations: [
       orden.titulo,
       orden.observaciones,

@@ -53,6 +53,7 @@ import { ComprasPedidoDialog } from '@/components/compras/ComprasPedidoDialog'
 import { SiigoStatusBadge, ETIQUETA_SIIGO_SYNC } from '@/components/compras/SiigoStatusBadge'
 import { RecepcionLineas } from '@/components/compras/RecepcionLineas'
 import { DocumentoOc } from '@/components/compras/DocumentoOc'
+import { FacturaProveedorDialog, type ModoFacturaProveedor } from '@/components/compras/FacturaProveedorDialog'
 import { subirOrdenCompraDocumento } from '@/lib/supabase/ordenes-compra-documento-actions'
 import type { EstadoSyncSiigo } from '@/lib/types/siigo'
 
@@ -97,6 +98,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
   const [textoEntrega, setTextoEntrega] = useState('')
   const [enviandoSiigoId, setEnviandoSiigoId] = useState<number | null>(null)
   const [subiendoDocumento, setSubiendoDocumento] = useState(false)
+  const [dialogoFactura, setDialogoFactura] = useState<{ orden: OrdenCompra; modo: ModoFacturaProveedor } | null>(null)
   const inputDocumentoRef = useRef<HTMLInputElement>(null)
 
   const recargar = useCallback(async () => {
@@ -134,7 +136,14 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
   const pendientes = filtradas.filter((o) => o.estado === 'en_curso')
   const otras = filtradas.filter((o) => o.estado !== 'en_curso')
 
-  async function cambiarEstado(id: number, estado: EstadoOrdenCompra) {
+  async function cambiarEstado(orden: OrdenCompra, estado: EstadoOrdenCompra) {
+    // Las OC creadas a mano generan la factura de compra en Siigo, que exige el
+    // número de la factura del proveedor: se pide antes de marcarlas listas.
+    if (estado === 'listo' && orden.origen !== 'documento_siigo' && !orden.siigo_id) {
+      setDialogoFactura({ orden, modo: 'listo' })
+      return
+    }
+    const id = orden.id
     const res = await actualizarEstadoOrdenCompra(id, estado)
     if (res.ok) {
       if (estado === 'listo') {
@@ -165,6 +174,11 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
   }
 
   async function handleEnviarSiigo(orden: OrdenCompra, esReintento: boolean) {
+    // Sin el número de la factura del proveedor Siigo rechaza el envío.
+    if (!orden.factura_proveedor_numero?.trim()) {
+      setDialogoFactura({ orden, modo: 'reintento' })
+      return
+    }
     setEnviandoSiigoId(orden.id)
     try {
       const res = esReintento ? await reintentarEnvioSiigo(orden.id) : await enviarOrdenASiigo(orden.id)
@@ -258,7 +272,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
               CLASE_ESTADO_OC[orden.estado]
             )}
             value={orden.estado}
-            onChange={(e) => cambiarEstado(orden.id, e.target.value as EstadoOrdenCompra)}
+            onChange={(e) => cambiarEstado(orden, e.target.value as EstadoOrdenCompra)}
           >
             {ESTADOS_ORDEN_COMPRA.map((e) => (
               <option key={e} value={e}>
@@ -531,6 +545,19 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
           </>
         )}
       </p>
+
+      <FacturaProveedorDialog
+        orden={dialogoFactura?.orden ?? null}
+        modo={dialogoFactura?.modo ?? 'listo'}
+        onOpenChange={(abierto) => {
+          if (!abierto) setDialogoFactura(null)
+        }}
+        onEnviada={() => {
+          // El envío a Siigo es asíncrono: se vuelve a consultar para ver el resultado.
+          recargar()
+          setTimeout(() => recargar(), 6000)
+        }}
+      />
 
       <ComprasPedidoDialog
         abierto={dialogAbierto}

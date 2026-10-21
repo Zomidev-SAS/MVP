@@ -28,7 +28,7 @@ import {
 } from '@/lib/types/orden-compra'
 
 const SELECT_ORDEN =
-  'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, medio_pago, creado_por, descargada_siigo_at, finalizada_at, siigo_id, siigo_estado, siigo_referencia, numero_oc, origen, documento_path, documento_firmado_path, firmada_at, firmada_por, total_pagar, created_at, updated_at'
+  'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, medio_pago, creado_por, descargada_siigo_at, finalizada_at, siigo_id, siigo_estado, siigo_referencia, numero_oc, factura_proveedor_prefijo, factura_proveedor_numero, origen, documento_path, documento_firmado_path, firmada_at, firmada_por, total_pagar, created_at, updated_at'
 
 const SELECT_ITEM =
   'id, orden_id, codigo_producto, nombre_producto, cantidad, precio_unitario, cantidad_recibida, cantidad_recibida_at, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
@@ -421,9 +421,15 @@ export async function actualizarOrdenCompraPedido(
  * Requiere rol compras o supervisor (validado en el RPC del backend).
  * En dev bypass solo actualiza el estado local sin llamar al backend.
  */
+export interface FacturaProveedorInput {
+  prefijo?: string | null
+  numero?: string | null
+}
+
 export async function marcarOcListoConSiigo(
   id: number,
-  medioPago?: 'credito' | 'contado' | null
+  medioPago?: 'credito' | 'contado' | null,
+  factura?: FacturaProveedorInput
 ): Promise<OrdenCompraResultado> {
   const ahora = new Date().toISOString()
 
@@ -440,6 +446,8 @@ export async function marcarOcListoConSiigo(
   const { data, error } = await supabase.rpc('rpc_marcar_oc_listo', {
     p_orden_id: id,
     p_medio_pago: medioPago ?? null,
+    p_factura_prefijo: factura?.prefijo?.trim() || null,
+    p_factura_numero: factura?.numero?.trim() || null,
   })
 
   if (error) return { ok: false, error: `No se pudo marcar como lista: ${error.message}` }
@@ -616,12 +624,19 @@ export async function enviarOrdenCompra(): Promise<OrdenCompraResultado> {
  * llega por `siigo_estado`/`siigo_id` en la fila (Realtime o refetch).
  * Es idempotente: si la orden ya tiene `siigo_id`, no la reenvía.
  */
-export async function enviarOrdenASiigo(ordenId: number): Promise<OrdenCompraResultado> {
+export async function enviarOrdenASiigo(
+  ordenId: number,
+  factura?: FacturaProveedorInput
+): Promise<OrdenCompraResultado> {
   const auth = await requireRole(['supervisor', 'compras'])
   if (!auth.ok) return { ok: false, error: auth.error }
   if (isDevBypassActive()) return { ok: true }
   const supabase = await createClient()
-  const { data, error } = await supabase.rpc('rpc_aprobar_oc_siigo', { p_orden_id: ordenId })
+  const { data, error } = await supabase.rpc('rpc_aprobar_oc_siigo', {
+    p_orden_id: ordenId,
+    p_factura_prefijo: factura?.prefijo?.trim() || null,
+    p_factura_numero: factura?.numero?.trim() || null,
+  })
   if (error) return { ok: false, error: `No se pudo enviar a Siigo: ${error.message}` }
   if (!(data as { ok?: boolean } | null)?.ok) {
     return { ok: false, error: 'rpc_aprobar_oc_siigo no confirmó el envío.' }
@@ -629,8 +644,11 @@ export async function enviarOrdenASiigo(ordenId: number): Promise<OrdenCompraRes
   return { ok: true }
 }
 
-export async function reintentarEnvioSiigo(ordenId: number): Promise<OrdenCompraResultado> {
-  return enviarOrdenASiigo(ordenId)
+export async function reintentarEnvioSiigo(
+  ordenId: number,
+  factura?: FacturaProveedorInput
+): Promise<OrdenCompraResultado> {
+  return enviarOrdenASiigo(ordenId, factura)
 }
 
 

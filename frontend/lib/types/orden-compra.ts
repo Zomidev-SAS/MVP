@@ -89,6 +89,9 @@ export interface OrdenCompra {
   siigo_referencia: string | null
   /** Número de la OC en Siigo (OC-1-3195) cuando se cargó desde el documento. */
   numero_oc?: string | null
+  /** Factura que emitió el proveedor: Siigo la exige para crear la factura de compra. */
+  factura_proveedor_prefijo?: string | null
+  factura_proveedor_numero?: string | null
   origen?: 'panel' | 'documento_siigo'
   documento_path?: string | null
   documento_firmado_path?: string | null
