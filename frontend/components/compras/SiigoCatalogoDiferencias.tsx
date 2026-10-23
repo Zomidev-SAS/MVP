@@ -88,7 +88,7 @@ function GrupoDiferencias({
           </h3>
           <p className="text-xs text-muted-foreground">{grupo.ayuda}</p>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <Button size="sm" disabled={ocupado} onClick={() => onAplicarTodas(grupo)}>
             {grupo.botonAplicar} (todas)
           </Button>
@@ -102,20 +102,20 @@ function GrupoDiferencias({
         {filas.slice(0, visibles).map((d) => (
           <li
             key={d.id}
-            className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
           >
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 basis-60">
               <span className="font-mono text-xs text-muted-foreground">{d.codigo}</span>
               {grupo.campo === 'existencia' ? (
-                <p className="truncate">{d.valorSiigo ?? '—'}</p>
+                <p className="break-words">{d.valorSiigo ?? '—'}</p>
               ) : (
-                <p className="truncate">
+                <p className="break-words">
                   <span className="text-muted-foreground">Panel:</span> {d.valorPanel ?? '—'}{' '}
                   <span className="text-muted-foreground">→ Siigo:</span> {d.valorSiigo ?? '—'}
                 </p>
               )}
             </div>
-            <div className="flex shrink-0 gap-1">
+            <div className="flex flex-wrap gap-1">
               <Button size="sm" disabled={ocupado} onClick={() => onAplicar(d.id)}>
                 {grupo.botonAplicar}
               </Button>

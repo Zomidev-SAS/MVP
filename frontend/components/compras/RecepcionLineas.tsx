@@ -60,7 +60,14 @@ function RecepcionLinea({ orden, item, mostrarCodigo, onActualizado }: Recepcion
 
   return (
     <div className="space-y-1 rounded-md border bg-muted/30 p-2 text-xs">
-      {mostrarCodigo && <p className="font-medium text-foreground">{item.codigo_producto}</p>}
+      <p className="font-medium text-foreground">
+        {item.descripcion}
+        {mostrarCodigo && (
+          <span className="ml-1 font-mono text-[11px] font-normal text-muted-foreground">
+            {item.codigo_producto}
+          </span>
+        )}
+      </p>
       <p className="text-muted-foreground">
         Pedidas {formatearNumero(resumen.pedida)} · Recibidas {formatearNumero(resumen.recibida)} ·{' '}
         <span className={resumen.completa ? 'font-semibold text-emerald-700' : 'font-semibold text-foreground'}>
@@ -108,7 +115,7 @@ export function RecepcionLineas({ orden, onActualizado }: RecepcionLineasProps) 
           key={item.id}
           orden={orden}
           item={item}
-          mostrarCodigo={orden.items.length > 1}
+          mostrarCodigo
           onActualizado={onActualizado}
         />
       ))}

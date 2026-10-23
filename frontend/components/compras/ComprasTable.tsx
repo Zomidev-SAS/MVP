@@ -1,24 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Download,
-  FileText,
-  Pencil,
-  Plus,
-  Search,
-  Send,
-  Trash2,
-  Upload,
-} from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronRight, Clock, Plus, Search, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -32,14 +19,13 @@ import {
   CLASE_ESTADO_OC,
   ESTADOS_ORDEN_COMPRA,
   ETIQUETA_ESTADO_OC,
-  ETIQUETA_MEDIO_PAGO,
+  resumenRecepcion,
   tituloOrdenDisplay,
   type EstadoOrdenCompra,
   type OrdenCompra,
 } from '@/lib/types/orden-compra'
 import {
   actualizarEstadoOrdenCompra,
-  actualizarObservacionesEntrega,
   eliminarOrdenCompra,
   enviarOrdenASiigo,
   fetchOrdenesCompra,
@@ -51,8 +37,7 @@ import { descargarCsvSiigo } from '@/lib/export/orden-compra-siigo'
 import { descargarPdfOrdenCompra } from '@/lib/export/orden-compra-pdf'
 import { ComprasPedidoDialog } from '@/components/compras/ComprasPedidoDialog'
 import { SiigoStatusBadge, ETIQUETA_SIIGO_SYNC } from '@/components/compras/SiigoStatusBadge'
-import { RecepcionLineas } from '@/components/compras/RecepcionLineas'
-import { DocumentoOc } from '@/components/compras/DocumentoOc'
+import { OrdenDetalle } from '@/components/compras/OrdenDetalle'
 import { FacturaProveedorDialog, type ModoFacturaProveedor } from '@/components/compras/FacturaProveedorDialog'
 import { subirOrdenCompraDocumento } from '@/lib/supabase/ordenes-compra-documento-actions'
 import type { EstadoSyncSiigo } from '@/lib/types/siigo'
@@ -79,6 +64,8 @@ function iconoVencimiento(orden: OrdenCompra) {
   return <Clock className="h-4 w-4 text-amber-600" aria-hidden />
 }
 
+const COLUMNAS = 6
+
 interface ComprasTableProps {
   productoInicial?: { codigo: string; nombre: string } | null
   puedeGestionarSiigo: boolean
@@ -94,8 +81,8 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
   const [filtroSiigo, setFiltroSiigo] = useState<'todos' | EstadoSyncSiigo>('todos')
   const [dialogAbierto, setDialogAbierto] = useState(Boolean(productoInicial))
   const [ordenEditar, setOrdenEditar] = useState<OrdenCompra | null>(null)
-  const [editandoTextoId, setEditandoTextoId] = useState<number | null>(null)
-  const [textoEntrega, setTextoEntrega] = useState('')
+  // Órdenes desplegadas: la fila compacta se abre al seleccionarla.
+  const [abiertas, setAbiertas] = useState<Set<number>>(new Set())
   const [enviandoSiigoId, setEnviandoSiigoId] = useState<number | null>(null)
   const [subiendoDocumento, setSubiendoDocumento] = useState(false)
   const [dialogoFactura, setDialogoFactura] = useState<{ orden: OrdenCompra; modo: ModoFacturaProveedor } | null>(null)
@@ -146,8 +133,10 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
     const id = orden.id
     const res = await actualizarEstadoOrdenCompra(id, estado)
     if (res.ok) {
-      if (estado === 'listo') {
-        toast.success('Orden lista. Enviando la factura de compra a Siigo…')
+      if (estado === 'listo' && orden.origen === 'documento_siigo') {
+        toast.success('Orden finalizada.')
+      } else if (estado === 'listo') {
+        toast.success('Orden finalizada. Enviando la factura de compra a Siigo…')
         // El envío a Siigo es asíncrono: se vuelve a consultar para mostrar el resultado.
         setTimeout(() => recargar(), 6000)
       } else {
@@ -218,17 +207,6 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
     }
   }
 
-  async function guardarTextoEntrega(id: number) {
-    const res = await actualizarObservacionesEntrega(id, textoEntrega)
-    if (res.ok) {
-      toast.success('Texto guardado.')
-      setEditandoTextoId(null)
-      recargar()
-    } else {
-      toast.error(res.error)
-    }
-  }
-
   async function handleEliminar(id: number) {
     const res = await eliminarOrdenCompra(id)
     if (res.ok) {
@@ -249,149 +227,160 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
     setDialogAbierto(true)
   }
 
-  function renderFila(orden: OrdenCompra) {
-    const resumenItems =
-      orden.items.length === 1
-        ? `${orden.items[0].cantidad} uds · ${orden.items[0].codigo_producto}`
-        : `${orden.items.length} líneas · ${orden.items.map((i) => i.proveedor_nombre).filter(Boolean).slice(0, 2).join(', ')}`
+  function alternar(id: number) {
+    setAbiertas((prev) => {
+      const siguiente = new Set(prev)
+      if (siguiente.has(id)) siguiente.delete(id)
+      else siguiente.add(id)
+      return siguiente
+    })
+  }
+
+  function finalizar(orden: OrdenCompra) {
+    const faltantes = orden.items.reduce((acc, i) => acc + resumenRecepcion(i).restante, 0)
+    const lineas = orden.items.filter((i) => resumenRecepcion(i).restante > 0).length
+    if (
+      faltantes > 0 &&
+      !window.confirm(
+        `Aún faltan ${faltantes.toLocaleString('es-CO')} unidades por recibir en ${lineas} línea(s). ¿Finalizar de todos modos?`
+      )
+    ) {
+      return
+    }
+    cambiarEstado(orden, 'listo')
+  }
+
+  function cancelar(orden: OrdenCompra) {
+    if (!window.confirm('¿Cancelar esta orden de compra?')) return
+    cambiarEstado(orden, 'cancelada')
+  }
+
+  function eliminar(orden: OrdenCompra) {
+    if (!window.confirm('¿Eliminar esta orden? No se puede deshacer.')) return
+    handleEliminar(orden.id)
+  }
+
+  function renderFilas(orden: OrdenCompra) {
+    const abierta = abiertas.has(orden.id)
     const siigo = derivarEstadoSiigo(orden)
-    const enviandoEstaOrden = enviandoSiigoId === orden.id
+    const pedidas = orden.items.reduce((acc, i) => acc + Number(i.cantidad || 0), 0)
+    const recibidas = orden.items.reduce((acc, i) => acc + Number(i.cantidad_recibida ?? 0), 0)
+    const porcentaje = pedidas > 0 ? Math.min(100, Math.round((recibidas / pedidas) * 100)) : 0
+    const proveedor = orden.items[0]?.proveedor_nombre ?? orden.proveedor_nombre
+    const resumen =
+      orden.items.length === 1
+        ? orden.items[0].descripcion
+        : `${orden.items.length} productos${proveedor ? ` · ${proveedor}` : ''}`
 
     return (
-      <TableRow key={orden.id}>
-        <TableCell className="font-medium">
-          <div>
-            <p>{tituloOrdenDisplay(orden)}</p>
-            <p className="text-xs text-muted-foreground">{resumenItems}</p>
-          </div>
-        </TableCell>
-        <TableCell>
-          <select
-            className={cn(
-              'w-[110px] cursor-pointer rounded-md border-0 px-3 py-1.5 text-center text-xs font-semibold',
-              CLASE_ESTADO_OC[orden.estado]
-            )}
-            value={orden.estado}
-            onChange={(e) => cambiarEstado(orden, e.target.value as EstadoOrdenCompra)}
-          >
-            {ESTADOS_ORDEN_COMPRA.map((e) => (
-              <option key={e} value={e}>
-                {ETIQUETA_ESTADO_OC[e]}
-              </option>
-            ))}
-          </select>
-        </TableCell>
-        <TableCell>
-          <div>
-            <SiigoStatusBadge estado={siigo.estado} />
-            {orden.medio_pago && (
-              <p className="mt-0.5 text-xs text-muted-foreground">{ETIQUETA_MEDIO_PAGO[orden.medio_pago]}</p>
-            )}
-            {siigo.referencia && (
-              <p className="mt-1 text-xs text-muted-foreground">Ref. {siigo.referencia}</p>
-            )}
-          </div>
-        </TableCell>
-        <TableCell>
-          <div className="flex items-center gap-1.5 text-sm">
-            {iconoVencimiento(orden)}
-            <span>{formatearVencimiento(orden.fecha_vencimiento)}</span>
-          </div>
-        </TableCell>
-        <TableCell className="min-w-[210px]">
-          <RecepcionLineas orden={orden} onActualizado={recargar} />
-        </TableCell>
-        <TableCell>
-          {orden.documento_path && (
-            <DocumentoOc orden={orden} puedeFirmar={puedeFirmar} onActualizado={recargar} />
-          )}
-          <div className="flex flex-wrap gap-1">
-            {!orden.documento_path && (
-              <>
-                <Button type="button" variant="outline" size="sm" onClick={() => handlePdf(orden)}>
-                  <FileText className="mr-1 h-3 w-3 text-red-600" />
-                  PDF
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => handleCsv(orden)}>
-                  <Download className="h-3 w-3" />
-                </Button>
-              </>
-            )}
-            {puedeGestionarSiigo && siigo.estado === 'pendiente' && orden.estado === 'listo' && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={enviandoEstaOrden}
-                onClick={() => handleEnviarSiigo(orden, false)}
-              >
-                <Send className="mr-1 h-3 w-3" />
-                {enviandoEstaOrden ? 'Enviando…' : 'Enviar a Siigo'}
-              </Button>
-            )}
-            {puedeGestionarSiigo && siigo.estado === 'error' && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={enviandoEstaOrden}
-                onClick={() => handleEnviarSiigo(orden, true)}
-              >
-                <Send className="mr-1 h-3 w-3" />
-                {enviandoEstaOrden ? 'Enviando…' : 'Reintentar'}
-              </Button>
-            )}
-          </div>
-        </TableCell>
-        <TableCell className="max-w-[220px]">
-          {editandoTextoId === orden.id ? (
-            <div className="space-y-1">
-              <Textarea
-                rows={2}
-                value={textoEntrega}
-                onChange={(e) => setTextoEntrega(e.target.value)}
-                placeholder="Ej. Llegaron 100 tornillos de 1000"
-                className="text-xs"
+      <Fragment key={orden.id}>
+        <TableRow
+          data-state={abierta ? 'selected' : undefined}
+          className="cursor-pointer"
+          tabIndex={0}
+          aria-expanded={abierta}
+          onClick={() => alternar(orden.id)}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              alternar(orden.id)
+            }
+          }}
+        >
+          <TableCell className="font-medium">
+            <div className="flex items-start gap-2">
+              <ChevronRight
+                aria-hidden
+                className={cn(
+                  'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                  abierta && 'rotate-90'
+                )}
               />
-              <div className="flex gap-1">
-                <Button type="button" size="sm" onClick={() => guardarTextoEntrega(orden.id)}>
-                  Guardar
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setEditandoTextoId(null)}>
-                  Cancelar
-                </Button>
+              <div className="min-w-0">
+                <p className="truncate">{tituloOrdenDisplay(orden)}</p>
+                <p className="truncate text-xs font-normal text-muted-foreground">{resumen}</p>
               </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              className="w-full text-left text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                setEditandoTextoId(orden.id)
-                setTextoEntrega(orden.observaciones_entrega ?? '')
-              }}
+          </TableCell>
+          <TableCell>
+            <span
+              className={cn(
+                'inline-block whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-semibold',
+                CLASE_ESTADO_OC[orden.estado]
+              )}
             >
-              {orden.observaciones_entrega?.trim() || 'Click para anotar entregas...'}
-            </button>
-          )}
-        </TableCell>
-        <TableCell>
-          <div className="flex gap-1">
-            {orden.estado === 'en_curso' && (
-              <>
-                <Button type="button" variant="ghost" size="sm" onClick={() => abrirEditar(orden)}>
-                  <Pencil className="h-3 w-3" />
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => handleEliminar(orden.id)}>
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </>
+              {ETIQUETA_ESTADO_OC[orden.estado]}
+            </span>
+          </TableCell>
+          <TableCell className="hidden md:table-cell">
+            <div className="w-32 space-y-1">
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${porcentaje}%` }} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {recibidas.toLocaleString('es-CO')} de {pedidas.toLocaleString('es-CO')}
+              </p>
+            </div>
+          </TableCell>
+          <TableCell className="hidden lg:table-cell">
+            <SiigoStatusBadge estado={siigo.estado} />
+          </TableCell>
+          <TableCell className="hidden md:table-cell">
+            <div className="flex items-center gap-1.5 text-sm">
+              {iconoVencimiento(orden)}
+              <span>{formatearVencimiento(orden.fecha_vencimiento)}</span>
+            </div>
+          </TableCell>
+          <TableCell className="hidden lg:table-cell text-xs">
+            {orden.documento_path ? (
+              orden.firmada_at ? (
+                <span className="font-medium text-emerald-700">Firmada</span>
+              ) : (
+                <span className="text-muted-foreground">Por firmar</span>
+              )
+            ) : (
+              <span className="text-muted-foreground">—</span>
             )}
-          </div>
-        </TableCell>
-      </TableRow>
+          </TableCell>
+        </TableRow>
+
+        {abierta && (
+          <TableRow className="bg-muted/20 hover:bg-muted/20">
+            <TableCell colSpan={COLUMNAS} className="whitespace-normal px-4 py-3">
+              <OrdenDetalle
+                key={`${orden.id}-${orden.updated_at}`}
+                orden={orden}
+                puedeGestionar={puedeGestionarSiigo}
+                puedeFirmar={puedeFirmar}
+                enviandoSiigo={enviandoSiigoId === orden.id}
+                onRecargar={recargar}
+                onEditar={() => abrirEditar(orden)}
+                onEliminar={() => eliminar(orden)}
+                onFinalizar={() => finalizar(orden)}
+                onCancelar={() => cancelar(orden)}
+                onReabrir={() => cambiarEstado(orden, 'en_curso')}
+                onPdf={() => handlePdf(orden)}
+                onCsv={() => handleCsv(orden)}
+                onEnviarSiigo={(esReintento) => handleEnviarSiigo(orden, esReintento)}
+              />
+            </TableCell>
+          </TableRow>
+        )}
+      </Fragment>
     )
   }
+
+  const encabezado = (
+    <TableRow>
+      <TableHead>Orden</TableHead>
+      <TableHead>Estado</TableHead>
+      <TableHead className="hidden md:table-cell">Avance</TableHead>
+      <TableHead className="hidden lg:table-cell">Siigo</TableHead>
+      <TableHead className="hidden md:table-cell">Entrega</TableHead>
+      <TableHead className="hidden lg:table-cell">Firma</TableHead>
+    </TableRow>
+  )
 
   return (
     <div className="space-y-4">
@@ -474,21 +463,12 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
               <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Orden</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Siigo</TableHead>
-                      <TableHead>Vencimiento</TableHead>
-                      <TableHead>Recepción</TableHead>
-                      <TableHead>Archivo</TableHead>
-                      <TableHead>Texto</TableHead>
-                      <TableHead className="w-[80px]" />
-                    </TableRow>
+                    {encabezado}
                   </TableHeader>
                   <TableBody>
-                    {pendientes.map(renderFila)}
+                    {pendientes.map(renderFilas)}
                     <TableRow className="hover:bg-muted/50">
-                      <TableCell colSpan={8} className="p-0">
+                      <TableCell colSpan={COLUMNAS} className="p-0">
                         <button
                           type="button"
                           onClick={abrirNueva}
@@ -514,18 +494,9 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
               <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Orden</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Siigo</TableHead>
-                      <TableHead>Vencimiento</TableHead>
-                      <TableHead>Recepción</TableHead>
-                      <TableHead>Archivo</TableHead>
-                      <TableHead>Texto</TableHead>
-                      <TableHead className="w-[80px]" />
-                    </TableRow>
+                    {encabezado}
                   </TableHeader>
-                  <TableBody>{otras.map(renderFila)}</TableBody>
+                  <TableBody>{otras.map(renderFilas)}</TableBody>
                 </Table>
               </div>
             </section>
@@ -534,7 +505,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
       )}
 
       <p className="text-xs text-muted-foreground">
-        Genera el PDF al completar los datos y súbelo a Siigo Nube. También puedes descargar CSV.
+        Selecciona una orden para ver sus productos, registrar entregas, añadir datos o finalizarla.
         {productoInicial && (
           <>
             {' '}

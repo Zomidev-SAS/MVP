@@ -113,14 +113,14 @@ export interface OrdenCompra {
 export type OrdenCompraResultado = { ok: true; id?: number } | { ok: false; error: string }
 
 export const ETIQUETA_ESTADO_OC: Record<EstadoOrdenCompra, string> = {
-  en_curso: 'En curso',
-  listo: 'Listo',
+  en_curso: 'En proceso',
+  listo: 'Finalizado',
   cancelada: 'Cancelada',
 }
 
 export const CLASE_ESTADO_OC: Record<EstadoOrdenCompra, string> = {
-  en_curso: 'chip-warning',
-  listo: 'chip-success',
+  en_curso: 'chip-proceso',
+  listo: 'chip-finalizado',
   cancelada: 'chip-neutral',
 }
 

@@ -47,7 +47,7 @@ export default async function PanelLayout({
     <div className="flex min-h-screen bg-background text-foreground">
       <NewAlertToastListener />
       <Sidebar profile={result.profile} ajustesPendientes={ajustesPendientes} />
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <Header
           profile={result.profile}
           ajustesPendientes={ajustesPendientes}

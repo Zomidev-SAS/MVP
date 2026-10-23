@@ -927,3 +927,40 @@ export async function fetchLineaTiempoOrdenesCompra(limite = 8): Promise<OrdenLi
     }
   })
 }
+
+
+/** Fecha de entrega esperada (vencimiento). Vacía la quita. */
+export async function actualizarFechaVencimientoOrden(
+  id: number,
+  fecha: string | null
+): Promise<OrdenCompraResultado> {
+  const limpia = fecha?.trim() || null
+  if (limpia && !/^\d{4}-\d{2}-\d{2}$/.test(limpia)) {
+    return { ok: false, error: 'Fecha inválida.' }
+  }
+
+  if (isDevBypassActive()) {
+    devPreviewUpdateOrden(id, { fecha_vencimiento: limpia })
+    return { ok: true }
+  }
+
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sesión expirada.' }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('ordenes_compra')
+    .update({ fecha_vencimiento: limpia, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id')
+
+  if (error) {
+    console.error('Failed to update fecha_vencimiento:', error)
+    return { ok: false, error: 'No se pudo guardar la fecha.' }
+  }
+  // RLS no devuelve error cuando no deja actualizar: simplemente no toca filas.
+  if (!data || data.length === 0) {
+    return { ok: false, error: 'No tienes permiso para cambiar esta orden.' }
+  }
+  return { ok: true }
+}

@@ -199,6 +199,17 @@
   color: var(--muted-foreground);
 }
 
+/* Estados de las órdenes de compra: en proceso = amarillo, finalizado = rojo. */
+.chip-proceso {
+  background-color: oklch(0.87 0.17 95);
+  color: oklch(0.28 0.06 80);
+}
+
+.chip-finalizado {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
 @keyframes page-enter {
   from {
     opacity: 0;
