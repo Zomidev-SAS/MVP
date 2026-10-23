@@ -4,8 +4,18 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { registrarRecepcionItem } from '@/lib/supabase/ordenes-compra-actions'
-import { resumenRecepcion, type OrdenCompra, type OrdenCompraItem } from '@/lib/types/orden-compra'
+import {
+  asignarCodigoLineaOC,
+  buscarProductosOC,
+  registrarRecepcionItem,
+} from '@/lib/supabase/ordenes-compra-actions'
+import { CampoSugerencias } from '@/components/compras/CampoSugerencias'
+import {
+  resumenRecepcion,
+  type OrdenCompra,
+  type OrdenCompraItem,
+  type ProductoSugerido,
+} from '@/lib/types/orden-compra'
 
 function formatearNumero(n: number): string {
   return n.toLocaleString('es-CO', { maximumFractionDigits: 2 })
@@ -27,15 +37,31 @@ interface RecepcionLineaProps {
   orden: OrdenCompra
   item: OrdenCompraItem
   mostrarCodigo: boolean
+  puedeAsignarCodigo: boolean
   onActualizado: () => void
 }
 
-function RecepcionLinea({ orden, item, mostrarCodigo, onActualizado }: RecepcionLineaProps) {
+function RecepcionLinea({ orden, item, mostrarCodigo, puedeAsignarCodigo, onActualizado }: RecepcionLineaProps) {
   const [llegaron, setLlegaron] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [asignando, setAsignando] = useState(false)
+  const [busquedaCodigo, setBusquedaCodigo] = useState('')
+  const sinCodigo = item.codigo_producto === 'SIN-CODIGO'
   const resumen = resumenRecepcion(item)
   const actualizado = formatearActualizacion(item.cantidad_recibida_at)
   const editable = orden.estado === 'en_curso' && !resumen.completa
+
+  async function asignarCodigo(producto: ProductoSugerido) {
+    const res = await asignarCodigoLineaOC(orden.id, item.id, producto.codigo_producto)
+    if (res.ok) {
+      toast.success(`Código ${producto.codigo_producto} asignado.`)
+      setAsignando(false)
+      setBusquedaCodigo('')
+      onActualizado()
+    } else {
+      toast.error(res.error)
+    }
+  }
 
   async function registrar() {
     const n = Number(llegaron)
@@ -67,7 +93,41 @@ function RecepcionLinea({ orden, item, mostrarCodigo, onActualizado }: Recepcion
             {item.codigo_producto}
           </span>
         )}
+        {sinCodigo && (
+          <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+            Sin código
+          </span>
+        )}
       </p>
+      {sinCodigo && puedeAsignarCodigo && (
+        <div className="pt-1">
+          {asignando ? (
+            <div className="max-w-sm space-y-1">
+              <CampoSugerencias<ProductoSugerido>
+                value={busquedaCodigo}
+                onChange={setBusquedaCodigo}
+                buscar={buscarProductosOC}
+                onSeleccionar={asignarCodigo}
+                claveItem={(p) => p.codigo_producto}
+                renderItem={(p) => (
+                  <span>
+                    <span className="font-medium">{p.nombre_producto}</span>
+                    <span className="text-muted-foreground"> — {p.codigo_producto}</span>
+                  </span>
+                )}
+                placeholder="Busca el producto por nombre o código"
+              />
+              <Button type="button" variant="ghost" size="sm" className="h-6 px-1 text-xs" onClick={() => setAsignando(false)}>
+                Cancelar
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-xs" onClick={() => setAsignando(true)}>
+              Asignar código
+            </Button>
+          )}
+        </div>
+      )}
       <p className="text-muted-foreground">
         Pedidas {formatearNumero(resumen.pedida)} · Recibidas {formatearNumero(resumen.recibida)} ·{' '}
         <span className={resumen.completa ? 'font-semibold text-emerald-700' : 'font-semibold text-foreground'}>
@@ -101,10 +161,12 @@ function RecepcionLinea({ orden, item, mostrarCodigo, onActualizado }: Recepcion
 interface RecepcionLineasProps {
   orden: OrdenCompra
   onActualizado: () => void
+  /** Compras y supervisor pueden asignar el código a las líneas SIN-CODIGO. */
+  puedeAsignarCodigo?: boolean
 }
 
 /** Entregas parciales por número, con la nota de cada línea visible en la tabla. */
-export function RecepcionLineas({ orden, onActualizado }: RecepcionLineasProps) {
+export function RecepcionLineas({ orden, onActualizado, puedeAsignarCodigo = false }: RecepcionLineasProps) {
   if (orden.items.length === 0) {
     return <span className="text-xs text-muted-foreground">—</span>
   }
@@ -116,6 +178,7 @@ export function RecepcionLineas({ orden, onActualizado }: RecepcionLineasProps) 
           orden={orden}
           item={item}
           mostrarCodigo
+          puedeAsignarCodigo={puedeAsignarCodigo && orden.estado === 'en_curso'}
           onActualizado={onActualizado}
         />
       ))}

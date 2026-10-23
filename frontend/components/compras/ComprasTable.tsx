@@ -17,7 +17,6 @@ import {
 import { cn } from '@/lib/utils'
 import {
   CLASE_ESTADO_OC,
-  ESTADOS_ORDEN_COMPRA,
   ETIQUETA_ESTADO_OC,
   resumenRecepcion,
   tituloOrdenDisplay,
@@ -38,6 +37,8 @@ import { descargarPdfOrdenCompra } from '@/lib/export/orden-compra-pdf'
 import { ComprasPedidoDialog } from '@/components/compras/ComprasPedidoDialog'
 import { SiigoStatusBadge, ETIQUETA_SIIGO_SYNC } from '@/components/compras/SiigoStatusBadge'
 import { OrdenDetalle } from '@/components/compras/OrdenDetalle'
+import { ResumenCompras, coincideFiltro, estaVencida, type FiltroCompras } from '@/components/compras/ResumenCompras'
+import { Skeleton } from '@/components/ui/skeleton'
 import { FacturaProveedorDialog, type ModoFacturaProveedor } from '@/components/compras/FacturaProveedorDialog'
 import { subirOrdenCompraDocumento } from '@/lib/supabase/ordenes-compra-documento-actions'
 import type { EstadoSyncSiigo } from '@/lib/types/siigo'
@@ -55,16 +56,43 @@ function iconoVencimiento(orden: OrdenCompra) {
   if (!orden.fecha_vencimiento) {
     return <Clock className="h-4 w-4 text-muted-foreground" aria-hidden />
   }
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  const vence = new Date(orden.fecha_vencimiento + 'T12:00:00')
-  if (vence < hoy) {
+  if (estaVencida(orden)) {
     return <AlertCircle className="h-4 w-4 text-destructive" aria-hidden />
   }
   return <Clock className="h-4 w-4 text-amber-600" aria-hidden />
 }
 
+/** "Vencida hace 3 d", "Vence hoy", "En 2 d" o la fecha: lo urgente se nota de un vistazo. */
+function textoEntrega(orden: OrdenCompra): { texto: string; clase: string } {
+  if (orden.estado !== 'en_curso') {
+    return { texto: formatearVencimiento(orden.fecha_vencimiento), clase: '' }
+  }
+  if (!orden.fecha_vencimiento) return { texto: 'Sin fecha', clase: 'text-muted-foreground' }
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  const vence = new Date(`${orden.fecha_vencimiento}T12:00:00`)
+  const dias = Math.round((vence.getTime() - hoy.getTime()) / 86_400_000)
+  if (dias < 0) return { texto: `Vencida hace ${-dias} d`, clase: 'font-semibold text-destructive' }
+  if (dias === 0) return { texto: 'Vence hoy', clase: 'font-semibold text-amber-700' }
+  if (dias <= 3) return { texto: `En ${dias} d`, clase: 'font-medium text-amber-700' }
+  return { texto: formatearVencimiento(orden.fecha_vencimiento), clase: '' }
+}
+
 const COLUMNAS = 6
+
+// Franja de color a la izquierda de cada orden: amarillo en proceso, rojo finalizado.
+const BORDE_ESTADO: Record<EstadoOrdenCompra, string> = {
+  en_curso: 'border-l-yellow-400',
+  listo: 'border-l-primary',
+  cancelada: 'border-l-muted-foreground/30',
+}
+
+const CHIPS: { id: FiltroCompras; etiqueta: string }[] = [
+  { id: 'todas', etiqueta: 'Todas' },
+  { id: 'proceso', etiqueta: 'En proceso' },
+  { id: 'finalizadas', etiqueta: 'Finalizadas' },
+  { id: 'canceladas', etiqueta: 'Canceladas' },
+]
 
 interface ComprasTableProps {
   productoInicial?: { codigo: string; nombre: string } | null
@@ -77,7 +105,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState<'todos' | EstadoOrdenCompra>('todos')
+  const [filtro, setFiltro] = useState<FiltroCompras>('todas')
   const [filtroSiigo, setFiltroSiigo] = useState<'todos' | EstadoSyncSiigo>('todos')
   const [dialogAbierto, setDialogAbierto] = useState(Boolean(productoInicial))
   const [ordenEditar, setOrdenEditar] = useState<OrdenCompra | null>(null)
@@ -104,7 +132,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     return ordenes.filter((o) => {
-      if (filtroEstado !== 'todos' && o.estado !== filtroEstado) return false
+      if (!coincideFiltro(o, filtro)) return false
       if (filtroSiigo !== 'todos' && derivarEstadoSiigo(o).estado !== filtroSiigo) return false
       if (!q) return true
       const titulo = tituloOrdenDisplay(o).toLowerCase()
@@ -118,7 +146,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
       const texto = `${titulo} ${o.observaciones_entrega ?? ''} ${items}`.toLowerCase()
       return texto.includes(q)
     })
-  }, [ordenes, busqueda, filtroEstado, filtroSiigo])
+  }, [ordenes, busqueda, filtro, filtroSiigo])
 
   const pendientes = filtradas.filter((o) => o.estado === 'en_curso')
   const otras = filtradas.filter((o) => o.estado !== 'en_curso')
@@ -288,7 +316,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
             }
           }}
         >
-          <TableCell className="font-medium">
+          <TableCell className={cn('border-l-4 font-medium', BORDE_ESTADO[orden.estado])}>
             <div className="flex items-start gap-2">
               <ChevronRight
                 aria-hidden
@@ -316,7 +344,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
           <TableCell className="hidden md:table-cell">
             <div className="w-32 space-y-1">
               <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${porcentaje}%` }} />
+                <div className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out" style={{ width: `${porcentaje}%` }} />
               </div>
               <p className="text-xs text-muted-foreground">
                 {recibidas.toLocaleString('es-CO')} de {pedidas.toLocaleString('es-CO')}
@@ -329,7 +357,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
           <TableCell className="hidden md:table-cell">
             <div className="flex items-center gap-1.5 text-sm">
               {iconoVencimiento(orden)}
-              <span>{formatearVencimiento(orden.fecha_vencimiento)}</span>
+              <span className={textoEntrega(orden).clase}>{textoEntrega(orden).texto}</span>
             </div>
           </TableCell>
           <TableCell className="hidden lg:table-cell text-xs">
@@ -382,8 +410,14 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
     </TableRow>
   )
 
+  const conteo = (f: FiltroCompras) => ordenes.filter((o) => coincideFiltro(o, f)).length
+
   return (
     <div className="space-y-4">
+      {!loading && ordenes.length > 0 && (
+        <ResumenCompras ordenes={ordenes} filtro={filtro} onFiltro={setFiltro} />
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={abrirNueva}>
@@ -423,18 +457,6 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
           </div>
           <select
             className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value as typeof filtroEstado)}
-          >
-            <option value="todos">Todos los estados</option>
-            {ESTADOS_ORDEN_COMPRA.map((e) => (
-              <option key={e} value={e}>
-                {ETIQUETA_ESTADO_OC[e]}
-              </option>
-            ))}
-          </select>
-          <select
-            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
             value={filtroSiigo}
             onChange={(e) => setFiltroSiigo(e.target.value as typeof filtroSiigo)}
           >
@@ -448,10 +470,61 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por estado">
+        {CHIPS.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            aria-pressed={filtro === c.id}
+            onClick={() => setFiltro(c.id)}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              filtro === c.id
+                ? 'border-foreground bg-foreground text-background'
+                : 'bg-card text-muted-foreground hover:bg-accent'
+            )}
+          >
+            {c.etiqueta} <span className="tabular-nums opacity-70">{conteo(c.id)}</span>
+          </button>
+        ))}
+        {filtro !== 'todas' && !CHIPS.some((c) => c.id === filtro) && (
+          <button
+            type="button"
+            onClick={() => setFiltro('todas')}
+            className="rounded-full border border-primary px-3 py-1 text-xs font-medium text-primary hover:bg-primary/5"
+          >
+            Quitar filtro ✕
+          </button>
+        )}
+      </div>
+
       {loading ? (
-        <p className="text-sm text-muted-foreground">Cargando pedidos...</p>
+        <div className="space-y-2" aria-busy="true" aria-label="Cargando pedidos">
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+        </div>
       ) : filtradas.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No hay órdenes de compra.</p>
+        <div className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">
+          {ordenes.length === 0 ? (
+            <>Aún no hay órdenes de compra. Sube la de Siigo o agrega un pedido para empezar.</>
+          ) : (
+            <>
+              Ninguna orden coincide con este filtro.{' '}
+              <button
+                type="button"
+                className="font-medium text-primary underline"
+                onClick={() => {
+                  setFiltro('todas')
+                  setBusqueda('')
+                  setFiltroSiigo('todos')
+                }}
+              >
+                Ver todas
+              </button>
+            </>
+          )}
+        </div>
       ) : (
         <div className="space-y-6">
           {pendientes.length > 0 && (

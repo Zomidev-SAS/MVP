@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle2, Download, FileText, Pencil, RotateCcw, Send, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Download, FileText, PackageCheck, Pencil, RotateCcw, Send, Trash2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { DocumentoOc } from '@/components/compras/DocumentoOc'
+import { PasosOrden } from '@/components/compras/PasosOrden'
 import { RecepcionLineas } from '@/components/compras/RecepcionLineas'
 import { SiigoStatusBadge } from '@/components/compras/SiigoStatusBadge'
 import { derivarEstadoSiigo } from '@/lib/supabase/orden-compra-siigo-status'
@@ -93,16 +94,32 @@ export function OrdenDetalle({
   }
 
   const faltantes = orden.items.reduce((acc, i) => acc + resumenRecepcion(i).restante, 0)
+  const todoRecibido = orden.items.length > 0 && orden.items.every((i) => resumenRecepcion(i).completa)
   const proveedor = orden.items[0]?.proveedor_nombre ?? orden.proveedor_nombre
   const nit = orden.items[0]?.proveedor_nit ?? orden.proveedor_nit
 
   return (
     <div className="space-y-4 py-1" onClick={(e) => e.stopPropagation()}>
+      <PasosOrden orden={orden} />
+
+      {editable && todoRecibido && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <span className="flex items-center gap-2 font-medium">
+            <PackageCheck aria-hidden className="h-4 w-4 text-primary" />
+            Llegó todo lo pedido. ¿Cerramos la orden?
+          </span>
+          <Button type="button" size="sm" onClick={onFinalizar}>
+            <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+            Finalizar orden
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         {/* Productos y recepción */}
         <section className="space-y-2">
           <h3 className="text-sm font-semibold">Productos y recepción</h3>
-          <RecepcionLineas orden={orden} onActualizado={onRecargar} />
+          <RecepcionLineas orden={orden} onActualizado={onRecargar} puedeAsignarCodigo={puedeGestionar} />
         </section>
 
         {/* Datos de la orden */}

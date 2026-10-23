@@ -35,6 +35,11 @@ const ETIQUETAS_REGLA: Record<string, { nombre: string; descripcion: string; hor
     descripcion: 'Borra notificaciones leídas con más de 90 días.',
     horario: 'Lunes 3:00 a.m.',
   },
+  recordatorio_firma_oc: {
+    nombre: 'Recordatorio de firma',
+    descripcion: 'Avisa al administrador las órdenes de compra que llevan más de 24 horas sin firmar.',
+    horario: 'Diario 8:00 a.m.',
+  },
   siigo_sync_oc: {
     nombre: 'Sincronización Siigo (OC)',
     descripcion: 'Envía órdenes de compra aprobadas a Siigo.',

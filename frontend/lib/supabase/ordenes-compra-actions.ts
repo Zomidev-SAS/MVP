@@ -964,3 +964,53 @@ export async function actualizarFechaVencimientoOrden(
   }
   return { ok: true }
 }
+
+
+/**
+ * Las OC cargadas desde Siigo no traen código de producto: las líneas que no
+ * coincidieron con el catálogo quedan como SIN-CODIGO y aquí se les asigna uno.
+ */
+export async function asignarCodigoLineaOC(
+  ordenId: number,
+  itemId: number,
+  codigo: string
+): Promise<OrdenCompraResultado> {
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+
+  const cod = codigo.trim()
+  if (!cod) return { ok: false, error: 'Elige un producto del catálogo.' }
+  if (isDevBypassActive()) return { ok: true }
+
+  const supabase = await createClient()
+  const { data: producto } = await supabase
+    .from('productos')
+    .select('codigo_producto, nombre_producto')
+    .eq('codigo_producto', cod)
+    .maybeSingle()
+  if (!producto) return { ok: false, error: 'Ese código no existe en el catálogo del panel.' }
+
+  const { data, error } = await supabase
+    .from('orden_compra_items')
+    .update({ codigo_producto: producto.codigo_producto, nombre_producto: producto.nombre_producto })
+    .eq('id', itemId)
+    .eq('orden_id', ordenId)
+    .select('id, orden_linea')
+
+  if (error) {
+    console.error('Failed to assign product code:', error)
+    return { ok: false, error: 'No se pudo asignar el código.' }
+  }
+  if (!data || data.length === 0) {
+    return { ok: false, error: 'No tienes permiso para cambiar esta línea.' }
+  }
+
+  // La primera línea también vive en la cabecera (compatibilidad con notificaciones).
+  if (data[0].orden_linea === 1) {
+    await supabase
+      .from('ordenes_compra')
+      .update({ codigo_producto: producto.codigo_producto, nombre_producto: producto.nombre_producto })
+      .eq('id', ordenId)
+  }
+  return { ok: true }
+}
