@@ -43,7 +43,11 @@ rm -f "$ENV_BACKUP"
 echo "==> docker/.env restaurado"
 
 cd "$SCRIPT_DIR"
-"${COMPOSE[@]}" up -d --build
+# --pull: cada despliegue reconstruye sobre la última imagen base de Node y de
+# nginx, así los parches de seguridad de las imágenes entran sin acordarse.
+"${COMPOSE[@]}" pull nginx
+"${COMPOSE[@]}" build --pull
+"${COMPOSE[@]}" up -d
 
 # La configuración de nginx se monta como archivos sueltos: al hacer git pull
 # esos archivos se reemplazan y el contenedor sigue viendo la versión anterior
