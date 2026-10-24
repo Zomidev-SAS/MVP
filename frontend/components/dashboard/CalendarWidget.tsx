@@ -153,21 +153,33 @@ export function CalendarWidget() {
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Calendario</CardTitle>
         <Button type="button" size="sm" onClick={() => abrirNuevoEvento(diaSeleccionado)}>
-          <Plus className="mr-1 h-4 w-4" />
+          <Plus aria-hidden="true" className="mr-1 h-4 w-4" />
           Agregar evento
         </Button>
       </CardHeader>
       <CardContent className="grid gap-6">
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <Button type="button" variant="outline" size="sm" onClick={irMesAnterior}>
-              <ChevronLeft className="h-4 w-4" />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={irMesAnterior}
+              aria-label="Mes anterior"
+            >
+              <ChevronLeft aria-hidden="true" className="h-4 w-4" />
             </Button>
             <span className="text-sm font-medium">
               {MESES[viewMonth]} {viewYear}
             </span>
-            <Button type="button" variant="outline" size="sm" onClick={irMesSiguiente}>
-              <ChevronRight className="h-4 w-4" />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={irMesSiguiente}
+              aria-label="Mes siguiente"
+            >
+              <ChevronRight aria-hidden="true" className="h-4 w-4" />
             </Button>
           </div>
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
@@ -175,7 +187,7 @@ export function CalendarWidget() {
               <div key={d}>{d}</div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-1.5">
             {grid.map((dia, i) => {
               if (dia === null) return <div key={`blank-${i}`} />
               const key = fechaKey(viewYear, viewMonth, dia)
@@ -187,7 +199,9 @@ export function CalendarWidget() {
                   key={key}
                   type="button"
                   onClick={() => handleTapFecha(key)}
-                  className={`relative flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors ${
+                  aria-current={esHoy ? 'date' : undefined}
+                  aria-pressed={esSeleccionado}
+                  className={`relative flex h-10 w-10 items-center justify-center rounded-md text-sm transition-colors ${
                     esSeleccionado
                       ? 'bg-primary text-primary-foreground'
                       : esHoy
@@ -198,6 +212,7 @@ export function CalendarWidget() {
                   {dia}
                   {tieneEvento && (
                     <span
+                      aria-hidden="true"
                       className={`absolute bottom-0.5 h-1 w-1 rounded-full ${
                         esSeleccionado ? 'bg-primary-foreground' : 'bg-primary'
                       }`}
@@ -227,7 +242,10 @@ export function CalendarWidget() {
                     onClick={() => abrirEvento(evento)}
                     className="flex w-full items-start gap-2 rounded-md border p-2 text-left transition-colors hover:bg-accent/50"
                   >
-                    <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <CalendarDays
+                      aria-hidden="true"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                    />
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{evento.titulo}</p>
                       <p className="text-xs text-muted-foreground">
@@ -265,7 +283,7 @@ export function CalendarWidget() {
             <div className="space-y-3 py-2">
               <p className="text-sm text-muted-foreground">No hay eventos en esta fecha.</p>
               <Button type="button" onClick={() => abrirNuevoEvento(diaSeleccionado)}>
-                <Plus className="mr-1 h-4 w-4" />
+                <Plus aria-hidden="true" className="mr-1 h-4 w-4" />
                 Crear evento
               </Button>
             </div>
@@ -293,7 +311,7 @@ export function CalendarWidget() {
                 ))}
               </ul>
               <Button type="button" variant="outline" onClick={() => abrirNuevoEvento(diaSeleccionado)}>
-                <Plus className="mr-1 h-4 w-4" />
+                <Plus aria-hidden="true" className="mr-1 h-4 w-4" />
                 Agregar otro evento
               </Button>
             </div>

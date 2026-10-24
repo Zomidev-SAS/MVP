@@ -4,22 +4,31 @@ export interface ProductoStockBajo {
   saldo: number
 }
 
+export interface EstadoCorreoNotificacion {
+  enviado: boolean
+  fecha: string | null
+}
+
 export interface AlertaStockBajo {
   tipo: 'stock_bajo'
   id: string
+  firma: string
   titulo: string
   resumen: string
   href: string
   productos: ProductoStockBajo[]
+  correoEnviado?: EstadoCorreoNotificacion
 }
 
 export interface AlertaAjustes {
   tipo: 'ajustes_pendientes'
   id: string
+  firma: string
   titulo: string
   resumen: string
   href: string
   cantidad: number
+  correoEnviado?: EstadoCorreoNotificacion
 }
 
 export interface EventoHoyResumen {
@@ -33,10 +42,12 @@ export interface EventoHoyResumen {
 export interface AlertaEventosHoy {
   tipo: 'eventos_hoy'
   id: string
+  firma: string
   titulo: string
   resumen: string
   href: string
   eventos: EventoHoyResumen[]
+  correoEnviado?: EstadoCorreoNotificacion
 }
 
 export interface OrdenCompraPendienteResumen {
@@ -50,10 +61,12 @@ export interface OrdenCompraPendienteResumen {
 export interface AlertaOrdenesCompra {
   tipo: 'ordenes_compra'
   id: string
+  firma: string
   titulo: string
   resumen: string
   href: string
   ordenes: OrdenCompraPendienteResumen[]
+  correoEnviado?: EstadoCorreoNotificacion
 }
 
 export type AlertaNotificacion =
@@ -76,4 +89,6 @@ export interface NotificacionesPayload {
   alertas: AlertaNotificacion[]
   mensajes: MensajePanel[]
   totalSinLeer: number
+  /** ids de alertas cuya firma coincide con la última marcada leída (notificaciones_leidas). */
+  leidas: string[]
 }

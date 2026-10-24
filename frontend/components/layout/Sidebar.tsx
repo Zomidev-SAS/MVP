@@ -9,12 +9,14 @@ import { useLogout } from '@/lib/hooks/use-logout'
 import { cn, getInitials } from '@/lib/utils'
 import type { Profile } from '@/lib/types/database'
 
-export function Sidebar({
+export function SidebarContent({
   profile,
   ajustesPendientes,
+  onNavigate,
 }: {
   profile: Profile
   ajustesPendientes?: number
+  onNavigate?: () => void
 }) {
   const pathname = usePathname()
   const { logout, loading } = useLogout()
@@ -26,7 +28,7 @@ export function Sidebar({
   })).filter((group) => group.items.length > 0)
 
   return (
-    <aside className="sticky top-0 flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex flex-col items-center gap-2 border-b border-sidebar-border p-4">
         <Image
           src="/logo_fondo.jpeg"
@@ -58,14 +60,15 @@ export function Sidebar({
                 <Link
                   key={item.key}
                   href={item.href}
+                  onClick={onNavigate}
                   className={cn(
-                    'flex items-center gap-3 rounded-md border-l-2 py-2 pl-[10px] pr-3 text-sm transition-all duration-200 ease-in-out active:scale-[0.98]',
+                    'flex items-center gap-3 rounded-md px-[10px] py-2 text-sm transition-colors active:scale-[0.98]',
                     isActive
-                      ? 'border-primary bg-sidebar-accent text-sidebar-foreground'
-                      : 'border-transparent text-sidebar-foreground hover:bg-sidebar-accent'
+                      ? 'bg-sidebar-accent text-sidebar-foreground'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent'
                   )}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon aria-hidden="true" className="h-4 w-4" />
                   {item.label}
                   {item.key === 'ajustes' && !!ajustesPendientes && ajustesPendientes > 0 && (
                     <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-medium text-primary-foreground">
@@ -82,6 +85,7 @@ export function Sidebar({
       <div className="border-t border-sidebar-border p-3">
         <Link
           href="/cuenta"
+          onClick={onNavigate}
           className={cn(
             'flex items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-sidebar-accent',
             pathname === '/cuenta' && 'bg-sidebar-accent'
@@ -103,10 +107,24 @@ export function Sidebar({
           disabled={loading}
           className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut aria-hidden="true" className="h-4 w-4" />
           {loading ? 'Cerrando sesión...' : 'Cerrar sesión'}
         </button>
       </div>
+    </div>
+  )
+}
+
+export function Sidebar({
+  profile,
+  ajustesPendientes,
+}: {
+  profile: Profile
+  ajustesPendientes?: number
+}) {
+  return (
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 lg:flex">
+      <SidebarContent profile={profile} ajustesPendientes={ajustesPendientes} />
     </aside>
   )
 }

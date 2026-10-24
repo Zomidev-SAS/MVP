@@ -21,6 +21,26 @@ const mensajeSchema = z.object({
   rol_destino: z.string().optional(),
 })
 
+/**
+ * Firma del contenido de una alerta sintética: no identifica la categoría,
+ * identifica QUÉ hay dentro de ella en este momento (ids ordenados). Si el
+ * contenido cambia (un producto nuevo bajo el umbral, una OC nueva vencida),
+ * la firma cambia, y marcar-leída con la firma vieja ya no aplica — ver
+ * migración 049.
+ */
+function firmaStockBajo(productos: { codigo_producto: string }[]): string {
+  return productos.map((p) => p.codigo_producto).sort().join(',')
+}
+function firmaAjustes(cantidad: number): string {
+  return String(cantidad)
+}
+function firmaOrdenesCompra(ordenes: { id: number }[]): string {
+  return ordenes.map((o) => o.id).sort((a, b) => a - b).join(',')
+}
+function firmaEventosHoy(eventos: { id: number }[]): string {
+  return eventos.map((e) => e.id).sort((a, b) => a - b).join(',')
+}
+
 export async function fetchNotificaciones(rol: string): Promise<NotificacionesPayload> {
   const alertas: AlertaNotificacion[] = []
 
@@ -38,6 +58,7 @@ export async function fetchNotificaciones(rol: string): Promise<NotificacionesPa
     alertas.push({
       tipo: 'stock_bajo',
       id: 'stock-bajo',
+      firma: firmaStockBajo(productos),
       titulo: 'Stock bajo',
       resumen: `${productos.length} producto${productos.length === 1 ? '' : 's'} bajo el umbral configurado`,
       href: '/inventario',
@@ -49,6 +70,7 @@ export async function fetchNotificaciones(rol: string): Promise<NotificacionesPa
     alertas.push({
       tipo: 'ajustes_pendientes',
       id: 'ajustes-pendientes',
+      firma: firmaAjustes(ajustesCount),
       titulo: 'Ajustes pendientes',
       resumen: `${ajustesCount} solicitud${ajustesCount === 1 ? '' : 'es'} esperando tu aprobación`,
       href: '/ajustes',
@@ -60,6 +82,7 @@ export async function fetchNotificaciones(rol: string): Promise<NotificacionesPa
     alertas.push({
       tipo: 'ordenes_compra',
       id: 'ordenes-compra',
+      firma: firmaOrdenesCompra(ordenesPendientes),
       titulo: 'Órdenes de compra pendientes',
       resumen: `${ordenesPendientes.length} orden${ordenesPendientes.length === 1 ? '' : 'es'} por cargar en Siigo`,
       href: '/compras',
@@ -77,6 +100,7 @@ export async function fetchNotificaciones(rol: string): Promise<NotificacionesPa
     alertas.push({
       tipo: 'eventos_hoy',
       id: 'eventos-hoy',
+      firma: firmaEventosHoy(eventosHoy),
       titulo: 'Eventos de hoy',
       resumen: `${eventosHoy.length} evento${eventosHoy.length === 1 ? '' : 's'} programado${eventosHoy.length === 1 ? '' : 's'} para hoy`,
       href: '/',
@@ -91,12 +115,32 @@ export async function fetchNotificaciones(rol: string): Promise<NotificacionesPa
   }
 
   const mensajesNoLeidos = mensajes.filter((m) => !m.leido).length
+  const leidas = await fetchAlertasLeidas(alertas)
 
   return {
     alertas,
     mensajes,
-    totalSinLeer: alertas.length + mensajesNoLeidos,
+    totalSinLeer: alertas.length + mensajesNoLeidos - leidas.length,
+    leidas,
   }
+}
+
+async function fetchAlertasLeidas(alertas: AlertaNotificacion[]): Promise<string[]> {
+  if (alertas.length === 0 || isDevBypassActive()) return []
+
+  const user = await getSessionUser()
+  if (!user) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('notificaciones_leidas')
+    .select('categoria, firma')
+    .in('categoria', alertas.map((a) => a.id))
+
+  if (error) return []
+
+  const firmaLeidaPorCategoria = new Map((data ?? []).map((r) => [r.categoria, r.firma]))
+  return alertas.filter((a) => firmaLeidaPorCategoria.get(a.id) === a.firma).map((a) => a.id)
 }
 
 async function fetchMensajesInternos(): Promise<MensajePanel[]> {
@@ -163,6 +207,50 @@ export async function marcarMensajeLeido(
     return { ok: false, error: 'No se pudo marcar como leído.' }
   }
 
+  return { ok: true }
+}
+
+// Las alertas son agregados sintéticos por categoría (stock_bajo,
+// ajustes_pendientes, ordenes_compra, eventos_hoy), recalculados en cada
+// fetchNotificaciones — no hay un id de fila real que marcar como leído.
+// Por eso cada llamada manda también la `firma` (ids ordenados del
+// contenido actual, calculada arriba): migración 049 guarda (usuario,
+// categoria) -> firma, y una alerta solo se ve como leída si su firma
+// actual coincide con la última que se marcó. Si el contenido cambió desde
+// entonces, vuelve a aparecer como no leída aunque la categoría sea la misma.
+export async function marcarNotificacionLeida(
+  alertaId: string,
+  firma: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isDevBypassActive()) return { ok: true }
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sin sesión.' }
+  const supabase = await createClient()
+  const { error } = await supabase.from('notificaciones_leidas').upsert({
+    usuario_id: user.id,
+    categoria: alertaId,
+    firma,
+    leida_at: new Date().toISOString(),
+  })
+  if (error) return { ok: false, error: 'No se pudo marcar como leída.' }
+  return { ok: true }
+}
+
+export async function marcarTodasLeidas(
+  alertas: { id: string; firma: string }[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isDevBypassActive()) return { ok: true }
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sin sesión.' }
+  const supabase = await createClient()
+  const filas = alertas.map((a) => ({
+    usuario_id: user.id,
+    categoria: a.id,
+    firma: a.firma,
+    leida_at: new Date().toISOString(),
+  }))
+  const { error } = await supabase.from('notificaciones_leidas').upsert(filas)
+  if (error) return { ok: false, error: 'No se pudieron marcar como leídas.' }
   return { ok: true }
 }
 

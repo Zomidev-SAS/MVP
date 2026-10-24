@@ -1,3 +1,8 @@
+supabase/functions/.env
+supabase/functions/**/.env
+.env
+.env.local
+node_modules/
 .DS_Store
 .idea/
 *.local
@@ -11,3 +16,9 @@ OC/
 # Supabase local
 supabase/.branches
 supabase/.temp
+
+# Descargas del browser tool integrado (verificación en VS Code)
+tmp/
+
+# Grafo graphify (local)
+graphify-out/

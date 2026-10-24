@@ -42,15 +42,15 @@ Deno.serve(async (req) => {
     return json({ error: 'JSON inválido' }, 400)
   }
 
-  const codigo = body.codigo_producto?.trim()
-  if (!codigo) {
-    return json({ error: 'codigo_producto es obligatorio' }, 400)
+  const codigo = body.codigo_producto?.trim() || null
+  const proveedorNit = body.proveedor_nit?.trim() || null
+  // Se puede validar solo el proveedor (autorrelleno por NIT) o producto + proveedor.
+  if (!codigo && !proveedorNit) {
+    return json({ error: 'Indica codigo_producto o proveedor_nit' }, 400)
   }
 
-  const proveedorNit = body.proveedor_nit?.trim() || null
-
   try {
-    const producto = await buscarProductoSiigo(codigo)
+    const producto = codigo ? await buscarProductoSiigo(codigo) : null
     let proveedor = null as Awaited<ReturnType<typeof buscarProveedorSiigo>>
 
     if (proveedorNit) {
@@ -59,9 +59,11 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true,
-      producto: producto
-        ? { encontrado: true, code: producto.code, name: producto.name, active: producto.active }
-        : { encontrado: false },
+      producto: !codigo
+        ? null
+        : producto
+          ? { encontrado: true, code: producto.code, name: producto.name, active: producto.active }
+          : { encontrado: false },
       proveedor: proveedorNit
         ? proveedor
           ? {

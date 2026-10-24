@@ -8,7 +8,8 @@ import { extraerFechaIngreso, extraerFechaSalida } from '@/lib/types/formularios
 export const TIPO_DB_MATCH: Record<Exclude<FormulariosFiltros['tipo'], 'todos'>, string[]> = {
   entrada: ['entrada', 'entradas', 'ingreso', 'in'],
   salida: ['salida', 'salidas', 'salida_vin', 'egreso', 'out'],
-  parqueadero: ['parqueadero', 'parking'],
+  // En la base, los formularios de parqueadero se guardan con tipoFormulario = 'ubicacion'.
+  parqueadero: ['parqueadero', 'parking', 'ubicacion', 'ubicación'],
 }
 
 export function normalizarFormulario(row: Record<string, unknown>): FormularioListado {

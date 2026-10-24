@@ -7,13 +7,18 @@ create table if not exists config_app (
   constraint config_app_singleton check (id = 1)
 );
 
-insert into config_app (id, bloquear_sin_stock, umbral_stock_bajo)
-select c.id, c.bloquear_sin_stock, c.umbral_stock_bajo
-from configuracion c
-where c.id = 1
-on conflict (id) do update set
-  bloquear_sin_stock = excluded.bloquear_sin_stock,
-  umbral_stock_bajo = excluded.umbral_stock_bajo;
+do $$
+begin
+  if to_regclass('public.configuracion') is not null then
+    insert into config_app (id, bloquear_sin_stock, umbral_stock_bajo)
+    select c.id, c.bloquear_sin_stock, c.umbral_stock_bajo
+    from configuracion c
+    where c.id = 1
+    on conflict (id) do update set
+      bloquear_sin_stock = excluded.bloquear_sin_stock,
+      umbral_stock_bajo = excluded.umbral_stock_bajo;
+  end if;
+end $$;
 
 insert into config_app (id, bloquear_sin_stock, umbral_stock_bajo)
 values (1, false, 2)

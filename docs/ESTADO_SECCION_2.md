@@ -1,0 +1,238 @@
+# Estado de la Sección 2 — Vista Gráfica, Siigo y Correos por Rol
+
+**Fecha:** 2026-10-10 (actualizado 2026-10-11 tras reconciliar contra el backend real; actualizado 2026-10-13 con fixes de frontend puro; actualizado 2026-10-14 cerrando 3 de los 4 huecos "bloqueado en backend")
+**Rama:** fusionada en `main` (commit `5381209`, pusheado a `origin/main`)
+**Plan original:** `docs/superpowers/plans/2026-10-09-seccion-2-vista-grafica.md`
+
+**Actualización 2026-10-14:** sesión mixta frontend + SQL (con autorización explícita para
+tocar backend, excepción puntual a la regla normal de "solo frontend"). Se cerraron 3 de
+los 4 puntos restantes de la sección "Bloqueado en el equipo de backend":
+
+- **Reenvío manual de correo** (`/correos`, botón Reenviar): se agregó
+  `rpc_reenviar_correo(p_id)` (migración 049) — reabre la fila en `cola_correos`
+  (`estado -> 'pendiente'`), el cron existente (`fn_disparar_envio_correos`, cada
+  minuto) la recoge sola. Solo supervisor. `correos-actions.ts` ya no falla explícito,
+  llama la RPC.
+- **Centro de notificaciones no persistía "leída"**: se creó `notificaciones_leidas`
+  (migración 049) con una diferencia de diseño a propósito respecto a lo que se había
+  descartado antes por peligroso — no guarda solo `(usuario, categoria)`, guarda también
+  una **firma del contenido** (ids ordenados de los productos/OC/eventos que componían la
+  alerta). Si el contenido cambia, la firma ya no coincide y la alerta vuelve a aparecer
+  como no leída aunque la categoría sea la misma — así "marcar leída" nunca esconde
+  alertas futuras que todavía no existían. Esto NO reemplaza el sistema real de
+  notificaciones por instancia de B3 (migración 033, tabla `notificaciones`, sigue sin
+  usarse desde el frontend) — sigue siendo una decisión de producto aparte si algún día
+  se quiere unificar ambos sistemas.
+- **Catálogo Siigo (productos/proveedores)**: resultó que el backend YA tenía todo desde
+  044 (`siigo_catalogo_diferencias` + último estado de `siigo_sync_catalogo` vía
+  `vista_log_automatizaciones_ultimo_estado`) — nunca se construyó pantalla. Se agregó
+  tarjeta "Catálogo Siigo — diferencias" en `/compras` (solo supervisor/compras) y
+  `rpc_marcar_diferencia_siigo_revisada` (migración 050) para marcar una diferencia como
+  revisada sin dar UPDATE directo sobre la tabla.
+- Fix adicional de la sesión anterior (correo HTML): `enviar-correos` ya envía el cuerpo
+  del correo con `<br>` en vez de `\n` crudo (los saltos de línea de alertas con bullets,
+  como el reporte semanal, se veían todos pegados en una sola línea).
+- Fix de UI suelto: input de contraseña en `/login` sin placeholder, agregado
+  ("Ingresa contraseña").
+
+Verificado con navegador real (bypass dev): los 3 flujos nuevos (marcar notificación
+leída, reenviar correo, marcar diferencia Siigo revisada) funcionan sin error. `tsc`,
+`eslint` y `next build` limpios. Las migraciones 049/050 se aplicaron manualmente vía SQL
+Editor (sin CLI) y se verificaron contra el proyecto real por API REST con la anon key
+(las 2 RPC responden "permission denied", no "function not found" — confirma que existen
+y que el chequeo de rol funciona). Se detectó un detalle: la tabla `notificaciones_leidas`
+quedó con `anon` teniendo GRANT de SELECT/INSERT/UPDATE (probablemente se creó desde el
+Table Editor visual en vez de pegar el SQL crudo — Supabase le da acceso a `anon` por
+defecto así). No es hueco real (RLS bloquea todo: `usuario_id = auth.uid()` nunca pasa
+sin sesión, confirmado insertando como anon) pero no sigue la convención del resto del
+proyecto.
+
+**Colisión con trabajo en paralelo:** al momento de pushear, `alecito` (con Cursor) ya
+había mergeado a `origin/main` su propia versión de 049/050 — mismo diseño, prácticamente
+línea por línea igual a lo de arriba — más una **051** que endurece ambas RPC: valida el
+rol de forma null-safe (`is distinct from` / `coalesce`, en vez de `<>` / `not in`, que
+con `get_user_rol()` devolviendo NULL —usuario sin perfil o inactivo— no lanzaban la
+excepción y dejaban pasar el UPDATE) y revoca EXECUTE a `anon` explícitamente en ambas
+funciones. Se resolvió con fast-forward merge (mismo padre, sin conflicto) descartando
+los 049/050 propios en favor de los de la rama remota — el fix null-safe de 051 es
+estrictamente mejor que lo que yo había escrito, y el mismo bug (`not in` sin null-safe)
+sigue latente en `rpc_aprobar_oc_siigo`, 044, sin tocar por ahora. Se agregó **052** solo
+para el hueco que 051 no cubre: el GRANT a `anon` sobre la *tabla* `notificaciones_leidas`
+(051 solo tocó las funciones).
+
+**051 y 052 ya se corrieron en el SQL Editor y se verificaron contra el proyecto real**
+(API REST con anon key): `notificaciones_leidas` ahora responde "permission denied for
+table" a `anon` (antes daba `[]` con 200 — grant leak cerrado), y ambas RPC siguen
+bloqueando `anon` correctamente. Nada pendiente de este bloque.
+
+**QA con bypass dev — los 8 roles (2026-10-14, mismo día):** auditoría estática de los 16
+`page.tsx` contra `ROUTE_PERMISSIONS` (carpeta = clave en los 16, sin mismatch) +
+navegación real con los 8 roles (supervisor, comercial, metalmecánica, producción,
+instalación, compras, auditoría, lectura) contra rutas representativas de cada uno
+(denegadas y permitidas). Resultado: los 8 correctos, cero errores de consola nuevos.
+Gating a nivel de componente también correcto en los 2 casos sensibles probados: la
+tarjeta de catálogo Siigo solo la ve supervisor/compras (comercial no), y el botón
+Reenviar de `/correos` solo lo ve supervisor (auditoría ve la tabla pero no el botón).
+No se cubrió la matriz completa 8×16 (128 combinaciones) — se probaron rutas
+representativas por rol, no todas. Sigue pendiente, y es lo que de verdad importa: todo
+esto valida el *wiring* del frontend (RoleGuard, gating de componentes), nunca datos
+reales ni RLS real — bypass dev no toca Supabase. Eso solo se prueba con sesión real.
+
+En esa pasada aparecieron 2 errores de consola reales, sin relación con lo anterior, ya
+arreglados (commit `615284d`):
+- **Hydration mismatch en casi toda fecha de la app** (correos, notificaciones,
+  automatizaciones, actividad, movimientos, catálogo Siigo): el ICU de Node (SSR) usa un
+  espacio normal antes de "a. m."/"p. m." y el de Chrome usa NBSP — mismo texto visual,
+  React lo marcaba como mismatch en cada una. Se agregó `formatFechaHora()` en
+  `lib/format.ts` (normaliza el espacio) y se reemplazaron los 9 sitios que llamaban
+  `new Date(x).toLocaleString('es-CO')` a mano.
+- **`/acceso-denegado`**: el botón usaba `Button render={<Link>}`, que Base UI rechaza
+  explícitamente (un `<a>` no es un `<button>` nativo). Cambiado a `buttonVariants()`
+  sobre un `Link` real — mismo patrón que ya usaba `ChartExportMenu`.
+
+Lo que queda pendiente de la lista original (ver abajo) ya no incluye los 3 puntos de
+arriba. Sigue pendiente, sin cambios: catálogo Siigo — fecha de última sync SÍ visible
+(siempre lo estuvo, vía `/automatizaciones`) pero eso es lo único de ese punto que no
+tocó esta sesión; F7 pulido visual en tablet real; QA completo por rol con datos reales;
+deploy a staging + grabaciones para cliente.
+
+**Actualización 2026-10-13:** sesión de arreglos de frontend puro, sin tocar
+backend/migraciones. Resumen (detalle completo en el mensaje de commit):
+- El selector de bodega/categoría del dashboard ahora trae opciones reales
+  (tablas `bodegas`/`categorias_inventario`) en vez de arrays vacíos/hardcodeados,
+  y el mismo bug (lista de opciones copy-pasteada y fija) se encontró y
+  arregló en 4 lugares más: `InventoryFilters`, `MovementsFilters`,
+  `AdjustmentForm`, `EntryForm`.
+- Los filtros de bodega/categoría del dashboard ahora sí llegan al servidor
+  (`parseFiltrosDesdeSearchParams` los ignoraba) y las tarjetas KPI
+  (unidades, valor, stock bajo) ya respetan esos filtros — antes solo las
+  gráficas los usaban, no los KPIs.
+- Gráficas del dashboard: ejes con etiquetas cortadas (nombres de bodega,
+  categoría, producto) arreglado; se cambió el layout de grid 2 columnas a
+  un selector tipo dropdown que muestra una gráfica a la vez (pedido
+  explícito del cliente para que no se vean cortadas).
+- Exportar gráfica: bug real en PNG (fallo silencioso si `canvas.toBlob`
+  devolvía `null`, sin aviso); se agregó opción de exportar como SVG además
+  de PNG/CSV, y errores ahora muestran toast en vez de fallar mudo.
+- `EnvioCorreoPreview` ya no se queda colgado en silencio si falla el
+  cálculo de destinatarios — muestra error visible.
+
+La parte de arriba se escribió sin navegador real disponible. Más tarde en la
+misma sesión se habilitó el browser integrado de VS Code y se verificó todo
+contra la app real (login real, sin bypass dev). Se encontraron y arreglaron
+3 bugs adicionales que el código por sí solo no delataba:
+
+- **Dropdowns de toda la app mostraban el `value` crudo, no la etiqueta**
+  (ej. "7d" en vez de "Últimos 7 días", "es" en vez de "Entradas vs
+  Salidas"). Causa: `@base-ui/react/select`'s `<Select.Value>` solo resuelve
+  el label si `<Select.Root items={...}>` recibe el mapeo value→label — sin
+  eso muestra el value tal cual. Bug preexistente en los 4 usos de `Select`
+  del proyecto (`DashboardFilters`, `ChartSelector`, `NotificacionesHistorial`,
+  `HeaderMessages`), no introducido en esta sesión pero tampoco detectado
+  hasta probar en navegador real.
+- **Export de gráfica a PNG/SVG rompía por 3 motivos distintos, cada uno
+  enmascarando al siguiente:**
+  1. `nodo.querySelector('svg')` agarraba el ícono de descarga (16×16, el
+     primer `<svg>` del contenedor) en vez de `.recharts-surface` (el
+     gráfico real) — exportaba el ícono, nunca el gráfico.
+  2. El CSP del proyecto (`next.config.ts`) tenía `img-src 'self' data:
+     https:` sin `blob:` — el `<img src="blob:...">` usado para rasterizar
+     el SVG a PNG quedaba bloqueado por política, siempre fallaba.
+  3. Los colores del tema están en `oklch()`/`lab()` (CSS Color 4,
+     `app/globals.css`); el renderizador de imágenes que rasteriza el SVG
+     standalone no los entiende y el `fill` caía a negro — las barras
+     exportaban negras en vez de rojas/el color real.
+  Arreglado: selector corregido a `svg.recharts-surface`, `blob:` agregado
+  al CSP, y los colores se normalizan pintando 1 pixel en un canvas oculto y
+  leyendo los bytes reales vía `getImageData` (siempre vuelve en sRGB
+  0-255 sin importar el espacio de color de entrada).
+- **Overflow horizontal real en viewport de celular (375px)**: las tarjetas
+  KPI (`KpiCard`, `IndicadorCard`) no tenían `min-w-0`, así que un grid de
+  2-4 columnas con `$ 1.174.609.038` no podía encoger y forzaba scroll
+  horizontal en toda la página. Arreglado con `min-w-0` + `break-words` en
+  las tarjetas.
+
+Verificado con capturas de pantalla y archivos PNG/SVG descargados y leídos
+de vuelta (colores y contenido correctos), incluyendo el click real del menú
+"Exportar" en la UI (no solo invocando la lógica directo).
+
+**4to bug, el que realmente rompía el click del usuario:**
+`ChartExportMenu.tsx` usaba `<DropdownMenuItem onSelect={...}>` — `onSelect`
+es convención de Radix UI, pero el proyecto usa `@base-ui/react/menu`, cuyo
+`Menu.Item` no tiene prop `onSelect`, solo `onClick`. TypeScript no lo marcó
+porque `onSelect` SÍ es un evento DOM válido de `<div>` (selección de texto,
+nada que ver), así que el handler quedaba completamente inerte: el menú se
+abría y cerraba bien, pero la descarga nunca se disparaba. Cambiado a
+`onClick` en los 3 items; confirmado con un click real vía CDP que ahora sí
+descarga el archivo con el nombre correcto (`chart-entradas-salidas.png`).
+
+**Actualización 2026-10-11:** el equipo de backend entregó B1-B13 (migraciones
+031-046) con nombres distintos a los que el frontend asumía — documentado en
+`docs/CONTRATO_DATOS_SECCION2.md`. Se reconciliaron los 7 archivos que
+llamaban RPCs/vistas placeholder (`dashboard-graficas-actions.ts`,
+`automatizaciones-actions.ts`, `actividad-actions.ts`, `correos-actions.ts`,
+`ordenes-compra-actions.ts`, `planta-actions.ts`, más el tipo
+`automatizaciones.ts`) contra los nombres reales del contrato. `tsc --noEmit`
+y `eslint` pasan limpio sobre esos archivos. Sigue sin probarse contra datos
+100% reales (falta confirmar project ref de Supabase cloud + secrets). Los
+huecos que NO se cerraron, porque no son de nombres sino de funcionalidad
+faltante en backend:
+- Vista/RPC anon-safe para `/planta` (kiosco): no existe nada que llamar
+  todavía — `fetchDatosPlanta` se degrada directo a listas vacías.
+- Reenvío manual de un correo individual: no hay RPC/Edge Function para
+  esto (solo reintento automático por cron) — `reenviarCorreo` falla
+  explícito con un mensaje claro en vez de llamar algo inexistente.
+- El centro de notificaciones (`/notificaciones`, campana) sigue sin
+  persistir "leída" entre recargas: el backend no construyó
+  `notificaciones_leidas` como se asumía, sino un sistema distinto (tabla
+  `notificaciones` por instancia/usuario) que no mapea 1:1 contra las
+  alertas sintéticas por categoría de esta pantalla — decisión de producto
+  pendiente, no un nombre por confirmar (ver nota en
+  `notificaciones-actions.ts`).
+
+Frontend completo para F1-F12 del documento del cliente. Se construyó con Subagent-Driven Development: 21 tareas, cada una implementada y revisada por separado (algunas con rondas de corrección), más una revisión final de rama completa que encontró y corrigió 1 hallazgo crítico y 6 importantes antes de fusionar.
+
+## Completado
+
+- **F1-F2** Dashboard gráfico por rol (6 gráficas nuevas + KPIs) y filtro de rango de fecha conectado a la URL.
+- **F3** Actualización en vivo: un solo proveedor de realtime escuchando 4 tablas a la vez, indicador "En vivo", aviso toast al llegar algo nuevo.
+- **F4** Centro de notificaciones: campana con marcar leída/marcar todas + historial en `/notificaciones`.
+- **F5** `/automatizaciones` (solo supervisor).
+- **F6** `/actividad` (supervisor + auditoría).
+- **F7** Pulido visual (parcial — ver Pendiente).
+- **F8** Exportar gráficas a PNG/CSV, respetando qué costos puede ver cada rol.
+- **F9** Rendimiento: KPIs rápidos se separaron de las gráficas pesadas con Suspense.
+- **F10** Estado de sincronización Siigo en `/compras` — **solo la parte que no depende del backend** (ver Pendiente).
+- **F11** Correos automáticos por rol: selector + vista previa al redactar, pantalla `/correos`, avisos de correo faltante en usuarios/cuenta.
+- **F12** `/planta/[token]` — modo pantalla para TV del taller, sin login, protegido por token firmado.
+
+Cada feature sigue el mismo patrón que ya usaba el resto del proyecto: Server Action con rama de bypass dev (datos de ejemplo) + rama real contra Supabase, que falla explícito (no silencioso) cuando la función/vista del backend todavía no existe.
+
+## Bloqueado en el equipo de backend
+
+Todo lo de esta sección (7 puntos originales: `dashboard_graficas`, automatizaciones,
+actividad, correos/reenvío, notificaciones leídas, envío a Siigo, vista anon-safe de
+planta) quedó resuelto entre el 2026-10-11 y el 2026-10-14. Detalle de qué se conectó
+contra qué nombre real en `docs/CONTRATO_DATOS_SECCION2.md` y en el bloque "Actualización
+2026-10-14" de arriba (reenvío de correo y notificaciones leídas, los 2 últimos en
+cerrarse). No queda nada bloqueado por backend en esta lista.
+
+## Pendiente, no bloqueado por backend
+
+- **F7 pulido visual**: validado en desktop y en navegador con viewport emulado, falta la
+  revisión visual real en tablet de 10 pulgadas (dispositivo físico) que pide el
+  documento del cliente.
+- **QA completo por rol (8 roles × todas las pantallas) con datos reales** — se hizo con
+  bypass dev (los 8 roles, rutas representativas, ver arriba), pero bypass dev nunca
+  prueba RLS ni datos reales. Falta repetir con sesión real contra Supabase cloud.
+- **Deploy a staging (`carrera.zomidev.com`) y grabaciones para el cliente** — no se hizo.
+
+## Cómo seguir
+
+1. QA por rol con datos reales (los 5 roles que faltan + matriz completa) + pulido visual
+   en tablet físico.
+2. Deploy a staging y grabaciones para el cliente.
+
+Si se retoma cualquier punto pendiente, seguir el mismo patrón ya usado en todo el
+proyecto: Server Action con bypass dev + rama real explícita, nunca inventar que algo
+funciona cuando no se puede verificar.

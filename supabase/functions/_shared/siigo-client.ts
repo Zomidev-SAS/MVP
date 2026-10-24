@@ -128,3 +128,244 @@ export async function buscarProveedorSiigo(nit: string): Promise<SiigoProveedorR
     active: item.active !== false,
   }
 }
+
+// ============================================================================
+// B12: escritura (hasta el Avance 2 este cliente era solo de consulta).
+// ============================================================================
+
+async function siigoPost(path: string, body: unknown): Promise<Response> {
+  const token = await getSiigoAccessToken()
+  return fetch(`${SIIGO_API}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: token,
+      'Partner-Id': partnerId(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+}
+
+export interface SiigoItemCompra {
+  codigo_producto: string
+  descripcion: string
+  cantidad: number
+  precio_unitario?: number
+}
+
+export interface OrdenCompraParaSiigo {
+  id: number
+  titulo: string | null
+  fecha_pedido: string | null
+  proveedor_nit: string | null
+  observaciones: string | null
+  // 'credito' | 'contado' — usar SIIGO_PAYMENT_TYPE_ID_CREDITO/CONTADO si están configurados
+  medio_pago: string | null
+  // Factura que emitió el proveedor: Siigo la exige para crear la factura de compra.
+  factura_proveedor_prefijo?: string | null
+  factura_proveedor_numero?: string | null
+  items: SiigoItemCompra[]
+}
+
+export interface SiigoDocumentoCreado {
+  id: string
+  numero: string | null
+}
+
+// Tipo de documento: Factura de compra (FC). Confirmado con contabilidad.
+// Configurar: supabase secrets set SIIGO_DOCUMENT_TYPE_ID=<id-del-tipo-FC-en-Siigo>
+function tipoDocumentoCompra(): string {
+  const id = Deno.env.get('SIIGO_DOCUMENT_TYPE_ID')?.trim()
+  if (!id) {
+    throw new Error(
+      'SIIGO_DOCUMENT_TYPE_ID no está configurado. ' +
+      'Busca el ID del tipo "Factura de compra" (FC) en tu cuenta Siigo y ' +
+      'ejecuta: supabase secrets set SIIGO_DOCUMENT_TYPE_ID=<id>'
+    )
+  }
+  return id
+}
+
+// Devuelve el array de payments para el documento Siigo según el medio de pago
+// de la OC. Si los secretos correspondientes no están configurados, Siigo usa
+// su propio valor por defecto (típicamente crédito a proveedor).
+function buildPayments(medioPago: string | null): Array<{ id: number }> | undefined {
+  if (medioPago === 'credito') {
+    const id = Deno.env.get('SIIGO_PAYMENT_TYPE_ID_CREDITO')?.trim()
+    if (id) return [{ id: Number(id) }]
+  }
+  if (medioPago === 'contado') {
+    const id = Deno.env.get('SIIGO_PAYMENT_TYPE_ID_CONTADO')?.trim()
+    if (id) return [{ id: Number(id) }]
+  }
+  return undefined
+}
+
+// Crea la factura de compra (FC) en Siigo cuando la OC se marca como 'listo'.
+// Idempotente a nivel de llamador: siigo-sync-oc solo invoca esto si
+// ordenes_compra.siigo_id todavía es null.
+export async function crearDocumentoCompraSiigo(
+  orden: OrdenCompraParaSiigo
+): Promise<SiigoDocumentoCreado> {
+  if (orden.items.length === 0) {
+    throw new Error(`La orden ${orden.id} no tiene líneas, no se envía a Siigo`)
+  }
+
+  // El precio 0 es válido (producto sin costo); solo falta precio si es null o negativo.
+  const sinPrecio = orden.items.filter(
+    (it) => it.precio_unitario == null || !Number.isFinite(it.precio_unitario) || it.precio_unitario < 0
+  )
+  if (sinPrecio.length > 0) {
+    throw new Error(
+      `La orden ${orden.id} tiene ítems sin precio unitario (${sinPrecio.map((it) => it.codigo_producto).join(', ')}). ` +
+      'Edita la OC en el panel y agrega el precio antes de enviarla a Siigo.'
+    )
+  }
+
+  const numeroFacturaProveedor = orden.factura_proveedor_numero?.trim()
+  if (!numeroFacturaProveedor) {
+    throw new Error(
+      `La orden ${orden.id} no tiene el número de la factura del proveedor. ` +
+      'Siigo lo exige (provider_invoice): agrégalo en el panel y reintenta.'
+    )
+  }
+
+  const payments = buildPayments(orden.medio_pago)
+
+  const body: Record<string, unknown> = {
+    document: { id: Number(tipoDocumentoCompra()) },
+    date: orden.fecha_pedido ?? new Date().toISOString().slice(0, 10),
+    supplier: orden.proveedor_nit ? { identification: orden.proveedor_nit } : undefined,
+    provider_invoice: {
+      ...(orden.factura_proveedor_prefijo?.trim() ? { prefix: orden.factura_proveedor_prefijo.trim() } : {}),
+      number: numeroFacturaProveedor,
+    },
+    observations: [
+      orden.titulo,
+      orden.observaciones,
+      `Panel Carrera Arango · OC #${orden.id}`,
+    ].filter(Boolean).join(' — '),
+    items: orden.items.map((it) => ({
+      // Siigo exige el tipo de cada línea (Product | FixedAsset | Account).
+      type: 'Product',
+      code: it.codigo_producto,
+      description: it.descripcion,
+      quantity: it.cantidad,
+      price: it.precio_unitario,
+    })),
+  }
+
+  if (payments) {
+    body.payments = payments
+  }
+
+  const res = await siigoPost('/v1/purchases', body)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Siigo purchases (${res.status}): ${text.slice(0, 300)}`)
+  }
+
+  const data = (await res.json()) as { id?: string; number?: string; name?: string }
+  if (!data.id) {
+    throw new Error('Siigo no devolvió id del documento creado')
+  }
+
+  return { id: data.id, numero: data.number ?? data.name ?? null }
+}
+
+// ============================================================================
+// B12: catálogo (sincronización nocturna de productos y proveedores).
+// ============================================================================
+
+export interface SiigoProductoCatalogo {
+  code: string
+  name: string
+  active: boolean
+  // precio de lista si Siigo lo trae en la primera moneda configurada; se usa
+  // solo para detectar diferencias, nunca se pisa el costo real del panel.
+  precio_lista: number | null
+}
+
+export async function listarProductosSiigo(
+  page: number,
+  pageSize = 100,
+  actualizadoDesde?: string
+): Promise<{
+  productos: SiigoProductoCatalogo[]
+  totalPaginas: number
+}> {
+  const params: Record<string, string> = { page: String(page), page_size: String(pageSize) }
+  // Bajada incremental: solo lo creado o modificado desde esa fecha (ISO).
+  if (actualizadoDesde) params.updated_start = actualizadoDesde
+  const res = await siigoGet('/v1/products', params)
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Siigo products (${res.status}): ${body.slice(0, 200)}`)
+  }
+
+  const data = (await res.json()) as {
+    results?: Array<{
+      code?: string
+      name?: string
+      active?: boolean
+      prices?: Array<{ price_list?: Array<{ value?: number }> }>
+    }>
+    pagination?: { total_results?: number; page_size?: number }
+  }
+
+  const productos = (data.results ?? [])
+    .filter((p) => p.code)
+    .map((p) => ({
+      code: p.code!,
+      name: p.name ?? p.code!,
+      active: p.active !== false,
+      precio_lista: p.prices?.[0]?.price_list?.[0]?.value ?? null,
+    }))
+
+  const totalResults = data.pagination?.total_results ?? productos.length
+  const size = data.pagination?.page_size ?? pageSize
+  const totalPaginas = Math.max(1, Math.ceil(totalResults / size))
+
+  return { productos, totalPaginas }
+}
+
+export async function listarProveedoresSiigo(
+  page: number,
+  pageSize = 100,
+  actualizadoDesde?: string
+): Promise<{
+  proveedores: SiigoProveedorResumen[]
+  totalPaginas: number
+}> {
+  const params: Record<string, string> = { page: String(page), page_size: String(pageSize) }
+  if (actualizadoDesde) params.updated_start = actualizadoDesde
+  const res = await siigoGet('/v1/customers', params)
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Siigo customers (${res.status}): ${body.slice(0, 200)}`)
+  }
+
+  const data = (await res.json()) as {
+    results?: Array<{
+      identification?: string
+      name?: string[] | string
+      commercial_name?: string
+      active?: boolean
+    }>
+    pagination?: { total_results?: number; page_size?: number }
+  }
+
+  const proveedores = (data.results ?? [])
+    .filter((p) => p.identification)
+    .map((p) => ({
+      identification: p.identification!,
+      name: Array.isArray(p.name) ? p.name.filter(Boolean).join(' ') : p.name ?? p.commercial_name ?? p.identification!,
+      active: p.active !== false,
+    }))
+
+  const totalResults = data.pagination?.total_results ?? proveedores.length
+  const size = data.pagination?.page_size ?? pageSize
+  const totalPaginas = Math.max(1, Math.ceil(totalResults / size))
+
+  return { proveedores, totalPaginas }
+}

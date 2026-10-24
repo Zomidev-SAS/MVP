@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { FormulariosFilters } from '@/components/formularios/FormulariosFilters'
@@ -38,8 +39,8 @@ export function FormulariosTable() {
   const [opcionesFiltro, setOpcionesFiltro] = useState<OpcionFiltro[]>(OPCIONES_FILTRO_INICIALES)
 
   useEffect(() => {
+    setLoading(true)
     const timeout = setTimeout(() => {
-      setLoading(true)
       fetchFormularios(filtros, pagina)
         .then((resultado) => {
           setFilas(resultado.filas)
@@ -100,7 +101,12 @@ export function FormulariosTable() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-md border">
+      <div className="relative overflow-x-auto rounded-md border">
+        {loading && filas.length > 0 && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
+            <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
         <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
@@ -159,7 +165,7 @@ export function FormulariosTable() {
           type="button"
           variant="outline"
           onClick={() => setPagina((p) => Math.max(1, p - 1))}
-          disabled={pagina <= 1}
+          disabled={pagina <= 1 || loading}
         >
           Anterior
         </Button>
@@ -170,7 +176,7 @@ export function FormulariosTable() {
           type="button"
           variant="outline"
           onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-          disabled={pagina >= totalPaginas}
+          disabled={pagina >= totalPaginas || loading}
         >
           Siguiente
         </Button>

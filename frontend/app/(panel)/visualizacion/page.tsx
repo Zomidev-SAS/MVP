@@ -6,7 +6,7 @@ import { getCurrentProfile } from '@/lib/supabase/get-current-profile'
 import { fetchEntradasSalidasFormulariosSemana } from '@/lib/supabase/lectura-panel-actions'
 import { VehiculoTimelineCard } from '@/components/dashboard/VehiculoTimelineCard'
 import { EntradasSalidasChart } from '@/components/dashboard/EntradasSalidasChart'
-import { RealtimeRefresher } from '@/components/dashboard/RealtimeRefresher'
+import { RealtimePanelProvider } from '@/components/realtime/RealtimePanelProvider'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function VisualizacionPage() {
@@ -25,11 +25,16 @@ async function VisualizacionContent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Panel operativo</h1>
-        <p className="text-sm text-muted-foreground">
-          Vista general de vehículos, entradas y salidas. Sin inventario ni valores de stock.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold">Panel operativo</h1>
+          <p className="text-sm text-muted-foreground">
+            Vista general de vehículos, entradas y salidas. Sin inventario ni valores de stock.
+          </p>
+        </div>
+        <RealtimePanelProvider
+          tablas={['movimientos_inventario', 'ajustes_pendientes', 'ordenes_compra', 'mensajes_panel']}
+        />
       </div>
 
       <VehiculoTimelineCard rolActual={result.profile.rol} />
@@ -61,8 +66,6 @@ async function VisualizacionContent() {
           </p>
         </CardContent>
       </Card>
-
-      <RealtimeRefresher />
     </div>
   )
 }

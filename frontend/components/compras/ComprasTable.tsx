@@ -1,22 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Download,
-  FileText,
-  Pencil,
-  Plus,
-  Search,
-  Trash2,
-} from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronRight, Clock, Plus, Search, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -28,22 +17,31 @@ import {
 import { cn } from '@/lib/utils'
 import {
   CLASE_ESTADO_OC,
-  ESTADOS_ORDEN_COMPRA,
   ETIQUETA_ESTADO_OC,
+  resumenRecepcion,
   tituloOrdenDisplay,
   type EstadoOrdenCompra,
   type OrdenCompra,
 } from '@/lib/types/orden-compra'
 import {
   actualizarEstadoOrdenCompra,
-  actualizarObservacionesEntrega,
   eliminarOrdenCompra,
+  enviarOrdenASiigo,
   fetchOrdenesCompra,
   marcarOrdenDescargadaSiigo,
+  reintentarEnvioSiigo,
 } from '@/lib/supabase/ordenes-compra-actions'
+import { derivarEstadoSiigo } from '@/lib/supabase/orden-compra-siigo-status'
 import { descargarCsvSiigo } from '@/lib/export/orden-compra-siigo'
 import { descargarPdfOrdenCompra } from '@/lib/export/orden-compra-pdf'
 import { ComprasPedidoDialog } from '@/components/compras/ComprasPedidoDialog'
+import { SiigoStatusBadge, ETIQUETA_SIIGO_SYNC } from '@/components/compras/SiigoStatusBadge'
+import { OrdenDetalle } from '@/components/compras/OrdenDetalle'
+import { ResumenCompras, coincideFiltro, estaVencida, type FiltroCompras } from '@/components/compras/ResumenCompras'
+import { Skeleton } from '@/components/ui/skeleton'
+import { FacturaProveedorDialog, type ModoFacturaProveedor } from '@/components/compras/FacturaProveedorDialog'
+import { subirOrdenCompraDocumento } from '@/lib/supabase/ordenes-compra-documento-actions'
+import type { EstadoSyncSiigo } from '@/lib/types/siigo'
 
 function formatearVencimiento(fecha: string | null): string {
   if (!fecha) return '—'
@@ -58,28 +56,65 @@ function iconoVencimiento(orden: OrdenCompra) {
   if (!orden.fecha_vencimiento) {
     return <Clock className="h-4 w-4 text-muted-foreground" aria-hidden />
   }
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  const vence = new Date(orden.fecha_vencimiento + 'T12:00:00')
-  if (vence < hoy) {
+  if (estaVencida(orden)) {
     return <AlertCircle className="h-4 w-4 text-destructive" aria-hidden />
   }
   return <Clock className="h-4 w-4 text-amber-600" aria-hidden />
 }
 
-interface ComprasTableProps {
-  productoInicial?: { codigo: string; nombre: string } | null
+/** "Vencida hace 3 d", "Vence hoy", "En 2 d" o la fecha: lo urgente se nota de un vistazo. */
+function textoEntrega(orden: OrdenCompra): { texto: string; clase: string } {
+  if (orden.estado !== 'en_curso') {
+    return { texto: formatearVencimiento(orden.fecha_vencimiento), clase: '' }
+  }
+  if (!orden.fecha_vencimiento) return { texto: 'Sin fecha', clase: 'text-muted-foreground' }
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  const vence = new Date(`${orden.fecha_vencimiento}T12:00:00`)
+  const dias = Math.round((vence.getTime() - hoy.getTime()) / 86_400_000)
+  if (dias < 0) return { texto: `Vencida hace ${-dias} d`, clase: 'font-semibold text-destructive' }
+  if (dias === 0) return { texto: 'Vence hoy', clase: 'font-semibold text-amber-700' }
+  if (dias <= 3) return { texto: `En ${dias} d`, clase: 'font-medium text-amber-700' }
+  return { texto: formatearVencimiento(orden.fecha_vencimiento), clase: '' }
 }
 
-export function ComprasTable({ productoInicial }: ComprasTableProps) {
+const COLUMNAS = 6
+
+// Franja de color a la izquierda de cada orden: amarillo en proceso, rojo finalizado.
+const BORDE_ESTADO: Record<EstadoOrdenCompra, string> = {
+  en_curso: 'border-l-yellow-400',
+  listo: 'border-l-primary',
+  cancelada: 'border-l-muted-foreground/30',
+}
+
+const CHIPS: { id: FiltroCompras; etiqueta: string }[] = [
+  { id: 'todas', etiqueta: 'Todas' },
+  { id: 'proceso', etiqueta: 'En proceso' },
+  { id: 'finalizadas', etiqueta: 'Finalizadas' },
+  { id: 'canceladas', etiqueta: 'Canceladas' },
+]
+
+interface ComprasTableProps {
+  productoInicial?: { codigo: string; nombre: string } | null
+  puedeGestionarSiigo: boolean
+  /** El administrador (supervisor) puede firmar las OC cargadas desde Siigo. */
+  puedeFirmar: boolean
+}
+
+export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar }: ComprasTableProps) {
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState<'todos' | EstadoOrdenCompra>('todos')
+  const [filtro, setFiltro] = useState<FiltroCompras>('todas')
+  const [filtroSiigo, setFiltroSiigo] = useState<'todos' | EstadoSyncSiigo>('todos')
   const [dialogAbierto, setDialogAbierto] = useState(Boolean(productoInicial))
   const [ordenEditar, setOrdenEditar] = useState<OrdenCompra | null>(null)
-  const [editandoTextoId, setEditandoTextoId] = useState<number | null>(null)
-  const [textoEntrega, setTextoEntrega] = useState('')
+  // Órdenes desplegadas: la fila compacta se abre al seleccionarla.
+  const [abiertas, setAbiertas] = useState<Set<number>>(new Set())
+  const [enviandoSiigoId, setEnviandoSiigoId] = useState<number | null>(null)
+  const [subiendoDocumento, setSubiendoDocumento] = useState(false)
+  const [dialogoFactura, setDialogoFactura] = useState<{ orden: OrdenCompra; modo: ModoFacturaProveedor } | null>(null)
+  const inputDocumentoRef = useRef<HTMLInputElement>(null)
 
   const recargar = useCallback(async () => {
     setLoading(true)
@@ -97,7 +132,8 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     return ordenes.filter((o) => {
-      if (filtroEstado !== 'todos' && o.estado !== filtroEstado) return false
+      if (!coincideFiltro(o, filtro)) return false
+      if (filtroSiigo !== 'todos' && derivarEstadoSiigo(o).estado !== filtroSiigo) return false
       if (!q) return true
       const titulo = tituloOrdenDisplay(o).toLowerCase()
       const items = o.items
@@ -110,15 +146,30 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
       const texto = `${titulo} ${o.observaciones_entrega ?? ''} ${items}`.toLowerCase()
       return texto.includes(q)
     })
-  }, [ordenes, busqueda, filtroEstado])
+  }, [ordenes, busqueda, filtro, filtroSiigo])
 
   const pendientes = filtradas.filter((o) => o.estado === 'en_curso')
   const otras = filtradas.filter((o) => o.estado !== 'en_curso')
 
-  async function cambiarEstado(id: number, estado: EstadoOrdenCompra) {
+  async function cambiarEstado(orden: OrdenCompra, estado: EstadoOrdenCompra) {
+    // Las OC creadas a mano generan la factura de compra en Siigo, que exige el
+    // número de la factura del proveedor: se pide antes de marcarlas listas.
+    if (estado === 'listo' && orden.origen !== 'documento_siigo' && !orden.siigo_id) {
+      setDialogoFactura({ orden, modo: 'listo' })
+      return
+    }
+    const id = orden.id
     const res = await actualizarEstadoOrdenCompra(id, estado)
     if (res.ok) {
-      toast.success('Estado actualizado.')
+      if (estado === 'listo' && orden.origen === 'documento_siigo') {
+        toast.success('Orden finalizada.')
+      } else if (estado === 'listo') {
+        toast.success('Orden finalizada. Enviando la factura de compra a Siigo…')
+        // El envío a Siigo es asíncrono: se vuelve a consultar para mostrar el resultado.
+        setTimeout(() => recargar(), 6000)
+      } else {
+        toast.success('Estado actualizado.')
+      }
       recargar()
     } else {
       toast.error(res.error)
@@ -139,14 +190,48 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
     recargar()
   }
 
-  async function guardarTextoEntrega(id: number) {
-    const res = await actualizarObservacionesEntrega(id, textoEntrega)
-    if (res.ok) {
-      toast.success('Texto guardado.')
-      setEditandoTextoId(null)
+  async function handleEnviarSiigo(orden: OrdenCompra, esReintento: boolean) {
+    // Sin el número de la factura del proveedor Siigo rechaza el envío.
+    if (!orden.factura_proveedor_numero?.trim()) {
+      setDialogoFactura({ orden, modo: 'reintento' })
+      return
+    }
+    setEnviandoSiigoId(orden.id)
+    try {
+      const res = esReintento ? await reintentarEnvioSiigo(orden.id) : await enviarOrdenASiigo(orden.id)
+      if (res.ok) {
+        toast.success('Orden enviada a Siigo.')
+        recargar()
+      } else {
+        toast.error(res.error)
+      }
+    } finally {
+      setEnviandoSiigoId(null)
+    }
+  }
+
+  async function handleSubirDocumento(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0]
+    e.target.value = ''
+    if (!archivo) return
+    setSubiendoDocumento(true)
+    try {
+      const formData = new FormData()
+      formData.set('archivo', archivo)
+      const res = await subirOrdenCompraDocumento(formData)
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      toast.success(`Orden ${res.numero} cargada. Queda pendiente de firma.`)
+      if (res.sinCodigo.length > 0) {
+        toast.warning(
+          `Sin código en el catálogo (quedaron como SIN-CODIGO): ${res.sinCodigo.join(', ')}`
+        )
+      }
       recargar()
-    } else {
-      toast.error(res.error)
+    } finally {
+      setSubiendoDocumento(false)
     }
   }
 
@@ -170,110 +255,196 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
     setDialogAbierto(true)
   }
 
-  function renderFila(orden: OrdenCompra) {
-    const resumenItems =
+  function alternar(id: number) {
+    setAbiertas((prev) => {
+      const siguiente = new Set(prev)
+      if (siguiente.has(id)) siguiente.delete(id)
+      else siguiente.add(id)
+      return siguiente
+    })
+  }
+
+  function finalizar(orden: OrdenCompra) {
+    const faltantes = orden.items.reduce((acc, i) => acc + resumenRecepcion(i).restante, 0)
+    const lineas = orden.items.filter((i) => resumenRecepcion(i).restante > 0).length
+    if (
+      faltantes > 0 &&
+      !window.confirm(
+        `Aún faltan ${faltantes.toLocaleString('es-CO')} unidades por recibir en ${lineas} línea(s). ¿Finalizar de todos modos?`
+      )
+    ) {
+      return
+    }
+    cambiarEstado(orden, 'listo')
+  }
+
+  function cancelar(orden: OrdenCompra) {
+    if (!window.confirm('¿Cancelar esta orden de compra?')) return
+    cambiarEstado(orden, 'cancelada')
+  }
+
+  function eliminar(orden: OrdenCompra) {
+    if (!window.confirm('¿Eliminar esta orden? No se puede deshacer.')) return
+    handleEliminar(orden.id)
+  }
+
+  function renderFilas(orden: OrdenCompra) {
+    const abierta = abiertas.has(orden.id)
+    const siigo = derivarEstadoSiigo(orden)
+    const pedidas = orden.items.reduce((acc, i) => acc + Number(i.cantidad || 0), 0)
+    const recibidas = orden.items.reduce((acc, i) => acc + Number(i.cantidad_recibida ?? 0), 0)
+    const porcentaje = pedidas > 0 ? Math.min(100, Math.round((recibidas / pedidas) * 100)) : 0
+    const proveedor = orden.items[0]?.proveedor_nombre ?? orden.proveedor_nombre
+    const resumen =
       orden.items.length === 1
-        ? `${orden.items[0].cantidad} uds · ${orden.items[0].codigo_producto}`
-        : `${orden.items.length} líneas · ${orden.items.map((i) => i.proveedor_nombre).filter(Boolean).slice(0, 2).join(', ')}`
+        ? orden.items[0].descripcion
+        : `${orden.items.length} productos${proveedor ? ` · ${proveedor}` : ''}`
 
     return (
-      <TableRow key={orden.id}>
-        <TableCell className="font-medium">
-          <div>
-            <p>{tituloOrdenDisplay(orden)}</p>
-            <p className="text-xs text-muted-foreground">{resumenItems}</p>
-          </div>
-        </TableCell>
-        <TableCell>
-          <select
-            className={cn(
-              'rounded-full border px-2.5 py-1 text-xs font-medium',
-              CLASE_ESTADO_OC[orden.estado]
-            )}
-            value={orden.estado}
-            onChange={(e) => cambiarEstado(orden.id, e.target.value as EstadoOrdenCompra)}
-          >
-            {ESTADOS_ORDEN_COMPRA.map((e) => (
-              <option key={e} value={e}>
-                {ETIQUETA_ESTADO_OC[e]}
-              </option>
-            ))}
-          </select>
-        </TableCell>
-        <TableCell>
-          <div className="flex items-center gap-1.5 text-sm">
-            {iconoVencimiento(orden)}
-            <span>{formatearVencimiento(orden.fecha_vencimiento)}</span>
-          </div>
-        </TableCell>
-        <TableCell>
-          <div className="flex flex-wrap gap-1">
-            <Button type="button" variant="outline" size="sm" onClick={() => handlePdf(orden)}>
-              <FileText className="mr-1 h-3 w-3 text-red-600" />
-              PDF
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => handleCsv(orden)}>
-              <Download className="h-3 w-3" />
-            </Button>
-          </div>
-        </TableCell>
-        <TableCell className="max-w-[220px]">
-          {editandoTextoId === orden.id ? (
-            <div className="space-y-1">
-              <Textarea
-                rows={2}
-                value={textoEntrega}
-                onChange={(e) => setTextoEntrega(e.target.value)}
-                placeholder="Ej. Llegaron 100 tornillos de 1000"
-                className="text-xs"
+      <Fragment key={orden.id}>
+        <TableRow
+          data-state={abierta ? 'selected' : undefined}
+          className="cursor-pointer"
+          tabIndex={0}
+          aria-expanded={abierta}
+          onClick={() => alternar(orden.id)}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              alternar(orden.id)
+            }
+          }}
+        >
+          <TableCell className={cn('border-l-4 font-medium', BORDE_ESTADO[orden.estado])}>
+            <div className="flex items-start gap-2">
+              <ChevronRight
+                aria-hidden
+                className={cn(
+                  'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                  abierta && 'rotate-90'
+                )}
               />
-              <div className="flex gap-1">
-                <Button type="button" size="sm" onClick={() => guardarTextoEntrega(orden.id)}>
-                  Guardar
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setEditandoTextoId(null)}>
-                  Cancelar
-                </Button>
+              <div className="min-w-0">
+                <p className="truncate">{tituloOrdenDisplay(orden)}</p>
+                <p className="truncate text-xs font-normal text-muted-foreground">{resumen}</p>
               </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              className="w-full text-left text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                setEditandoTextoId(orden.id)
-                setTextoEntrega(orden.observaciones_entrega ?? '')
-              }}
+          </TableCell>
+          <TableCell>
+            <span
+              className={cn(
+                'inline-block whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-semibold',
+                CLASE_ESTADO_OC[orden.estado]
+              )}
             >
-              {orden.observaciones_entrega?.trim() || 'Click para anotar entregas...'}
-            </button>
-          )}
-        </TableCell>
-        <TableCell>
-          <div className="flex gap-1">
-            {orden.estado === 'en_curso' && (
-              <>
-                <Button type="button" variant="ghost" size="sm" onClick={() => abrirEditar(orden)}>
-                  <Pencil className="h-3 w-3" />
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => handleEliminar(orden.id)}>
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </>
+              {ETIQUETA_ESTADO_OC[orden.estado]}
+            </span>
+          </TableCell>
+          <TableCell className="hidden md:table-cell">
+            <div className="w-32 space-y-1">
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out" style={{ width: `${porcentaje}%` }} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {recibidas.toLocaleString('es-CO')} de {pedidas.toLocaleString('es-CO')}
+              </p>
+            </div>
+          </TableCell>
+          <TableCell className="hidden lg:table-cell">
+            <SiigoStatusBadge estado={siigo.estado} />
+          </TableCell>
+          <TableCell className="hidden md:table-cell">
+            <div className="flex items-center gap-1.5 text-sm">
+              {iconoVencimiento(orden)}
+              <span className={textoEntrega(orden).clase}>{textoEntrega(orden).texto}</span>
+            </div>
+          </TableCell>
+          <TableCell className="hidden lg:table-cell text-xs">
+            {orden.documento_path ? (
+              orden.firmada_at ? (
+                <span className="font-medium text-emerald-700">Firmada</span>
+              ) : (
+                <span className="text-muted-foreground">Por firmar</span>
+              )
+            ) : (
+              <span className="text-muted-foreground">—</span>
             )}
-          </div>
-        </TableCell>
-      </TableRow>
+          </TableCell>
+        </TableRow>
+
+        {abierta && (
+          <TableRow className="bg-muted/20 hover:bg-muted/20">
+            <TableCell colSpan={COLUMNAS} className="whitespace-normal px-4 py-3">
+              <OrdenDetalle
+                key={`${orden.id}-${orden.updated_at}`}
+                orden={orden}
+                puedeGestionar={puedeGestionarSiigo}
+                puedeFirmar={puedeFirmar}
+                enviandoSiigo={enviandoSiigoId === orden.id}
+                onRecargar={recargar}
+                onEditar={() => abrirEditar(orden)}
+                onEliminar={() => eliminar(orden)}
+                onFinalizar={() => finalizar(orden)}
+                onCancelar={() => cancelar(orden)}
+                onReabrir={() => cambiarEstado(orden, 'en_curso')}
+                onPdf={() => handlePdf(orden)}
+                onCsv={() => handleCsv(orden)}
+                onEnviarSiigo={(esReintento) => handleEnviarSiigo(orden, esReintento)}
+              />
+            </TableCell>
+          </TableRow>
+        )}
+      </Fragment>
     )
   }
 
+  const encabezado = (
+    <TableRow>
+      <TableHead>Orden</TableHead>
+      <TableHead>Estado</TableHead>
+      <TableHead className="hidden md:table-cell">Avance</TableHead>
+      <TableHead className="hidden lg:table-cell">Siigo</TableHead>
+      <TableHead className="hidden md:table-cell">Entrega</TableHead>
+      <TableHead className="hidden lg:table-cell">Firma</TableHead>
+    </TableRow>
+  )
+
+  const conteo = (f: FiltroCompras) => ordenes.filter((o) => coincideFiltro(o, f)).length
+
   return (
     <div className="space-y-4">
+      {!loading && ordenes.length > 0 && (
+        <ResumenCompras ordenes={ordenes} filtro={filtro} onFiltro={setFiltro} />
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Button type="button" onClick={abrirNueva}>
-          <Plus className="mr-1 h-4 w-4" />
-          Agregar pedido
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={abrirNueva}>
+            <Plus className="mr-1 h-4 w-4" />
+            Agregar pedido
+          </Button>
+          {puedeGestionarSiigo && (
+            <>
+              <input
+                ref={inputDocumentoRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={handleSubirDocumento}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={subiendoDocumento}
+                onClick={() => inputDocumentoRef.current?.click()}
+              >
+                <Upload className="mr-1 h-4 w-4" />
+                {subiendoDocumento ? 'Leyendo documento…' : 'Subir OC (PDF de Siigo)'}
+              </Button>
+            </>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           <div className="relative min-w-[200px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -286,41 +457,102 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
           </div>
           <select
             className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value as typeof filtroEstado)}
+            value={filtroSiigo}
+            onChange={(e) => setFiltroSiigo(e.target.value as typeof filtroSiigo)}
           >
-            <option value="todos">Todos los estados</option>
-            {ESTADOS_ORDEN_COMPRA.map((e) => (
+            <option value="todos">Todos (Siigo)</option>
+            {(Object.keys(ETIQUETA_SIIGO_SYNC) as EstadoSyncSiigo[]).map((e) => (
               <option key={e} value={e}>
-                {ETIQUETA_ESTADO_OC[e]}
+                {ETIQUETA_SIIGO_SYNC[e]}
               </option>
             ))}
           </select>
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por estado">
+        {CHIPS.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            aria-pressed={filtro === c.id}
+            onClick={() => setFiltro(c.id)}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              filtro === c.id
+                ? 'border-foreground bg-foreground text-background'
+                : 'bg-card text-muted-foreground hover:bg-accent'
+            )}
+          >
+            {c.etiqueta} <span className="tabular-nums opacity-70">{conteo(c.id)}</span>
+          </button>
+        ))}
+        {filtro !== 'todas' && !CHIPS.some((c) => c.id === filtro) && (
+          <button
+            type="button"
+            onClick={() => setFiltro('todas')}
+            className="rounded-full border border-primary px-3 py-1 text-xs font-medium text-primary hover:bg-primary/5"
+          >
+            Quitar filtro ✕
+          </button>
+        )}
+      </div>
+
       {loading ? (
-        <p className="text-sm text-muted-foreground">Cargando pedidos...</p>
+        <div className="space-y-2" aria-busy="true" aria-label="Cargando pedidos">
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+        </div>
       ) : filtradas.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No hay órdenes de compra.</p>
+        <div className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">
+          {ordenes.length === 0 ? (
+            <>Aún no hay órdenes de compra. Sube la de Siigo o agrega un pedido para empezar.</>
+          ) : (
+            <>
+              Ninguna orden coincide con este filtro.{' '}
+              <button
+                type="button"
+                className="font-medium text-primary underline"
+                onClick={() => {
+                  setFiltro('todas')
+                  setBusqueda('')
+                  setFiltroSiigo('todos')
+                }}
+              >
+                Ver todas
+              </button>
+            </>
+          )}
+        </div>
       ) : (
         <div className="space-y-6">
           {pendientes.length > 0 && (
             <section>
-              <h2 className="mb-2 text-sm font-semibold text-primary">Pendientes</h2>
+              <div className="mb-2 flex items-center gap-2">
+                <span aria-hidden="true" className="h-5 w-1.5 rounded-full bg-primary" />
+                <h2 className="text-sm font-semibold text-foreground">Pendientes</h2>
+              </div>
               <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Tarea</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Vencimiento</TableHead>
-                      <TableHead>Archivo</TableHead>
-                      <TableHead>Texto</TableHead>
-                      <TableHead className="w-[80px]" />
-                    </TableRow>
+                    {encabezado}
                   </TableHeader>
-                  <TableBody>{pendientes.map(renderFila)}</TableBody>
+                  <TableBody>
+                    {pendientes.map(renderFilas)}
+                    <TableRow className="hover:bg-muted/50">
+                      <TableCell colSpan={COLUMNAS} className="p-0">
+                        <button
+                          type="button"
+                          onClick={abrirNueva}
+                          className="flex w-full items-center gap-1.5 px-2 py-2.5 text-left text-sm text-muted-foreground hover:text-foreground"
+                        >
+                          <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+                          Agregar pedido
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
                 </Table>
               </div>
             </section>
@@ -328,20 +560,16 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
 
           {otras.length > 0 && (
             <section>
-              <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Historial</h2>
+              <div className="mb-2 flex items-center gap-2">
+                <span aria-hidden="true" className="h-5 w-1.5 rounded-full bg-muted-foreground/40" />
+                <h2 className="text-sm font-semibold text-muted-foreground">Historial</h2>
+              </div>
               <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Tarea</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Vencimiento</TableHead>
-                      <TableHead>Archivo</TableHead>
-                      <TableHead>Texto</TableHead>
-                      <TableHead className="w-[80px]" />
-                    </TableRow>
+                    {encabezado}
                   </TableHeader>
-                  <TableBody>{otras.map(renderFila)}</TableBody>
+                  <TableBody>{otras.map(renderFilas)}</TableBody>
                 </Table>
               </div>
             </section>
@@ -350,7 +578,7 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
       )}
 
       <p className="text-xs text-muted-foreground">
-        Genera el PDF al completar los datos y súbelo a Siigo Nube. También puedes descargar CSV.
+        Selecciona una orden para ver sus productos, registrar entregas, añadir datos o finalizarla.
         {productoInicial && (
           <>
             {' '}
@@ -361,6 +589,19 @@ export function ComprasTable({ productoInicial }: ComprasTableProps) {
           </>
         )}
       </p>
+
+      <FacturaProveedorDialog
+        orden={dialogoFactura?.orden ?? null}
+        modo={dialogoFactura?.modo ?? 'listo'}
+        onOpenChange={(abierto) => {
+          if (!abierto) setDialogoFactura(null)
+        }}
+        onEnviada={() => {
+          // El envío a Siigo es asíncrono: se vuelve a consultar para ver el resultado.
+          recargar()
+          setTimeout(() => recargar(), 6000)
+        }}
+      />
 
       <ComprasPedidoDialog
         abierto={dialogAbierto}

@@ -6,7 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatNumber } from '@/lib/format'
+import { formatFechaHora, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { MovimientoReciente } from '@/lib/types/dashboard'
 
@@ -50,7 +50,7 @@ export function UltimosMovimientosTable({
         ) : (
           movimientos.map((mov) => (
             <TableRow key={mov.id}>
-              <TableCell>{new Date(mov.created_at).toLocaleString('es-CO')}</TableCell>
+              <TableCell>{formatFechaHora(mov.created_at)}</TableCell>
               <TableCell>
                 <span
                   className={cn(

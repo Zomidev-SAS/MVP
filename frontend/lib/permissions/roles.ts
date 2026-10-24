@@ -10,6 +10,9 @@ import {
   ClipboardList,
   Settings,
   ShoppingCart,
+  Workflow,
+  History,
+  Mail,
   type LucideIcon,
 } from 'lucide-react'
 import { ALL_ROLES, type Role } from '@/lib/types/database'
@@ -28,7 +31,11 @@ export type RouteKey =
   | 'importar'
   | 'usuarios'
   | 'configuracion'
+  | 'automatizaciones'
+  | 'actividad'
+  | 'correos'
   | 'cuenta'
+  | 'notificaciones'
 
 export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   dashboard: ROLES_CON_DASHBOARD,
@@ -51,7 +58,13 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   importar: ['supervisor', 'compras'] as const,
   usuarios: ['supervisor'] as const,
   configuracion: ['supervisor'] as const,
+  automatizaciones: ['supervisor'] as const,
+  actividad: ['supervisor', 'auditoria'] as const,
+  correos: ['supervisor', 'auditoria'] as const,
   cuenta: ALL_ROLES,
+  // La campana de notificaciones es visible para cualquier rol en el header;
+  // el historial completo en /notificaciones debe estar igualmente abierto.
+  notificaciones: ALL_ROLES,
 }
 
 /** Roles que pueden ver valor_unitario/valor_total en cualquier pantalla — igual a la matriz real de las vistas de Supabase. */
@@ -77,6 +90,9 @@ export const NAV_ITEMS: {
   { key: 'importar', label: 'Importar CSV', href: '/importar', icon: Upload },
   { key: 'usuarios', label: 'Usuarios', href: '/usuarios', icon: Users },
   { key: 'configuracion', label: 'Configuración', href: '/configuracion', icon: Settings },
+  { key: 'automatizaciones', label: 'Automatizaciones', href: '/automatizaciones', icon: Workflow },
+  { key: 'actividad', label: 'Actividad', href: '/actividad', icon: History },
+  { key: 'correos', label: 'Correos', href: '/correos', icon: Mail },
 ]
 
 /** Agrupa NAV_ITEMS en las dos secciones visuales del sidebar. */
@@ -87,13 +103,14 @@ export const NAV_GROUPS: { label: string; keys: RouteKey[] }[] = [
   },
   {
     label: 'Sistema y control',
-    keys: ['ajustes', 'importar', 'usuarios', 'configuracion'],
+    keys: ['ajustes', 'importar', 'usuarios', 'configuracion', 'automatizaciones', 'actividad', 'correos'],
   },
 ]
 
 /** Resuelve un pathname exacto a su RouteKey, o null si no es una ruta controlada por ROUTE_PERMISSIONS (ej. /login, /acceso-denegado). */
 export function getRouteKeyForPath(pathname: string): RouteKey | null {
   if (pathname === '/cuenta') return 'cuenta'
+  if (pathname === '/notificaciones') return 'notificaciones'
   if (pathname === '/visualizacion') return 'visualizacion'
   const item = NAV_ITEMS.find((i) => i.href === pathname)
   return item ? item.key : null
