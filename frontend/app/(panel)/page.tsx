@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -66,6 +67,7 @@ async function DashboardContent() {
               label="Total Unidades en Stock"
               value={formatNumber(data.totalUnidades)}
               icon={Package}
+              href="/inventario"
             />
             {puedeVerCostos && (
               <KpiCard
@@ -79,12 +81,15 @@ async function DashboardContent() {
                 label="Movimientos del Día"
                 value={formatNumber(data.movimientosHoy)}
                 icon={ArrowLeftRight}
+                href={ROUTE_PERMISSIONS.movimientos.includes(result.profile.rol) ? '/movimientos' : undefined}
               />
             )}
             <KpiCard
               label="Productos con Stock Bajo"
               value={formatNumber(data.stockBajo)}
               icon={AlertTriangle}
+              href="/inventario"
+              alerta={data.stockBajo > 0}
             />
           </div>
 
@@ -134,7 +139,7 @@ async function DashboardContent() {
 
           {variante !== 'basico' && (
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>
                   {variante === 'bitacora'
                     ? 'Bitácora de actividad'
@@ -142,6 +147,11 @@ async function DashboardContent() {
                       ? 'Productos con movimiento reciente'
                       : 'Últimos movimientos'}
                 </CardTitle>
+                {ROUTE_PERMISSIONS.movimientos.includes(result.profile.rol) && (
+                  <Link href="/movimientos" className="text-sm text-primary hover:underline">
+                    Ver todos →
+                  </Link>
+                )}
               </CardHeader>
               <CardContent>
                 <UltimosMovimientosTable movimientos={data.ultimosMovimientos} />

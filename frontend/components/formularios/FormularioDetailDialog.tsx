@@ -78,7 +78,7 @@ export function FormularioDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!flex h-[min(72vh,22rem)] w-[calc(100%-2rem)] max-w-sm flex-col gap-0 overflow-hidden p-0 sm:max-w-sm">
+      <DialogContent className="!flex h-[min(85vh,40rem)] w-[calc(100%-2rem)] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
         {detalle && (
           <>
             <DialogHeader className="shrink-0 space-y-1 border-b px-4 py-3 text-left">
