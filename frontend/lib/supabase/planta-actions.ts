@@ -246,13 +246,11 @@ export async function fetchDetalleVehiculoPlanta(
 const DATOS_PLANTA_COMPRAS_VACIOS: DatosPlantaCompras = {
   kpis: { en_curso: 0, vencidas: 0, pendientes_firma: 0, con_entregas_parciales: 0 },
   ordenes: [],
-  productosStockBajo: [],
 }
 
 interface RespuestaRpcPlantaCompras {
   kpis: DatosPlantaCompras['kpis']
   ordenes: DatosPlantaCompras['ordenes']
-  productos_stock_bajo: ProductoBajoStock[]
 }
 
 /**
@@ -272,14 +270,17 @@ export async function fetchDatosPlantaCompras(token: string): Promise<DatosPlant
           id: 1, numero: 'OC-1-3195', proveedor: 'MATRICES TROQUELES Y MOLDES MATROMOL',
           fecha_pedido: '2026-01-26', fecha_vencimiento: '2026-02-10', requiere_firma: true,
           firmada: false, pedidas: 48, recibidas: 16, ultima_entrega: null,
+          titulo: null, observaciones: null,
+          items: [
+            { codigo_producto: 'MAT-001', nombre_producto: 'Matriz de troquel', descripcion: 'Matriz de troquel para guardabarros, acero 1045, acabado pulido', cantidad: 48, cantidad_recibida: 16, proveedor_nombre: 'MATRICES TROQUELES Y MOLDES MATROMOL', observaciones: null },
+          ],
         },
         {
           id: 2, numero: null, proveedor: 'COAUTOPARTES', fecha_pedido: '2026-01-20',
           fecha_vencimiento: null, requiere_firma: false, firmada: false, pedidas: 100,
-          recibidas: 0, ultima_entrega: null,
+          recibidas: 0, ultima_entrega: null, titulo: null, observaciones: null, items: [],
         },
       ],
-      productosStockBajo: await fetchProductosBajoStock(5),
     }
   }
 
@@ -302,11 +303,11 @@ export async function fetchDatosPlantaCompras(token: string): Promise<DatosPlant
       ...o,
       pedidas: Number(o.pedidas),
       recibidas: Number(o.recibidas),
-    })),
-    productosStockBajo: (r.productos_stock_bajo ?? []).map((p) => ({
-      codigo_producto: p.codigo_producto,
-      nombre_producto: p.nombre_producto,
-      saldo: Number(p.saldo),
+      items: (o.items ?? []).map((i) => ({
+        ...i,
+        cantidad: Number(i.cantidad),
+        cantidad_recibida: Number(i.cantidad_recibida ?? 0),
+      })),
     })),
   }
 }

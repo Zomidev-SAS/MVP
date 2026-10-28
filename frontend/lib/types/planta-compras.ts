@@ -1,4 +1,12 @@
-import type { ProductoBajoStock } from '@/components/dashboard/LowStockList'
+export interface ItemOrdenPlanta {
+  codigo_producto: string
+  nombre_producto: string | null
+  descripcion: string
+  cantidad: number
+  cantidad_recibida: number
+  proveedor_nombre: string | null
+  observaciones: string | null
+}
 
 export interface OrdenPlanta {
   id: number
@@ -11,6 +19,9 @@ export interface OrdenPlanta {
   pedidas: number
   recibidas: number
   ultima_entrega: string | null
+  titulo: string | null
+  observaciones: string | null
+  items: ItemOrdenPlanta[]
 }
 
 export interface KpisPlantaCompras {
@@ -23,5 +34,4 @@ export interface KpisPlantaCompras {
 export interface DatosPlantaCompras {
   kpis: KpisPlantaCompras
   ordenes: OrdenPlanta[]
-  productosStockBajo: ProductoBajoStock[]
 }
