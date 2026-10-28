@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
-import { LowStockList } from '@/components/dashboard/LowStockList'
+import { ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List, Pause, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { DatosPlantaCompras, OrdenPlanta } from '@/lib/types/planta-compras'
 
@@ -11,7 +10,6 @@ const ROTACION_MS = 30_000
 const VISTAS = [
   { id: 'resumen', titulo: 'Compras — resumen' },
   { id: 'ordenes', titulo: 'Órdenes en curso' },
-  { id: 'stock-bajo', titulo: 'Por reponer (stock bajo)' },
 ] as const
 
 function Kpi({
@@ -57,37 +55,105 @@ function numero(n: number): string {
   return n.toLocaleString('es-CO', { maximumFractionDigits: 2 })
 }
 
-function TarjetaOrden({ orden }: { orden: OrdenPlanta }) {
+function TarjetaOrden({
+  orden,
+  lista,
+  expandida,
+  onToggle,
+}: {
+  orden: OrdenPlanta
+  lista?: boolean
+  expandida?: boolean
+  onToggle?: () => void
+}) {
   const porcentaje = orden.pedidas > 0 ? Math.min(100, Math.round((orden.recibidas / orden.pedidas) * 100)) : 0
   const vencida = estaVencida(orden)
+  const interactiva = Boolean(onToggle)
   return (
-    <div className={cn('rounded-2xl border bg-card p-5 shadow-sm', vencida && 'border-destructive/60')}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-2xl font-semibold">{orden.proveedor ?? 'Sin proveedor'}</p>
-          <p className="text-lg text-muted-foreground">{orden.numero ?? `OC ${orden.id}`}</p>
-        </div>
-        <div className="shrink-0 text-right text-lg">
-          <p className={cn(vencida && 'font-bold text-destructive')}>
-            {vencida ? 'Vencida' : 'Vence'} {fechaCorta(orden.fecha_vencimiento)}
-          </p>
-          {orden.requiere_firma && (
-            <p className={cn('font-medium', orden.firmada ? 'text-emerald-700' : 'text-amber-600')}>
-              {orden.firmada ? 'Firmada' : 'Pendiente de firma'}
+    <div className={cn('rounded-2xl border bg-card shadow-sm', vencida && 'border-destructive/60')}>
+      <button
+        type="button"
+        disabled={!interactiva}
+        aria-expanded={interactiva ? Boolean(expandida) : undefined}
+        onClick={onToggle}
+        className={cn(
+          'w-full p-5 text-left',
+          lista && 'flex items-center gap-6',
+          interactiva && 'rounded-2xl transition-colors hover:bg-accent/40'
+        )}
+      >
+        <div className={cn('flex items-start justify-between gap-3', lista ? 'min-w-0 flex-1' : '')}>
+          <div className="min-w-0">
+            <p className="truncate text-2xl font-semibold">{orden.proveedor ?? 'Sin proveedor'}</p>
+            <p className="text-lg text-muted-foreground">{orden.numero ?? `OC ${orden.id}`}</p>
+          </div>
+          <div className="shrink-0 text-right text-lg">
+            <p className={cn(vencida && 'font-bold text-destructive')}>
+              {vencida ? 'Vencida' : 'Vence'} {fechaCorta(orden.fecha_vencimiento)}
             </p>
+            {orden.requiere_firma && (
+              <p className={cn('font-medium', orden.firmada ? 'text-emerald-700' : 'text-amber-600')}>
+                {orden.firmada ? 'Firmada' : 'Pendiente de firma'}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className={cn(lista ? 'w-1/3 shrink-0' : 'mt-4')}>
+          <div className="h-4 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${porcentaje}%` }} />
+          </div>
+          <p className="mt-2 text-xl">
+            Recibidas {numero(orden.recibidas)} de {numero(orden.pedidas)} ·{' '}
+            <span className="font-semibold">Restan {numero(Math.max(orden.pedidas - orden.recibidas, 0))}</span>
+            {orden.ultima_entrega && !lista && (
+              <span className="text-muted-foreground"> · última entrega {fechaCorta(orden.ultima_entrega)}</span>
+            )}
+          </p>
+        </div>
+        {interactiva && (
+          <ChevronDown
+            aria-hidden="true"
+            className={cn('h-7 w-7 shrink-0 text-muted-foreground transition-transform', expandida && 'rotate-180', !lista && 'hidden')}
+          />
+        )}
+      </button>
+
+      {expandida && (
+        <div className="space-y-3 border-t px-5 py-4 text-xl">
+          {orden.titulo && <p className="font-semibold">{orden.titulo}</p>}
+          {orden.observaciones?.trim() && (
+            <p className="whitespace-pre-wrap text-muted-foreground">{orden.observaciones}</p>
+          )}
+          {orden.items.length === 0 ? (
+            <p className="text-muted-foreground">Sin líneas registradas.</p>
+          ) : (
+            <ul className="space-y-3">
+              {orden.items.map((item, idx) => (
+                <li key={`${item.codigo_producto}-${idx}`} className="rounded-xl bg-muted/50 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <p className="font-semibold">
+                      <span className="font-mono text-lg text-muted-foreground">{item.codigo_producto}</span>
+                      {item.nombre_producto && <> · {item.nombre_producto}</>}
+                    </p>
+                    <p className="shrink-0 tabular-nums">
+                      {numero(item.cantidad_recibida)} / {numero(item.cantidad)}
+                    </p>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap">{item.descripcion}</p>
+                  {item.proveedor_nombre && (
+                    <p className="mt-1 text-lg text-muted-foreground">Proveedor: {item.proveedor_nombre}</p>
+                  )}
+                  {item.observaciones?.trim() && (
+                    <p className="mt-1 whitespace-pre-wrap text-lg text-muted-foreground">
+                      Obs.: {item.observaciones}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
-      </div>
-      <div className="mt-4 h-4 w-full overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-primary" style={{ width: `${porcentaje}%` }} />
-      </div>
-      <p className="mt-2 text-xl">
-        Recibidas {numero(orden.recibidas)} de {numero(orden.pedidas)} ·{' '}
-        <span className="font-semibold">Restan {numero(Math.max(orden.pedidas - orden.recibidas, 0))}</span>
-        {orden.ultima_entrega && (
-          <span className="text-muted-foreground"> · última entrega {fechaCorta(orden.ultima_entrega)}</span>
-        )}
-      </p>
+      )}
     </div>
   )
 }
@@ -97,6 +163,8 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
   const [indice, setIndice] = useState(0)
   const [automatico, setAutomatico] = useState(true)
   const [actividad, setActividad] = useState(0)
+  const [modoOrdenes, setModoOrdenes] = useState<'mosaico' | 'lista'>('mosaico')
+  const [abiertaId, setAbiertaId] = useState<number | null>(null)
 
   // Pantalla sin sesión: polling simple, igual que la TV del taller.
   useEffect(() => {
@@ -109,10 +177,11 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
   }, [])
 
   useEffect(() => {
-    if (!automatico) return
+    // Con una orden abierta no se rota: se está leyendo el detalle.
+    if (!automatico || abiertaId !== null) return
     const id = setTimeout(() => ir(1), ROTACION_MS)
     return () => clearTimeout(id)
-  }, [automatico, indice, ir, actividad])
+  }, [automatico, abiertaId, indice, ir, actividad])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -128,7 +197,7 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
   }, [ir])
 
   const vista = VISTAS[indice]
-  const { kpis, ordenes, productosStockBajo } = datos
+  const { kpis, ordenes } = datos
   const botonNav =
     'flex h-16 w-16 shrink-0 items-center justify-center rounded-full border bg-card text-foreground shadow-sm transition-colors hover:bg-accent'
 
@@ -158,20 +227,6 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
                 <Kpi label="Vencidas" valor={kpis.vencidas} alerta={kpis.vencidas > 0} />
                 <Kpi label="Entregas parciales" valor={kpis.con_entregas_parciales} detalle="órdenes con faltantes" />
                 <Kpi label="Pendientes de firma" valor={kpis.pendientes_firma} />
-                <div className="col-span-2">
-                  <Kpi
-                    label="Productos con stock bajo"
-                    valor={productosStockBajo.length}
-                    detalle={
-                      productosStockBajo.length > 0
-                        ? productosStockBajo
-                            .slice(0, 3)
-                            .map((p) => p.nombre_producto ?? p.codigo_producto)
-                            .join(' · ')
-                        : 'Todo en orden'
-                    }
-                  />
-                </div>
               </div>
               <div className="space-y-4">
                 {ordenes.slice(0, 3).map((o) => (
@@ -184,20 +239,47 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
             </div>
           )}
           {vista.id === 'ordenes' && (
-            <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-4 xl:grid-cols-2">
-              {ordenes.map((o) => (
-                <TarjetaOrden key={o.id} orden={o} />
-              ))}
-              {ordenes.length === 0 && (
-                <p className="col-span-full text-center text-2xl text-muted-foreground">
-                  No hay órdenes en curso.
-                </p>
-              )}
-            </div>
-          )}
-          {vista.id === 'stock-bajo' && (
-            <div className="mx-auto w-full max-w-4xl text-2xl">
-              <LowStockList productos={productosStockBajo} />
+            <div className="mx-auto w-full max-w-7xl space-y-4">
+              <div className="flex justify-end gap-2">
+                {([
+                  ['mosaico', LayoutGrid, 'Mosaico'],
+                  ['lista', List, 'Lista'],
+                ] as const).map(([id, Icono, texto]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setModoOrdenes(id)}
+                    className={cn(
+                      'flex items-center gap-2 rounded-full border px-4 py-1.5 text-base transition-colors',
+                      modoOrdenes === id ? 'bg-foreground text-background' : 'bg-card text-muted-foreground hover:bg-accent'
+                    )}
+                  >
+                    <Icono aria-hidden="true" className="h-4 w-4" />
+                    {texto}
+                  </button>
+                ))}
+              </div>
+              <div
+                className={cn(
+                  'grid grid-cols-1 items-start gap-4',
+                  modoOrdenes === 'mosaico' && 'xl:grid-cols-2 2xl:grid-cols-3'
+                )}
+              >
+                {ordenes.map((o) => (
+                  <TarjetaOrden
+                    key={o.id}
+                    orden={o}
+                    lista={modoOrdenes === 'lista'}
+                    expandida={abiertaId === o.id}
+                    onToggle={() => setAbiertaId((id) => (id === o.id ? null : o.id))}
+                  />
+                ))}
+                {ordenes.length === 0 && (
+                  <p className="col-span-full text-center text-2xl text-muted-foreground">
+                    No hay órdenes en curso.
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </div>
