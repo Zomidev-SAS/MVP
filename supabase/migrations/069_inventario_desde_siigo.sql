@@ -168,18 +168,21 @@ begin
         v_muestra  := v_muestra || jsonb_build_object(
           'codigo', v_codigo, 'nombre', v_nombre, 'panel', v_saldo, 'siigo', v_exist, 'unidad', v_unidad);
         if not p_dry then
+          -- Sin ON CONFLICT: la tabla tiene reglas anti-edición y Postgres no lo permite.
           insert into movimientos_inventario (
             codigo_producto, tipo_movimiento, cantidad, valor_unitario,
             bodega, motivo, actor_id, idempotency_key
           )
-          values (
+          select
             v_codigo, 'ajuste', v_delta, v_precio,
             'Sin Asignar',
             'Sincronización con Siigo (existencia ' || v_exist || ', panel ' || v_saldo || ')',
             p_actor,
             'siigo-sync-' || v_hoy || '-' || v_codigo
-          )
-          on conflict (idempotency_key) do nothing;
+          where not exists (
+            select 1 from movimientos_inventario
+            where idempotency_key = 'siigo-sync-' || v_hoy || '-' || v_codigo
+          );
         end if;
       end if;
     end if;
