@@ -289,6 +289,7 @@ export interface SiigoProductoCatalogo {
   existencia: number | null
   control_inventario: boolean
   marca: string | null
+  grupo: string | null
 }
 
 export async function listarProductosSiigo(
@@ -319,6 +320,7 @@ export async function listarProductosSiigo(
       stock_control?: boolean
       available_quantity?: number
       additional_fields?: { brand?: string }
+      account_group?: { name?: string }
     }>
     pagination?: { total_results?: number; page_size?: number }
   }
@@ -334,6 +336,7 @@ export async function listarProductosSiigo(
       existencia: typeof p.available_quantity === 'number' ? p.available_quantity : null,
       control_inventario: p.stock_control === true,
       marca: p.additional_fields?.brand ?? null,
+      grupo: p.account_group?.name ?? null,
     }))
 
   const totalResults = data.pagination?.total_results ?? productos.length

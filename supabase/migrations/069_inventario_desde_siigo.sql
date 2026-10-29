@@ -12,6 +12,9 @@
 -- Los productos activos de Siigo que no existen en el panel se agregan.
 --
 -- Solo se tocan productos con control de inventario en Siigo (stock_control).
+-- Lo que no tenga categoría no va en el panel: las vistas lo ocultan, no se agrega
+-- desde Siigo y no se le hacen ajustes. La categoría se toma del grupo de Siigo
+-- cuando coincide con una categoría del panel.
 
 alter table productos
   add column if not exists siigo_precio     numeric(14,2),
@@ -39,7 +42,7 @@ select
   max(m.created_at) as ultimo_movimiento
 from movimientos_inventario m
 join productos p on p.codigo_producto = m.codigo_producto
-where m.estado = 'aplicado'
+where m.estado = 'aplicado' and p.categoria is not null
 group by m.codigo_producto, p.nombre_producto, p.unidad_medida, p.categoria, p.siigo_precio;
 
 create or replace view vista_inventario_por_bodega as
@@ -61,7 +64,7 @@ select
   max(m.created_at) as ultimo_movimiento
 from movimientos_inventario m
 join productos p on p.codigo_producto = m.codigo_producto
-where m.estado = 'aplicado'
+where m.estado = 'aplicado' and p.categoria is not null
 group by m.codigo_producto, p.nombre_producto, p.unidad_medida, p.categoria, m.bodega, p.siigo_precio;
 
 -- Reparte un ajuste entre bodegas para que ninguna quede en negativo:
@@ -149,6 +152,8 @@ declare
   v_control   boolean;
   v_activo    boolean;
   v_marca     text;
+  v_grupo     text;
+  v_cat       text;
   v_existe    boolean;
   v_saldo     numeric;
   v_delta     numeric;
@@ -173,18 +178,26 @@ begin
     v_control := coalesce((it ->> 'control_inventario')::boolean, false);
     v_activo  := coalesce((it ->> 'activo')::boolean, true);
     v_marca   := nullif(btrim(it ->> 'marca'), '');
+    v_grupo   := nullif(btrim(it ->> 'grupo'), '');
+
+    -- Categoría: la que ya tiene el producto o, si no, la del grupo de Siigo
+    -- cuando existe una categoría del panel con ese nombre.
+    select coalesce(
+      (select p.categoria from productos p where p.codigo_producto = v_codigo),
+      (select c.nombre from categorias_inventario c where upper(btrim(c.nombre)) = upper(v_grupo) limit 1)
+    ) into v_cat;
 
     select exists (select 1 from productos where codigo_producto = v_codigo) into v_existe;
 
     if not v_existe then
-      -- Solo se agregan productos activos y con nombre.
-      if v_activo and v_nombre is not null then
+      -- Solo se agregan productos activos, con nombre y con categoría.
+      if v_activo and v_nombre is not null and v_cat is not null then
         v_nuevos := v_nuevos + 1;
         v_muestra_n := v_muestra_n || jsonb_build_object('codigo', v_codigo, 'nombre', v_nombre);
         if not p_dry then
-          insert into productos (codigo_producto, nombre_producto, unidad_medida,
+          insert into productos (codigo_producto, nombre_producto, unidad_medida, categoria,
                                  siigo_precio, siigo_existencia, siigo_marca, siigo_sync_at)
-          values (v_codigo, v_nombre, v_unidad, v_precio, v_exist, v_marca, now())
+          values (v_codigo, v_nombre, v_unidad, v_cat, v_precio, v_exist, v_marca, now())
           on conflict (codigo_producto) do nothing;
         end if;
       else
@@ -208,6 +221,7 @@ begin
         update productos
         set nombre_producto  = coalesce(v_nombre, nombre_producto),
             unidad_medida    = coalesce(v_unidad, unidad_medida),
+            categoria        = coalesce(categoria, v_cat),
             siigo_precio     = coalesce(v_precio, siigo_precio),
             siigo_existencia = v_exist,
             siigo_marca      = coalesce(v_marca, siigo_marca),
@@ -217,7 +231,7 @@ begin
     end if;
 
     -- Unidades: el saldo del panel debe igualar la existencia de Siigo.
-    if v_control and v_exist is not null and v_activo then
+    if v_control and v_exist is not null and v_activo and v_cat is not null then
       select coalesce(sum(cantidad), 0) into v_saldo
       from movimientos_inventario
       where codigo_producto = v_codigo and estado = 'aplicado';

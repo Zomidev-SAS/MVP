@@ -112,6 +112,7 @@ Deno.serve(async (req) => {
         control_inventario: p.control_inventario,
         activo: p.active,
         marca: p.marca,
+        grupo: p.grupo,
       }))
       const { data: r, error } = await admin.rpc('fn_aplicar_inventario_siigo', {
         p_items: items, p_actor: actor, p_dry: dryRun,
