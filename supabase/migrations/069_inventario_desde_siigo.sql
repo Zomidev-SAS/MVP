@@ -22,6 +22,10 @@ alter table productos
   add column if not exists siigo_marca      text,
   add column if not exists siigo_sync_at    timestamptz;
 
+-- Limpieza: precios negativos que hubieran bajado de Siigo.
+update productos set siigo_precio = null where siigo_precio < 0;
+update productos set siigo_existencia = 0 where siigo_existencia < 0;
+
 -- ===================== vistas: precio unitario de Siigo =====================
 -- Mismas columnas y orden que 011 / 020; solo cambia valor_unitario/valor_total.
 create or replace view vista_inventario_actual as
@@ -36,7 +40,7 @@ select
        else null
   end as valor_unitario,
   case when get_user_rol() in ('supervisor','compras','auditoria')
-       then sum(m.cantidad) * coalesce(p.siigo_precio, max(coalesce(m.valor_unitario, 0)))
+       then greatest(sum(m.cantidad), 0) * coalesce(p.siigo_precio, max(coalesce(m.valor_unitario, 0)))
        else null
   end as valor_total,
   max(m.created_at) as ultimo_movimiento
@@ -58,7 +62,7 @@ select
        else null
   end as valor_unitario,
   case when get_user_rol() in ('supervisor','compras','auditoria')
-       then sum(m.cantidad) * coalesce(p.siigo_precio, max(coalesce(m.valor_unitario, 0)))
+       then greatest(sum(m.cantidad), 0) * coalesce(p.siigo_precio, max(coalesce(m.valor_unitario, 0)))
        else null
   end as valor_total,
   max(m.created_at) as ultimo_movimiento
@@ -175,6 +179,9 @@ begin
     v_unidad  := nullif(btrim(it ->> 'unidad'), '');
     v_precio  := nullif(it ->> 'precio', '')::numeric;
     v_exist   := nullif(it ->> 'existencia', '')::numeric;
+    -- Siigo permite existencias y precios negativos; el panel no los copia.
+    if v_precio is not null and v_precio < 0 then v_precio := null; end if;
+    if v_exist is not null and v_exist < 0 then v_exist := 0; end if;
     v_control := coalesce((it ->> 'control_inventario')::boolean, false);
     v_activo  := coalesce((it ->> 'activo')::boolean, true);
     v_marca   := nullif(btrim(it ->> 'marca'), '');
