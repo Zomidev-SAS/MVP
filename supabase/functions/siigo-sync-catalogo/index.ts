@@ -2,14 +2,17 @@
 // Corre sola todas las noches a las 12 a. m. hora de Colombia (pg_cron, 063) y
 // también puede invocarse bajo demanda (supervisor/compras con su JWT).
 //
-// Trae solo lo nuevo o modificado desde la última bajada exitosa (updated_start
-// de Siigo) y lo compara EN MEMORIA contra el panel. Antes hacía una consulta a
-// la base por cada registro de Siigo y nunca terminaba (las cuatro últimas
-// noches quedaron "en curso" sin cerrar).
+// Productos: se recorre TODO el catálogo cada noche (una venta o compra en Siigo
+// cambia la existencia sin tocar la fecha de modificación del producto, así que
+// la bajada incremental no sirve para unidades) y se deja el inventario del
+// panel igual al de Siigo con fn_aplicar_inventario_siigo (069): nombre, unidad,
+// precio unitario, unidades (movimiento de ajuste por la diferencia) y productos
+// nuevos activos.
 //
-// Nunca borra ni pisa información: toda diferencia queda en
-// siigo_catalogo_diferencias para revisión manual (punto 3.12), sin duplicar
-// las que ya están pendientes de revisar.
+// Proveedores: solo trae lo nuevo o modificado desde la última bajada exitosa
+// (updated_start de Siigo) y lo compara EN MEMORIA contra el panel. La diferencia
+// queda en siigo_catalogo_diferencias para revisión manual (punto 3.12), sin
+// duplicar las que ya están pendientes de revisar.
 //
 // Body opcional:
 //   { completo: true }  ignora la última bajada y recorre todo el catálogo
@@ -72,7 +75,6 @@ Deno.serve(async (req) => {
     const desde = await calcularDesde(admin, body.completo === true)
 
     // Estado local, cargado una sola vez.
-    const productosLocales = await cargarProductosLocales(admin)
     const proveedoresLocales = await cargarProveedoresLocales(admin)
     const pendientes = await cargarPendientes(admin)
 
@@ -84,34 +86,35 @@ Deno.serve(async (req) => {
       nuevas.push(d)
     }
 
-    // ── Productos ────────────────────────────────────────────────────────
+    // ── Productos: el panel queda igual que Siigo ────────────────────────
+    const actor = Deno.env.get('SYSTEM_ACTOR_ID')
+    if (!actor) throw new Error('Falta SYSTEM_ACTOR_ID para registrar los ajustes de la sincronización')
+
     let vistosProductos = 0
+    const totales = { actualizados: 0, nuevos: 0, ajustes: 0, unidades_ajustadas: 0 }
     let pagina = 1
     let totalPaginas = 1
     do {
       verificarTiempo(inicio, `productos, página ${pagina}`)
-      const { productos, totalPaginas: tp } = await listarProductosSiigo(pagina, 100, desde ?? undefined)
+      const { productos, totalPaginas: tp } = await listarProductosSiigo(pagina, 100)
       totalPaginas = tp
+      vistosProductos += productos.length
 
-      for (const prod of productos) {
-        vistosProductos++
-        const local = productosLocales.get(prod.code)
-        if (local === undefined) {
-          // Un producto inactivo en Siigo no le hace falta al panel. Se guarda el
-          // nombre para poder agregarlo al catálogo con un clic.
-          if (prod.active) {
-            agregar({
-              tipo: 'producto', codigo: prod.code, campo: 'existencia',
-              valor_panel: null, valor_siigo: prod.name,
-            })
-          }
-        } else if (normalizar(local) !== normalizar(prod.name)) {
-          agregar({
-            tipo: 'producto', codigo: prod.code, campo: 'nombre',
-            valor_panel: local, valor_siigo: prod.name,
-          })
-        }
-      }
+      const items = productos.map((p) => ({
+        codigo: p.code,
+        nombre: p.name,
+        unidad: p.unidad,
+        precio: p.precio_lista,
+        existencia: p.existencia,
+        control_inventario: p.control_inventario,
+        activo: p.active,
+        marca: p.marca,
+      }))
+      const { data: r, error } = await admin.rpc('fn_aplicar_inventario_siigo', {
+        p_items: items, p_actor: actor, p_dry: dryRun,
+      })
+      if (error) throw new Error(`No se pudo aplicar el inventario de Siigo (página ${pagina}): ${error.message}`)
+      for (const k of Object.keys(totales) as Array<keyof typeof totales>) totales[k] += Number(r?.[k] ?? 0)
       pagina++
     } while (pagina <= totalPaginas)
 
@@ -142,8 +145,11 @@ Deno.serve(async (req) => {
       dry_run: dryRun,
       productos_revisados: vistosProductos,
       proveedores_revisados: vistosProveedores,
+      productos_actualizados: totales.actualizados,
+      productos_nuevos: totales.nuevos,
+      ajustes_de_unidades: totales.ajustes,
+      unidades_ajustadas: totales.unidades_ajustadas,
       diferencias_nuevas: nuevas.length,
-      productos: nuevas.filter((d) => d.tipo === 'producto').length,
       proveedores: nuevas.filter((d) => d.tipo === 'proveedor').length,
       duracion_ms: Date.now() - inicio,
     }
@@ -151,7 +157,7 @@ Deno.serve(async (req) => {
     if (dryRun) {
       await admin.from('log_automatizaciones').update({ detalle: resumen }).eq('id', logId)
       await admin.rpc('fn_log_automatizacion_cerrar', {
-        p_id: logId, p_resultado: 'ok', p_filas_afectadas: nuevas.length, p_error: null,
+        p_id: logId, p_resultado: 'ok', p_filas_afectadas: totales.actualizados + totales.nuevos + totales.ajustes, p_error: null,
       })
       return json({ ok: true, ...resumen })
     }
@@ -164,7 +170,7 @@ Deno.serve(async (req) => {
     await admin.rpc('fn_log_automatizacion_cerrar', {
       p_id: logId,
       p_resultado: 'ok',
-      p_filas_afectadas: nuevas.length,
+      p_filas_afectadas: totales.actualizados + totales.nuevos + totales.ajustes + nuevas.length,
       p_error: null,
     })
 
@@ -172,13 +178,12 @@ Deno.serve(async (req) => {
       await admin.rpc('fn_registrar_intento_sync', { p_id: body.sync_pendiente_id, p_exitoso: true })
     }
 
-    // Aviso para validar lo nuevo que bajó de Siigo.
+    // Aviso para validar lo que bajó de Siigo (solo lo que necesita revisión humana).
     if (nuevas.length > 0) {
       await admin.rpc('fn_crear_notificacion', {
         p_tipo: 'siigo_catalogo_nuevo',
         p_titulo: 'Novedades de Siigo para validar',
-        p_mensaje: `La bajada de Siigo trajo ${nuevas.length} diferencia(s) con el panel `
-          + `(${resumen.productos} de productos, ${resumen.proveedores} de proveedores). Revísalas en Compras.`,
+        p_mensaje: `La bajada de Siigo trajo ${nuevas.length} diferencia(s) de proveedores con el panel. Revísalas en Compras.`,
         p_enlace: '/compras',
         p_usuario_destino: null,
         p_rol_destino: 'compras',
@@ -243,18 +248,6 @@ async function calcularDesde(admin: any, completo: boolean): Promise<string | nu
   if (!data?.inicio) return null
   // Un día de margen por si una bajada anterior dejó cambios sin ver.
   return new Date(new Date(data.inicio).getTime() - MARGEN_SEGURIDAD_MS).toISOString()
-}
-
-// deno-lint-ignore no-explicit-any
-async function cargarProductosLocales(admin: any): Promise<Map<string, string>> {
-  const mapa = new Map<string, string>()
-  const { data, error } = await admin
-    .from('productos')
-    .select('codigo_producto, nombre_producto')
-    .limit(20000)
-  if (error) throw new Error(`No se pudo leer el catálogo del panel: ${error.message}`)
-  for (const p of data ?? []) mapa.set(p.codigo_producto, p.nombre_producto)
-  return mapa
 }
 
 // deno-lint-ignore no-explicit-any

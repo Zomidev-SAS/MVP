@@ -284,6 +284,11 @@ export interface SiigoProductoCatalogo {
   // precio de lista si Siigo lo trae en la primera moneda configurada; se usa
   // solo para detectar diferencias, nunca se pisa el costo real del panel.
   precio_lista: number | null
+  unidad: string | null
+  // existencia total en Siigo (available_quantity) y si el producto la controla
+  existencia: number | null
+  control_inventario: boolean
+  marca: string | null
 }
 
 export async function listarProductosSiigo(
@@ -309,6 +314,11 @@ export async function listarProductosSiigo(
       name?: string
       active?: boolean
       prices?: Array<{ price_list?: Array<{ value?: number }> }>
+      unit?: { name?: string; code?: string }
+      unit_label?: string
+      stock_control?: boolean
+      available_quantity?: number
+      additional_fields?: { brand?: string }
     }>
     pagination?: { total_results?: number; page_size?: number }
   }
@@ -320,6 +330,10 @@ export async function listarProductosSiigo(
       name: p.name ?? p.code!,
       active: p.active !== false,
       precio_lista: p.prices?.[0]?.price_list?.[0]?.value ?? null,
+      unidad: p.unit_label ?? p.unit?.name ?? null,
+      existencia: typeof p.available_quantity === 'number' ? p.available_quantity : null,
+      control_inventario: p.stock_control === true,
+      marca: p.additional_fields?.brand ?? null,
     }))
 
   const totalResults = data.pagination?.total_results ?? productos.length
