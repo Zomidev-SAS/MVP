@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { getDevPreviewDashboardData } from '@/lib/dev/preview-dashboard-data'
-import { getUmbralStockBajo } from '@/lib/supabase/get-stock-threshold'
+import { getUmbralesStock } from '@/lib/supabase/get-stock-threshold'
+import { umbralDeCategoria } from '@/lib/stock/umbral'
 import type { DashboardData, EntradaSalidaDia, MovimientoReciente } from '@/lib/types/dashboard'
 
 // Colombia does not observe DST — a fixed UTC-5 offset is always correct,
@@ -48,8 +49,8 @@ export async function getDashboardData(
   // vista desglosada por bodega (020), que agrega por producto+bodega en vez
   // de solo por producto.
   let inventarioQuery = bodegaId
-    ? supabase.from('vista_inventario_por_bodega').select('saldo, valor_total').eq('bodega', bodegaId)
-    : supabase.from('vista_inventario_actual').select('saldo, valor_total')
+    ? supabase.from('vista_inventario_por_bodega').select('saldo, valor_total, categoria').eq('bodega', bodegaId)
+    : supabase.from('vista_inventario_actual').select('saldo, valor_total, categoria')
   if (categoriaId) inventarioQuery = inventarioQuery.eq('categoria', categoriaId)
 
   let movimientosHoyQuery = supabase
@@ -93,11 +94,13 @@ export async function getDashboardData(
   }
 
   const inventarioRows = inventarioResult.data ?? []
-  const umbralStockBajo = await getUmbralStockBajo()
+  const umbrales = await getUmbralesStock()
   const totalUnidades = inventarioRows.reduce((sum, row) => sum + (row.saldo ?? 0), 0)
   const valorTotal = inventarioRows.reduce((sum, row) => sum + (row.valor_total ?? 0), 0)
   const stockBajo = inventarioRows.filter(
-    (row) => (row.saldo ?? 0) > 0 && (row.saldo ?? 0) <= umbralStockBajo
+    (row) =>
+      (row.saldo ?? 0) > 0 &&
+      (row.saldo ?? 0) <= umbralDeCategoria(umbrales, (row.categoria as string | null) ?? null)
   ).length
 
   const movimientosHoy = movimientosHoyResult.count ?? 0

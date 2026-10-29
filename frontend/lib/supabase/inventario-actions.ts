@@ -3,7 +3,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { getDevPreviewInventarioData } from '@/lib/dev/preview-inventario-data'
-import { getUmbralStockBajo } from '@/lib/supabase/get-stock-threshold'
 import { INVENTARIO_PAGE_SIZE } from '@/lib/supabase/inventario-page-size'
 import type { InventarioFiltros, InventarioItem, InventarioPagina } from '@/lib/types/inventario'
 
@@ -76,13 +75,9 @@ export async function fetchStockBajoCount(): Promise<number> {
   }
 
   const supabase = await createClient()
-  const umbral = await getUmbralStockBajo()
-
   const { count, error } = await supabase
-    .from('vista_inventario_actual')
+    .from('vista_stock_bajo')
     .select('codigo_producto', { count: 'exact', head: true })
-    .gt('saldo', 0)
-    .lte('saldo', umbral)
 
   if (error) {
     console.error('Failed to count stock bajo:', error)
@@ -104,13 +99,9 @@ export async function fetchProductosBajoStock(
   }
 
   const supabase = await createClient()
-  const umbral = await getUmbralStockBajo()
-
   const { data, error } = await supabase
-    .from('vista_inventario_actual')
+    .from('vista_stock_bajo')
     .select('codigo_producto, nombre_producto, saldo')
-    .gt('saldo', 0)
-    .lte('saldo', umbral)
     .order('saldo', { ascending: true })
     .limit(limite)
 
