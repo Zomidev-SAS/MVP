@@ -12,17 +12,23 @@ export interface Configuracion {
   umbral_stock_bajo: number
 }
 
-// umbral = null significa "sin umbral propio": la categoría usa el umbral general.
 export interface UmbralCategoria {
   categoria: string
-  umbral: number | null
+  umbral: number
+  // productos de la categoría que hoy están en o bajo ese umbral (saldo > 0)
+  en_alerta: number
 }
 
-export const umbralesCategoriaSchema = z.array(
-  z.object({
-    categoria: z.string().min(1),
-    umbral: z.number().int().min(0, 'Debe ser 0 o mayor').nullable(),
-  })
-)
+export interface UmbralesCategoriaData {
+  categorias: string[]
+  umbrales: UmbralCategoria[]
+  // si falla la carga (p. ej. falta aplicar la migración 072) viene el motivo
+  error: string | null
+}
+
+export const umbralCategoriaSchema = z.object({
+  categoria: z.string().min(1, 'Elige una categoría'),
+  umbral: z.number().int('Debe ser un número entero').min(0, 'Debe ser 0 o mayor').max(1000000),
+})
 
 export type ConfiguracionResultado = { ok: true } | { ok: false; error: string }
