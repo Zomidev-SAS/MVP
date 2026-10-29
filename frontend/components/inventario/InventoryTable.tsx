@@ -14,11 +14,24 @@ import {
 import { Button } from '@/components/ui/button'
 import { InventoryFilters } from '@/components/inventario/InventoryFilters'
 import { fetchInventario } from '@/lib/supabase/inventario-actions'
+import { getUmbralesStock } from '@/lib/supabase/get-stock-threshold'
+import { umbralDeCategoria, type UmbralesStock } from '@/lib/stock/umbral'
+import { cn } from '@/lib/utils'
 import { INVENTARIO_PAGE_SIZE } from '@/lib/supabase/inventario-page-size'
 import { formatCOP, formatNumber } from '@/lib/format'
 import type { InventarioFiltros, InventarioItem } from '@/lib/types/inventario'
 
-const STOCK_BAJO_THRESHOLD = 2
+// Rojo: crítico (saldo en o bajo 2, incluido agotado). Amarillo: en o bajo el
+// umbral de su categoría (o el general si la categoría no tiene uno propio).
+const UMBRAL_CRITICO = 2
+
+type NivelStock = 'critico' | 'bajo' | 'ok'
+
+function nivelDeStock(item: InventarioItem, umbrales: UmbralesStock | null): NivelStock {
+  if (item.saldo <= UMBRAL_CRITICO) return 'critico'
+  const umbral = umbrales ? umbralDeCategoria(umbrales, item.categoria) : UMBRAL_CRITICO
+  return item.saldo <= umbral ? 'bajo' : 'ok'
+}
 
 const FILTROS_INICIALES: InventarioFiltros = {
   busqueda: '',
@@ -35,6 +48,13 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
   const [filas, setFilas] = useState<InventarioItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [umbrales, setUmbrales] = useState<UmbralesStock | null>(null)
+
+  useEffect(() => {
+    getUmbralesStock()
+      .then(setUmbrales)
+      .catch((error) => console.error('Failed to fetch umbrales de stock:', error))
+  }, [])
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -110,6 +130,15 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
         </Button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Crítico (2 o menos)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> Stock bajo (en o bajo el umbral de su categoría)
+        </span>
+      </div>
+
       <div className="overflow-x-auto rounded-md border">
         <Table className="min-w-[880px]">
           <TableHeader>
@@ -136,8 +165,16 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
                 </TableCell>
               </TableRow>
             ) : (
-              filas.map((item) => (
-                <TableRow key={item.codigo_producto}>
+              filas.map((item) => {
+                const nivel = nivelDeStock(item, umbrales)
+                return (
+                <TableRow
+                  key={item.codigo_producto}
+                  className={cn(
+                    nivel === 'critico' && 'bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50',
+                    nivel === 'bajo' && 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50'
+                  )}
+                >
                   <TableCell className="font-mono text-sm">{item.codigo_producto}</TableCell>
                   <TableCell
                     className="max-w-[240px] truncate"
@@ -147,9 +184,20 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
                   </TableCell>
                   <TableCell>{item.categoria ?? '—'}</TableCell>
                   <TableCell className="text-right">
-                    <span className="inline-flex items-center gap-1">
-                      {item.saldo <= STOCK_BAJO_THRESHOLD && item.saldo > 0 && (
-                        <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1',
+                        nivel === 'critico' && 'font-semibold text-red-700 dark:text-red-400',
+                        nivel === 'bajo' && 'font-semibold text-amber-700 dark:text-amber-400'
+                      )}
+                    >
+                      {nivel !== 'ok' && (
+                        <AlertTriangle
+                          className={cn(
+                            'h-3.5 w-3.5',
+                            nivel === 'critico' ? 'text-red-600' : 'text-amber-500'
+                          )}
+                        />
                       )}
                       {formatNumber(item.saldo)}
                     </span>
@@ -179,7 +227,8 @@ export function InventoryTable({ puedeVerCostos }: { puedeVerCostos: boolean }) 
                     </Link>
                   </TableCell>
                 </TableRow>
-              ))
+                )
+              })
             )}
           </TableBody>
         </Table>
