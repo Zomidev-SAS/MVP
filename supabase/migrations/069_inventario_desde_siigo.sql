@@ -64,6 +64,67 @@ join productos p on p.codigo_producto = m.codigo_producto
 where m.estado = 'aplicado'
 group by m.codigo_producto, p.nombre_producto, p.unidad_medida, p.categoria, m.bodega, p.siigo_precio;
 
+-- Reparte un ajuste entre bodegas para que ninguna quede en negativo:
+--   delta < 0: descuenta de las bodegas que tienen saldo (la de más saldo primero);
+--              solo lo que no alcance queda en 'Sin Asignar' (Siigo con existencia negativa).
+--   delta > 0: suma en la bodega con más saldo ('Sin Asignar' si no hay ninguna).
+-- Los movimientos son append-only: sin ON CONFLICT (la tabla tiene reglas).
+create or replace function fn_repartir_ajuste_siigo(
+  p_codigo text, p_delta numeric, p_precio numeric, p_motivo text, p_actor uuid, p_hoy text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  r        record;
+  v_resto  numeric;
+  v_toma   numeric;
+  v_bodega text;
+begin
+  if p_delta < 0 then
+    v_resto := -p_delta;
+    for r in
+      select bodega, sum(cantidad) as saldo
+      from movimientos_inventario
+      where codigo_producto = p_codigo and estado = 'aplicado'
+      group by bodega
+      having sum(cantidad) > 0
+      order by sum(cantidad) desc
+    loop
+      exit when v_resto <= 0;
+      v_toma := least(r.saldo, v_resto);
+      insert into movimientos_inventario (codigo_producto, tipo_movimiento, cantidad, valor_unitario,
+                                          bodega, motivo, actor_id, idempotency_key)
+      values (p_codigo, 'ajuste', -v_toma, p_precio, r.bodega, p_motivo, p_actor,
+              'siigo-sync-' || p_hoy || '-' || p_codigo || '-' || md5(r.bodega || clock_timestamp()::text));
+      v_resto := v_resto - v_toma;
+    end loop;
+    if v_resto > 0 then
+      insert into movimientos_inventario (codigo_producto, tipo_movimiento, cantidad, valor_unitario,
+                                          bodega, motivo, actor_id, idempotency_key)
+      values (p_codigo, 'ajuste', -v_resto, p_precio, 'Sin Asignar', p_motivo, p_actor,
+              'siigo-sync-' || p_hoy || '-' || p_codigo || '-' || md5('sa' || clock_timestamp()::text));
+    end if;
+  elsif p_delta > 0 then
+    select bodega into v_bodega
+    from movimientos_inventario
+    where codigo_producto = p_codigo and estado = 'aplicado'
+    group by bodega
+    having sum(cantidad) > 0
+    order by sum(cantidad) desc
+    limit 1;
+    insert into movimientos_inventario (codigo_producto, tipo_movimiento, cantidad, valor_unitario,
+                                        bodega, motivo, actor_id, idempotency_key)
+    values (p_codigo, 'ajuste', p_delta, p_precio, coalesce(v_bodega, 'Sin Asignar'), p_motivo, p_actor,
+            'siigo-sync-' || p_hoy || '-' || p_codigo || '-' || md5('mas' || clock_timestamp()::text));
+  end if;
+end;
+$$;
+
+revoke all on function fn_repartir_ajuste_siigo(text, numeric, numeric, text, uuid, text) from public, anon, authenticated;
+
 -- ===================== aplicar lo que baja de Siigo =====================
 -- p_items: [{codigo, nombre, unidad, precio, existencia, control_inventario, activo, marca}]
 -- p_dry: solo cuenta, no escribe nada.
@@ -168,21 +229,9 @@ begin
         v_muestra  := v_muestra || jsonb_build_object(
           'codigo', v_codigo, 'nombre', v_nombre, 'panel', v_saldo, 'siigo', v_exist, 'unidad', v_unidad);
         if not p_dry then
-          -- Sin ON CONFLICT: la tabla tiene reglas anti-edición y Postgres no lo permite.
-          insert into movimientos_inventario (
-            codigo_producto, tipo_movimiento, cantidad, valor_unitario,
-            bodega, motivo, actor_id, idempotency_key
-          )
-          select
-            v_codigo, 'ajuste', v_delta, v_precio,
-            'Sin Asignar',
+          perform fn_repartir_ajuste_siigo(v_codigo, v_delta, v_precio,
             'Sincronización con Siigo (existencia ' || v_exist || ', panel ' || v_saldo || ')',
-            p_actor,
-            'siigo-sync-' || v_hoy || '-' || v_codigo
-          where not exists (
-            select 1 from movimientos_inventario
-            where idempotency_key = 'siigo-sync-' || v_hoy || '-' || v_codigo
-          );
+            p_actor, v_hoy);
         end if;
       end if;
     end if;
