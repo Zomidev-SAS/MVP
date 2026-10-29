@@ -96,6 +96,8 @@ declare
   v_actualiz  int := 0;
   v_ajustes   int := 0;
   v_unidades  numeric := 0;
+  v_muestra   jsonb := '[]'::jsonb;
+  v_muestra_n jsonb := '[]'::jsonb;
 begin
   for it in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
   loop
@@ -117,6 +119,7 @@ begin
       -- Solo se agregan productos activos y con nombre.
       if v_activo and v_nombre is not null then
         v_nuevos := v_nuevos + 1;
+        v_muestra_n := v_muestra_n || jsonb_build_object('codigo', v_codigo, 'nombre', v_nombre);
         if not p_dry then
           insert into productos (codigo_producto, nombre_producto, unidad_medida,
                                  siigo_precio, siigo_existencia, siigo_marca, siigo_sync_at)
@@ -162,6 +165,8 @@ begin
       if v_delta <> 0 then
         v_ajustes  := v_ajustes + 1;
         v_unidades := v_unidades + abs(v_delta);
+        v_muestra  := v_muestra || jsonb_build_object(
+          'codigo', v_codigo, 'nombre', v_nombre, 'panel', v_saldo, 'siigo', v_exist, 'unidad', v_unidad);
         if not p_dry then
           insert into movimientos_inventario (
             codigo_producto, tipo_movimiento, cantidad, valor_unitario,
@@ -184,7 +189,14 @@ begin
     'actualizados', v_actualiz,
     'nuevos', v_nuevos,
     'ajustes', v_ajustes,
-    'unidades_ajustadas', v_unidades
+    'unidades_ajustadas', v_unidades,
+    'muestra_ajustes', (
+      select coalesce(jsonb_agg(e), '[]'::jsonb) from (
+        select e from jsonb_array_elements(v_muestra) e
+        order by abs((e ->> 'siigo')::numeric - (e ->> 'panel')::numeric) desc limit 8) t),
+    'muestra_nuevos', (
+      select coalesce(jsonb_agg(e), '[]'::jsonb) from (
+        select e from jsonb_array_elements(v_muestra_n) e limit 8) t)
   );
 end;
 $$;

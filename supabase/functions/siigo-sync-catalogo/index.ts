@@ -92,6 +92,9 @@ Deno.serve(async (req) => {
 
     let vistosProductos = 0
     const totales = { actualizados: 0, nuevos: 0, ajustes: 0, unidades_ajustadas: 0 }
+    // Muestra de lo más llamativo, para revisar a ojo antes de aplicar.
+    const muestraAjustes: Array<{ panel: number; siigo: number }> = []
+    const muestraNuevos: unknown[] = []
     let pagina = 1
     let totalPaginas = 1
     do {
@@ -115,8 +118,11 @@ Deno.serve(async (req) => {
       })
       if (error) throw new Error(`No se pudo aplicar el inventario de Siigo (página ${pagina}): ${error.message}`)
       for (const k of Object.keys(totales) as Array<keyof typeof totales>) totales[k] += Number(r?.[k] ?? 0)
+      muestraAjustes.push(...(r?.muestra_ajustes ?? []))
+      muestraNuevos.push(...(r?.muestra_nuevos ?? []))
       pagina++
     } while (pagina <= totalPaginas)
+    muestraAjustes.sort((a, b) => Math.abs(b.siigo - b.panel) - Math.abs(a.siigo - a.panel))
 
     // ── Proveedores ──────────────────────────────────────────────────────
     let vistosProveedores = 0
@@ -149,6 +155,8 @@ Deno.serve(async (req) => {
       productos_nuevos: totales.nuevos,
       ajustes_de_unidades: totales.ajustes,
       unidades_ajustadas: totales.unidades_ajustadas,
+      muestra_ajustes: dryRun ? muestraAjustes.slice(0, 15) : undefined,
+      muestra_nuevos: dryRun ? muestraNuevos.slice(0, 15) : undefined,
       diferencias_nuevas: nuevas.length,
       proveedores: nuevas.filter((d) => d.tipo === 'proveedor').length,
       duracion_ms: Date.now() - inicio,
