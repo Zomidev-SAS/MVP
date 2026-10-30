@@ -18,6 +18,8 @@ export interface FormulariosFiltros {
   tipo: 'todos' | 'entrada' | 'salida' | 'parqueadero'
   /** Valor de la lista Filtros, ej. "marca:MERCEDES" o "todos" */
   filtros: string
+  /** Ubicación del parqueadero (app móvil): "todas", un valor de la lista o "sin_clasificar" */
+  ubicacion: string
 }
 
 export interface FormulariosPagina {

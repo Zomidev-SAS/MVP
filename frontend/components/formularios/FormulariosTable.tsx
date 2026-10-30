@@ -9,6 +9,7 @@ import { FormularioDetailDialog } from '@/components/formularios/FormularioDetai
 import { fetchFormularios } from '@/lib/supabase/formularios-actions'
 import { FORMULARIOS_PAGE_SIZE } from '@/lib/supabase/formularios-page-size'
 import type { OpcionFiltro } from '@/lib/formularios/opciones-filtro'
+import { textoUbicacionParqueadero } from '@/lib/formularios/ubicacion-parqueadero'
 import {
   formatearFechaFormulario,
   vistaFormulario,
@@ -20,6 +21,7 @@ const FILTROS_INICIALES: FormulariosFiltros = {
   busqueda: '',
   tipo: 'todos',
   filtros: 'todos',
+  ubicacion: 'todas',
 }
 
 const OPCIONES_FILTRO_INICIALES: OpcionFiltro[] = [
@@ -113,6 +115,7 @@ export function FormulariosTable() {
               <TableHead className="whitespace-nowrap">Tipo</TableHead>
               <TableHead className="whitespace-nowrap">Marca</TableHead>
               <TableHead className="whitespace-nowrap">Chasis</TableHead>
+              <TableHead className="whitespace-nowrap">Ubicación</TableHead>
               <TableHead className="whitespace-nowrap">Fecha ingreso</TableHead>
               <TableHead className="whitespace-nowrap">Fecha salida</TableHead>
             </TableRow>
@@ -120,7 +123,7 @@ export function FormulariosTable() {
           <TableBody>
             {filas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
                   {loading ? 'Cargando...' : 'Sin formularios.'}
                 </TableCell>
               </TableRow>
@@ -141,6 +144,9 @@ export function FormulariosTable() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-sm">
                       {vista.chasis}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">
+                      {textoUbicacionParqueadero(item) ?? ''}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {formatearFechaFormulario(vista.fechaIngreso)}

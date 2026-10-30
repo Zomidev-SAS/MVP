@@ -4,12 +4,21 @@ export function getDevPreviewFormulariosData(): FormularioListado[] {
   const baseDate = new Date('2026-09-13T08:00:00Z')
 
   return Array.from({ length: 45 }, (_, i) => {
-    const esEntrada = i % 2 === 0
-    const tipoFormulario = esEntrada ? 'ingreso' : 'salida'
+    const esParqueadero = i % 3 === 2
+    const esEntrada = !esParqueadero && i % 2 === 0
+    const tipoFormulario = esParqueadero ? 'ubicacion' : esEntrada ? 'ingreso' : 'salida'
+    // Igual que la app: ubicación de la lista + detalle opcional (el último simula texto libre antiguo).
+    const bodega = ['Principal', 'Bodega Cemi', 'Bodegas Nuevas', null][i % 4]
+    const ubicacion = esParqueadero
+      ? bodega
+        ? { bodegaParqueadero: bodega, ubicacionParqueadero: `${bodega} · Zona ${'ABC'[i % 3]}` }
+        : { ubicacionParqueadero: 'Patio trasero' }
+      : {}
     const created_at = new Date(baseDate.getTime() - i * 4 * 60 * 60 * 1000).toISOString()
 
     const rawData = {
       tipoFormulario,
+      ...ubicacion,
       datosGenerales: {
         chasis: `CH${(100000 + i).toString()}`,
         marca: 'Toyota',

@@ -2,6 +2,7 @@ import { coincideBusquedaFormulario, coincideFiltroLista } from '@/lib/formulari
 import { extraerDbColumns } from '@/lib/formularios/db-columns'
 import { aplanarFilaFormulario } from '@/lib/formularios/flatten'
 import { ordenarFormulariosRecientes } from '@/lib/formularios/orden'
+import { coincideUbicacionFiltro } from '@/lib/formularios/ubicacion-parqueadero'
 import type { FormularioListado, FormulariosFiltros } from '@/lib/types/formularios'
 import { extraerFechaIngreso, extraerFechaSalida } from '@/lib/types/formularios'
 
@@ -43,6 +44,7 @@ export function filtrarYOrdenarFormularios(
       .filter((fila) => coincideTipoFiltro(fila, filtros.tipo))
       .filter((fila) => coincideBusquedaFormulario(fila, filtros.busqueda))
       .filter((fila) => coincideFiltroLista(fila, filtros.filtros))
+      .filter((fila) => coincideUbicacionFiltro(fila, filtros.ubicacion))
   )
 }
 
