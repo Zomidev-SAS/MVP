@@ -6,6 +6,7 @@ import {
   ArrowUpFromLine,
   Car,
   Loader2,
+  MapPin,
   ParkingSquare,
   Plus,
   Search,
@@ -97,6 +98,12 @@ function DetalleEventoFormulario({ evento }: { evento: EventoLineaTiempo }) {
       <p className="text-muted-foreground">{fechaTexto}</p>
       {evento.ciudad && <p className="text-muted-foreground">{evento.ciudad}</p>}
       {evento.marca && <p className="text-muted-foreground">{evento.marca}</p>}
+      {evento.ubicacion && (
+        <p className="flex items-center gap-1 font-medium text-foreground">
+          <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {evento.ubicacion}
+        </p>
+      )}
     </div>
   )
 }
@@ -292,6 +299,12 @@ export function VehiculoTimelineCard({ rolActual, tokenPlanta }: VehiculoTimelin
                           ? ` · ${formatearFechaFormulario(v.ultimo_ingreso) ?? v.ultimo_ingreso}`
                           : ''}
                       </span>
+                      {v.ubicacion && (
+                        <span className="flex items-center gap-1 text-xs font-medium text-foreground">
+                          <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          {v.ubicacion}
+                        </span>
+                      )}
                     </span>
                     <EstadoVehiculoBadge estado={v.estadoActual} />
                   </button>
