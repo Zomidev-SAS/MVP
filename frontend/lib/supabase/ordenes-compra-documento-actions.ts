@@ -6,6 +6,7 @@ import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { leerOcSiigoDesdePdf, MAX_BYTES_PDF } from '@/lib/oc-documento/leer-pdf'
 import { ErrorLecturaOc } from '@/lib/oc-documento/parse-siigo-oc'
 import { estamparFirma } from '@/lib/oc-documento/firmar-pdf'
+import { nombreProveedorIncompleto } from '@/lib/oc-documento/nombre-proveedor'
 
 const BUCKET_DOCUMENTOS = 'ordenes-compra'
 const BUCKET_FIRMAS = 'firmas-admin'
@@ -291,8 +292,8 @@ export async function corregirProveedoresOrdenesDocumento(): Promise<CorreccionP
   let revisadas = 0
   for (const orden of ordenes ?? []) {
     const guardado = (orden.proveedor_nombre ?? '').trim()
-    // Un nombre de más de 12 caracteres se considera completo.
-    if (guardado.length > 12) continue
+    // Solo se tocan los nombres que quedaron cortados ("LTDA", "S.A.S.").
+    if (!nombreProveedorIncompleto(guardado)) continue
     revisadas++
 
     const original = await supabase.storage.from(BUCKET_DOCUMENTOS).download(orden.documento_path as string)

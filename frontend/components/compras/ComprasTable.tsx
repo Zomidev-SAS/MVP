@@ -39,6 +39,7 @@ import { SiigoStatusBadge, ETIQUETA_SIIGO_SYNC } from '@/components/compras/Siig
 import { OrdenDetalle } from '@/components/compras/OrdenDetalle'
 import { ResumenCompras, coincideFiltro, estaVencida, type FiltroCompras } from '@/components/compras/ResumenCompras'
 import { Skeleton } from '@/components/ui/skeleton'
+import { nombreProveedorIncompleto } from '@/lib/oc-documento/nombre-proveedor'
 import { FacturaProveedorDialog, type ModoFacturaProveedor } from '@/components/compras/FacturaProveedorDialog'
 import {
   corregirProveedoresOrdenesDocumento,
@@ -161,6 +162,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
   const [subiendoDocumento, setSubiendoDocumento] = useState(false)
   const [dialogoFactura, setDialogoFactura] = useState<{ orden: OrdenCompra; modo: ModoFacturaProveedor } | null>(null)
   const [corrigiendoNombres, setCorrigiendoNombres] = useState(false)
+  const [avisoNombresOculto, setAvisoNombresOculto] = useState(false)
   const inputDocumentoRef = useRef<HTMLInputElement>(null)
 
   const recargar = useCallback(async () => {
@@ -199,7 +201,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
   const conProveedorCortado = useMemo(
     () =>
       ordenes.filter(
-        (o) => o.origen === 'documento_siigo' && (o.proveedor_nombre ?? '').trim().length > 0 && (o.proveedor_nombre ?? '').trim().length <= 12
+        (o) => o.origen === 'documento_siigo' && nombreProveedorIncompleto(o.proveedor_nombre)
       ).length,
     [ordenes]
   )
@@ -222,6 +224,8 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
       }
       await recargar()
     } finally {
+      // Si alguno no se pudo completar, el aviso no se repite hasta recargar la página.
+      setAvisoNombresOculto(true)
       setCorrigiendoNombres(false)
     }
   }
@@ -506,7 +510,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
 
   return (
     <div className="space-y-4">
-      {!loading && conProveedorCortado > 0 && (puedeGestionarSiigo || puedeFirmar) && (
+      {!loading && !avisoNombresOculto && conProveedorCortado > 0 && (puedeGestionarSiigo || puedeFirmar) && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
             <p>
               {conProveedorCortado} orden{conProveedorCortado === 1 ? '' : 'es'} con el nombre del proveedor
