@@ -8,14 +8,27 @@ interface Linea {
 }
 
 const TOLERANCIA_Y = 3
+// En el cuerpo de la tabla, el número de ítem y la unidad ("ML") quedan centrados
+// o más abajo que el texto de la fila: hasta ~6 pt de diferencia. Las filas están
+// a más de 20 pt entre sí y las descripciones partidas a ~10 pt, así que 7 no mezcla filas.
+const TOLERANCIA_Y_TABLA = 7
+
+/** Altura (y) del encabezado de la tabla ("Descripción"), o null si no se encuentra. */
+function alturaEncabezadoTabla(fragmentos: FragmentoTexto[]): number | null {
+  const f = fragmentos.find((i) => !i.rotado && /^descripci[oó]n$/i.test(i.texto.trim()))
+  return f ? f.y : null
+}
 
 /** Agrupa fragmentos que comparten renglón (misma altura) de izquierda a derecha. */
 function agruparEnLineas(fragmentos: FragmentoTexto[]): Linea[] {
+  const yEncabezado = alturaEncabezadoTabla(fragmentos)
   const utiles = fragmentos.filter((f) => !f.rotado && f.texto.trim().length > 0)
   const ordenados = [...utiles].sort((a, b) => b.y - a.y || a.x - b.x)
   const lineas: Linea[] = []
   for (const f of ordenados) {
-    const actual = lineas.find((l) => Math.abs(l.y - f.y) <= TOLERANCIA_Y)
+    const tolerancia =
+      yEncabezado !== null && f.y < yEncabezado - 6 ? TOLERANCIA_Y_TABLA : TOLERANCIA_Y
+    const actual = lineas.find((l) => Math.abs(l.y - f.y) <= tolerancia)
     if (actual) {
       actual.items.push(f)
       actual.alto = Math.max(actual.alto, f.alto)
@@ -98,21 +111,43 @@ export function parsearOcSiigo(
     throw new ErrorLecturaOc('No encontré el proveedor ("Para") en la orden.')
   }
 
-  const partesNombre: string[] = [derechaSuperior[indicePara].texto.replace(/^para\b\s*/i, '')]
   let nit: string | null = null
   let fecha: string | null = null
-  for (const l of derechaSuperior.slice(indicePara + 1)) {
+  for (const l of derechaSuperior.slice(indicePara)) {
     const matchNit = l.texto.match(/^nit\b\s*:?\s*([\d.\-]+)/i)
-    if (matchNit) {
-      nit = nitSinDigitoVerificacion(matchNit[1])
-      continue
-    }
+    if (matchNit) nit = nitSinDigitoVerificacion(matchNit[1])
     const matchFecha = l.texto.match(/^fecha\b\s*:?\s*(\d{4}-\d{2}-\d{2})/i)
-    if (matchFecha) {
-      fecha = matchFecha[1]
-      continue
+    if (matchFecha) fecha = matchFecha[1]
+  }
+
+  // El nombre queda centrado sobre la etiqueta "Para": un nombre largo (p. ej.
+  // "ALFIBRAS DE COLOMBIA" / "S.A.S.") ocupa renglones ARRIBA y ABAJO de ella.
+  // Se toma todo lo que está en la mitad derecha entre el título "No. OC-…" y el "Nit".
+  const derechaSinRotar = fragmentos.filter((f) => !f.rotado && f.x >= mitad && f.texto.trim())
+  const yTitulo = derechaSinRotar.find((f) => /\bOC-\d+-\d+\b/i.test(f.texto))?.y ?? null
+  const yNit = derechaSinRotar.find((f) => /^nit\b/i.test(f.texto.trim()))?.y ?? null
+  const yPara = derechaSinRotar.find((f) => /^para$/i.test(f.texto.trim()))?.y ?? null
+
+  let partesNombre: string[] = []
+  if (yTitulo !== null && yNit !== null && yPara !== null) {
+    const delNombre = derechaSinRotar
+      .filter((f) => f.y < yTitulo - 4 && f.y > yNit + 4 && !/^para$/i.test(f.texto.trim()))
+      .sort((a, b) => b.y - a.y || a.x - b.x)
+    const renglones: { y: number; textos: string[] }[] = []
+    for (const f of delNombre) {
+      const r = renglones.find((x) => Math.abs(x.y - f.y) <= TOLERANCIA_Y)
+      if (r) r.textos.push(f.texto.trim())
+      else renglones.push({ y: f.y, textos: [f.texto.trim()] })
     }
-    if (nit === null && fecha === null) partesNombre.push(l.texto)
+    partesNombre = renglones.map((r) => r.textos.join(' '))
+  }
+  if (partesNombre.length === 0) {
+    // Respaldo: el texto del mismo renglón que "Para" y los siguientes hasta el Nit.
+    partesNombre = [derechaSuperior[indicePara].texto.replace(/^para\b\s*/i, '')]
+    for (const l of derechaSuperior.slice(indicePara + 1)) {
+      if (/^(nit|fecha)\b/i.test(l.texto)) break
+      partesNombre.push(l.texto)
+    }
   }
 
   const proveedorNombre = partesNombre.join(' ').replace(/\s+/g, ' ').trim()

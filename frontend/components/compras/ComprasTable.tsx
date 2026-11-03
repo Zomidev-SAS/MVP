@@ -40,13 +40,27 @@ import { OrdenDetalle } from '@/components/compras/OrdenDetalle'
 import { ResumenCompras, coincideFiltro, estaVencida, type FiltroCompras } from '@/components/compras/ResumenCompras'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FacturaProveedorDialog, type ModoFacturaProveedor } from '@/components/compras/FacturaProveedorDialog'
-import { subirOrdenCompraDocumento } from '@/lib/supabase/ordenes-compra-documento-actions'
+import {
+  corregirProveedoresOrdenesDocumento,
+  subirOrdenCompraDocumento,
+} from '@/lib/supabase/ordenes-compra-documento-actions'
 import type { EstadoSyncSiigo } from '@/lib/types/siigo'
 
 function formatearVencimiento(fecha: string | null): string {
   if (!fecha) return '—'
   const d = new Date(fecha + 'T12:00:00')
   return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+}
+
+/** Fecha y hora en que se cargó la orden al panel (hora de Colombia): "3 nov · 9:42 a. m.". */
+function formatearCarga(creadaEn: string | null | undefined): { fecha: string; hora: string } | null {
+  if (!creadaEn) return null
+  const d = new Date(creadaEn)
+  if (Number.isNaN(d.getTime())) return null
+  return {
+    fecha: d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' }),
+    hora: d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' }),
+  }
 }
 
 function iconoVencimiento(orden: OrdenCompra) {
@@ -78,7 +92,7 @@ function textoEntrega(orden: OrdenCompra): { texto: string; clase: string } {
   return { texto: formatearVencimiento(orden.fecha_vencimiento), clase: '' }
 }
 
-const COLUMNAS = 6
+const COLUMNAS = 7
 
 // Franja de color a la izquierda de cada orden: amarillo en proceso, rojo finalizado.
 const BORDE_ESTADO: Record<EstadoOrdenCompra, string> = {
@@ -114,6 +128,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
   const [enviandoSiigoId, setEnviandoSiigoId] = useState<number | null>(null)
   const [subiendoDocumento, setSubiendoDocumento] = useState(false)
   const [dialogoFactura, setDialogoFactura] = useState<{ orden: OrdenCompra; modo: ModoFacturaProveedor } | null>(null)
+  const [corrigiendoNombres, setCorrigiendoNombres] = useState(false)
   const inputDocumentoRef = useRef<HTMLInputElement>(null)
 
   const recargar = useCallback(async () => {
@@ -147,6 +162,37 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
       return texto.includes(q)
     })
   }, [ordenes, busqueda, filtro, filtroSiigo])
+
+  // Órdenes cargadas desde Siigo cuyo proveedor quedó cortado ("LTDA", "S.A.S.").
+  const conProveedorCortado = useMemo(
+    () =>
+      ordenes.filter(
+        (o) => o.origen === 'documento_siigo' && (o.proveedor_nombre ?? '').trim().length > 0 && (o.proveedor_nombre ?? '').trim().length <= 12
+      ).length,
+    [ordenes]
+  )
+
+  async function corregirNombresProveedor() {
+    setCorrigiendoNombres(true)
+    try {
+      const res = await corregirProveedoresOrdenesDocumento()
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      if (res.corregidas.length === 0) {
+        toast.info('No se pudo completar ningún nombre. Revisa esas órdenes manualmente.')
+      } else {
+        toast.success(
+          `Se corrigieron ${res.corregidas.length} proveedor${res.corregidas.length === 1 ? '' : 'es'}: ` +
+            res.corregidas.map((c) => `${c.numero} → ${c.despues}`).join(' · ')
+        )
+      }
+      await recargar()
+    } finally {
+      setCorrigiendoNombres(false)
+    }
+  }
 
   const pendientes = filtradas.filter((o) => o.estado === 'en_curso')
   const otras = filtradas.filter((o) => o.estado !== 'en_curso')
@@ -342,6 +388,19 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
             </span>
           </TableCell>
           <TableCell className="hidden md:table-cell">
+            {(() => {
+              const carga = formatearCarga(orden.created_at)
+              return carga ? (
+                <div className="text-sm leading-tight" title="Fecha y hora en que se subió la orden al panel">
+                  <p className="font-medium">{carga.fecha}</p>
+                  <p className="text-xs text-muted-foreground">{carga.hora}</p>
+                </div>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )
+            })()}
+          </TableCell>
+          <TableCell className="hidden md:table-cell">
             <div className="w-32 space-y-1">
               <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                 <div className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out" style={{ width: `${porcentaje}%` }} />
@@ -403,6 +462,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
     <TableRow>
       <TableHead>Orden</TableHead>
       <TableHead>Estado</TableHead>
+      <TableHead className="hidden md:table-cell">Cargada</TableHead>
       <TableHead className="hidden md:table-cell">Avance</TableHead>
       <TableHead className="hidden lg:table-cell">Siigo</TableHead>
       <TableHead className="hidden md:table-cell">Entrega</TableHead>
@@ -414,6 +474,17 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
 
   return (
     <div className="space-y-4">
+      {!loading && conProveedorCortado > 0 && (puedeGestionarSiigo || puedeFirmar) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
+            <p>
+              {conProveedorCortado} orden{conProveedorCortado === 1 ? '' : 'es'} con el nombre del proveedor
+              incompleto (por ejemplo «LTDA» o «S.A.S.»).
+            </p>
+            <Button type="button" size="sm" variant="outline" onClick={corregirNombresProveedor} disabled={corrigiendoNombres}>
+              {corrigiendoNombres ? 'Corrigiendo...' : 'Completar nombres'}
+            </Button>
+          </div>
+      )}
       {!loading && ordenes.length > 0 && (
         <ResumenCompras ordenes={ordenes} filtro={filtro} onFiltro={setFiltro} />
       )}

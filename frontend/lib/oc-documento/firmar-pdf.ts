@@ -11,7 +11,12 @@ interface OpcionesFirma {
 }
 
 const ALTO_LEYENDA = 11
-const ALTO_MINIMO_HUECO = 66
+// La firma es pequeña a propósito: así cabe en la misma hoja entre la tabla y las
+// observaciones en casi todas las órdenes (el hueco típico es de 55 a 70 pt).
+const ALTO_MAXIMO_FIRMA = 32
+const ANCHO_MAXIMO_FIRMA = 130
+const ALTO_MINIMO_FIRMA = 22
+const ALTO_MINIMO_HUECO = ALTO_LEYENDA + ALTO_MINIMO_FIRMA + 11
 
 function formatoFechaHora(fecha: Date): string {
   return fecha.toLocaleString('es-CO', {
@@ -50,14 +55,16 @@ export async function estamparFirma({
 
   if (diseño && hueco >= ALTO_MINIMO_HUECO) {
     const x = diseño.xObservaciones ?? 48
-    const altoFirma = Math.min(46, hueco - ALTO_LEYENDA - 12)
-    const anchoFirma = (imagen.width / imagen.height) * altoFirma
+    const altoDisponible = Math.min(ALTO_MAXIMO_FIRMA, hueco - ALTO_LEYENDA - 10)
+    const proporcion = imagen.width / imagen.height
+    const anchoFirma = Math.min(ANCHO_MAXIMO_FIRMA, proporcion * altoDisponible)
+    const altoFirma = anchoFirma / proporcion
     const yBase = (diseño.ySobreObservaciones as number) + 6
 
     primera.drawImage(imagen, { x, y: yBase + ALTO_LEYENDA + 2, width: anchoFirma, height: altoFirma })
     primera.drawLine({
       start: { x, y: yBase + ALTO_LEYENDA },
-      end: { x: x + Math.max(anchoFirma, 170), y: yBase + ALTO_LEYENDA },
+      end: { x: x + Math.max(anchoFirma, 150), y: yBase + ALTO_LEYENDA },
       thickness: 0.5,
       color: rgb(0.4, 0.4, 0.4),
     })

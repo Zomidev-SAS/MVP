@@ -260,3 +260,65 @@ export async function urlDocumentoOrdenCompra(
   if (error || !data) return { ok: false, error: 'No se pudo abrir el documento.' }
   return { ok: true, url: data.signedUrl }
 }
+
+export type CorreccionProveedoresResultado =
+  | { ok: true; corregidas: { numero: string; antes: string; despues: string }[]; revisadas: number }
+  | { ok: false; error: string }
+
+/**
+ * Vuelve a leer el PDF original de las OC cargadas desde Siigo y completa el
+ * nombre del proveedor cuando se había guardado cortado ("LTDA", "S.A.S.").
+ * Solo cambia un nombre si el leído ahora lo contiene entero (nunca reemplaza
+ * un nombre por otro distinto).
+ */
+export async function corregirProveedoresOrdenesDocumento(): Promise<CorreccionProveedoresResultado> {
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+  if (isDevBypassActive()) return { ok: false, error: 'No disponible en modo demostración.' }
+
+  const supabase = await createClient()
+  const { data: ordenes, error } = await supabase
+    .from('ordenes_compra')
+    .select('id, numero_oc, proveedor_nombre, documento_path')
+    .eq('origen', 'documento_siigo')
+    .not('documento_path', 'is', null)
+  if (error) {
+    console.error('Failed to list OC for provider fix:', error)
+    return { ok: false, error: 'No se pudieron consultar las órdenes.' }
+  }
+
+  const corregidas: { numero: string; antes: string; despues: string }[] = []
+  let revisadas = 0
+  for (const orden of ordenes ?? []) {
+    const guardado = (orden.proveedor_nombre ?? '').trim()
+    // Un nombre de más de 12 caracteres se considera completo.
+    if (guardado.length > 12) continue
+    revisadas++
+
+    const original = await supabase.storage.from(BUCKET_DOCUMENTOS).download(orden.documento_path as string)
+    if (original.error || !original.data) continue
+
+    let leida
+    try {
+      leida = await leerOcSiigoDesdePdf(new Uint8Array(await original.data.arrayBuffer()))
+    } catch {
+      continue
+    }
+
+    const nuevo = leida.proveedor_nombre.trim()
+    if (!nuevo || nuevo.length <= guardado.length || !normalizar(nuevo).includes(normalizar(guardado))) continue
+
+    const { error: errorOrden } = await supabase
+      .from('ordenes_compra')
+      .update({ proveedor_nombre: nuevo })
+      .eq('id', orden.id)
+    if (errorOrden) {
+      console.error('Failed to fix provider name:', errorOrden)
+      continue
+    }
+    await supabase.from('orden_compra_items').update({ proveedor_nombre: nuevo }).eq('orden_id', orden.id)
+    corregidas.push({ numero: orden.numero_oc ?? String(orden.id), antes: guardado, despues: nuevo })
+  }
+
+  return { ok: true, corregidas, revisadas }
+}
