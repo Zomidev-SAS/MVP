@@ -20,6 +20,22 @@ type Resultado<T> = ({ ok: true } & T) | { ok: false; error: string }
 const MAX_BYTES = 500 * 1024 * 1024
 const MAX_NOMBRE = 150
 
+/** Traduce el fallo de Azure a algo que quien usa el panel pueda reportar sin ver los logs. */
+function explicarFallo(error: unknown, porDefecto: string): string {
+  const texto = error instanceof Error ? error.message : ''
+  const status = (error as { statusCode?: number } | null)?.statusCode
+  if (texto.includes('AZURE_STORAGE_CONNECTION_STRING')) {
+    return 'El servidor no tiene configurada la conexión a Azure. Avisa a ZomiDev.'
+  }
+  if (texto.includes('Invalid AccountKey') || texto.includes('AccountKey')) {
+    return 'La clave de Azure configurada en el servidor no es válida. Avisa a ZomiDev.'
+  }
+  if (status === 403 || texto.includes('AuthenticationFailed')) {
+    return 'Azure rechazó la clave del servidor (¿fue rotada?). Avisa a ZomiDev.'
+  }
+  return porDefecto
+}
+
 /** Quita rutas y caracteres de control; los archivos viven planos dentro del contenedor. */
 function limpiarNombre(original: string): string | null {
   const base = original.split(/[\\/]/).pop() ?? ''
@@ -67,7 +83,7 @@ export async function listarArchivos(carpeta: string): Promise<Resultado<{ archi
     return { ok: true, archivos }
   } catch (error) {
     console.error('Failed to list blobs:', error)
-    return { ok: false, error: 'No se pudo leer la carpeta.' }
+    return { ok: false, error: explicarFallo(error, 'No se pudo leer la carpeta.') }
   }
 }
 
@@ -103,7 +119,7 @@ export async function crearUrlSubida(
     return { ok: true, url: crearUrlFirmada(carpeta, limpio, 'escritura'), nombre: limpio }
   } catch (error) {
     console.error('Failed to create upload url:', error)
-    return { ok: false, error: 'No se pudo preparar la subida.' }
+    return { ok: false, error: explicarFallo(error, 'No se pudo preparar la subida.') }
   }
 }
 
@@ -129,7 +145,7 @@ export async function crearUrlDescarga(
     return { ok: true, url: crearUrlFirmada(carpeta as Carpeta, limpio, 'lectura', limpio) }
   } catch (error) {
     console.error('Failed to create download url:', error)
-    return { ok: false, error: 'No se pudo preparar la descarga.' }
+    return { ok: false, error: explicarFallo(error, 'No se pudo preparar la descarga.') }
   }
 }
 
@@ -156,6 +172,6 @@ export async function borrarArchivo(
     return { ok: true }
   } catch (error) {
     console.error('Failed to delete blob:', error)
-    return { ok: false, error: 'No se pudo borrar el archivo.' }
+    return { ok: false, error: explicarFallo(error, 'No se pudo borrar el archivo.') }
   }
 }
