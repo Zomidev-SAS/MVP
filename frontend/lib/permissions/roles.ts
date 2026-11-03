@@ -13,9 +13,11 @@ import {
   Workflow,
   History,
   Mail,
+  FolderOpen,
   type LucideIcon,
 } from 'lucide-react'
 import { ALL_ROLES, type Role } from '@/lib/types/database'
+import { ROLES_CON_ARCHIVOS } from '@/lib/archivos/matriz'
 
 const ROLES_CON_DASHBOARD = ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[]
 
@@ -26,6 +28,7 @@ export type RouteKey =
   | 'compras'
   | 'movimientos'
   | 'formularios'
+  | 'archivos'
   | 'entradas'
   | 'ajustes'
   | 'importar'
@@ -51,6 +54,8 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   // Lectura: formularios operativos (entrada/salida) — sin inventario ni costos.
   formularios: [...ALL_ROLES.filter((r) => r !== 'lectura'), 'lectura'] as readonly Role[],
   // Alineado a la policy real mov_insert_roles_autorizados.
+  // Matriz por carpeta en lib/archivos/matriz.ts; aquí solo se exige ver al menos una.
+  archivos: ROLES_CON_ARCHIVOS,
   entradas: ['supervisor', 'metalmecanica', 'produccion', 'instalacion', 'compras'] as const,
   // Alineado a la policy real ajustes_insert_roles.
   ajustes: ['supervisor', 'produccion', 'metalmecanica', 'instalacion', 'compras'] as const,
@@ -85,6 +90,7 @@ export const NAV_ITEMS: {
   { key: 'compras', label: 'Compras', href: '/compras', icon: ShoppingCart },
   { key: 'movimientos', label: 'Movimientos', href: '/movimientos', icon: ArrowLeftRight },
   { key: 'formularios', label: 'Formularios', href: '/formularios', icon: ClipboardList },
+  { key: 'archivos', label: 'Archivos', href: '/archivos', icon: FolderOpen },
   { key: 'entradas', label: 'Entradas', href: '/entradas', icon: FilePlus },
   { key: 'ajustes', label: 'Ajustes', href: '/ajustes', icon: SlidersHorizontal },
   { key: 'importar', label: 'Importar CSV', href: '/importar', icon: Upload },
@@ -99,7 +105,7 @@ export const NAV_ITEMS: {
 export const NAV_GROUPS: { label: string; keys: RouteKey[] }[] = [
   {
     label: 'Módulos de planta',
-    keys: ['dashboard', 'visualizacion', 'inventario', 'compras', 'movimientos', 'formularios', 'entradas'],
+    keys: ['dashboard', 'visualizacion', 'inventario', 'compras', 'movimientos', 'formularios', 'archivos', 'entradas'],
   },
   {
     label: 'Sistema y control',

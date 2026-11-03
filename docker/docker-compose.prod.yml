@@ -22,6 +22,10 @@ services:
       # Firma los enlaces de /planta/[token]. Debe ser idéntico al secreto
       # 'PLANTA_KIOSK_SECRET' del Vault de Supabase (rpc_datos_planta, 048).
       PLANTA_KIOSK_SECRET: ${PLANTA_KIOSK_SECRET:-}
+      # Módulo Archivos (cuenta de almacenamiento stcarreraarango). Cadena de
+      # conexión completa de Azure; solo la usa el servidor, nunca el navegador.
+      # Sin ella, /archivos muestra error y el resto del panel sigue igual.
+      AZURE_STORAGE_CONNECTION_STRING: ${AZURE_STORAGE_CONNECTION_STRING:-}
     networks:
       - carrera_internal
 

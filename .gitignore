@@ -8,8 +8,8 @@ node_modules/
 *.local
 
 # Datos locales (Excel de inventario, PDFs de referencia, etc.) — no subir a git
-archivos/
-Archivos/
+/archivos/
+/Archivos/
 ArchivosAle/
 OC/
 
