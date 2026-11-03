@@ -20,7 +20,10 @@ const nextConfig: NextConfig = {
             // (lib/export/chart-export.ts) rasteriza el SVG cargándolo en un
             // <img src="blob:..."> — sin blob: aquí, el navegador bloquea esa
             // carga por CSP y el export de PNG falla siempre (img.onerror).
-            value: `default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:;`,
+            // connect-src incluye Azure Blob porque el módulo de archivos sube
+            // directo desde el navegador (PUT a la URL SAS); sin esto el fetch
+            // se bloquea y sale "No se pudo subir el archivo. Revisa tu conexión".
+            value: `default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.blob.core.windows.net; script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:;`,
           },
         ],
       },
