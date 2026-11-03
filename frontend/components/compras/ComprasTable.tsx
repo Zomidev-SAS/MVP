@@ -52,15 +52,47 @@ function formatearVencimiento(fecha: string | null): string {
   return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
 }
 
-/** Fecha y hora en que se cargó la orden al panel (hora de Colombia): "3 nov · 9:42 a. m.". */
-function formatearCarga(creadaEn: string | null | undefined): { fecha: string; hora: string } | null {
-  if (!creadaEn) return null
-  const d = new Date(creadaEn)
-  if (Number.isNaN(d.getTime())) return null
-  return {
-    fecha: d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' }),
-    hora: d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' }),
+const ZONA_COLOMBIA = 'America/Bogota'
+
+function diaColombia(fecha: Date): string {
+  return fecha.toLocaleDateString('en-CA', { timeZone: ZONA_COLOMBIA })
+}
+
+/**
+ * Inicio de la orden: la fecha de la orden (la del documento de Siigo o la del
+ * pedido) y, debajo, cuándo se subió al panel. Si se subió otro día distinto al
+ * de la orden se muestra también ese día ("Subida 5 nov · 9:07 a. m.").
+ */
+function formatearInicio(
+  orden: OrdenCompra
+): { fecha: string; subida: string } | null {
+  const creada = orden.created_at ? new Date(orden.created_at) : null
+  const creadaValida = creada && !Number.isNaN(creada.getTime()) ? creada : null
+  const fechaOrden = orden.fecha_pedido
+    ? new Date(`${orden.fecha_pedido}T12:00:00`)
+    : creadaValida
+  if (!fechaOrden || Number.isNaN(fechaOrden.getTime())) return null
+
+  const fecha = fechaOrden.toLocaleDateString('es-CO', {
+    day: 'numeric',
+    month: 'short',
+    ...(fechaOrden.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' as const } : {}),
+    ...(orden.fecha_pedido ? {} : { timeZone: ZONA_COLOMBIA }),
+  })
+
+  let subida = ''
+  if (creadaValida) {
+    const hora = creadaValida.toLocaleTimeString('es-CO', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: ZONA_COLOMBIA,
+    })
+    const mismoDia = orden.fecha_pedido ? diaColombia(creadaValida) === orden.fecha_pedido : true
+    subida = mismoDia
+      ? `Subida ${hora}`
+      : `Subida ${creadaValida.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: ZONA_COLOMBIA })} · ${hora}`
   }
+  return { fecha, subida }
 }
 
 function iconoVencimiento(orden: OrdenCompra) {
@@ -389,11 +421,11 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
           </TableCell>
           <TableCell className="hidden md:table-cell">
             {(() => {
-              const carga = formatearCarga(orden.created_at)
-              return carga ? (
-                <div className="text-sm leading-tight" title="Fecha y hora en que se subió la orden al panel">
-                  <p className="font-medium">{carga.fecha}</p>
-                  <p className="text-xs text-muted-foreground">{carga.hora}</p>
+              const inicio = formatearInicio(orden)
+              return inicio ? (
+                <div className="text-sm leading-tight" title="Cuándo inició la orden de compra">
+                  <p className="font-medium">{inicio.fecha}</p>
+                  {inicio.subida && <p className="text-xs text-muted-foreground">{inicio.subida}</p>}
                 </div>
               ) : (
                 <span className="text-muted-foreground">—</span>
@@ -462,7 +494,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
     <TableRow>
       <TableHead>Orden</TableHead>
       <TableHead>Estado</TableHead>
-      <TableHead className="hidden md:table-cell">Cargada</TableHead>
+      <TableHead className="hidden md:table-cell">Inicio</TableHead>
       <TableHead className="hidden md:table-cell">Avance</TableHead>
       <TableHead className="hidden lg:table-cell">Siigo</TableHead>
       <TableHead className="hidden md:table-cell">Entrega</TableHead>
