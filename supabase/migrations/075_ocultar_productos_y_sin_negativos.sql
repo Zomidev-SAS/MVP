@@ -93,7 +93,8 @@ begin
   select format_type(a.atttypid, a.atttypmod) into t_total_bodega
     from pg_attribute a where a.attrelid = 'public.vista_inventario_por_bodega'::regclass and a.attname = 'valor_total';
 
-  -- Mismas columnas y orden que 073; solo se agrega umbral_stock al final de ambas vistas.
+  -- Mismas columnas y orden que 073; se agregan umbral_stock y nivel_stock al final de ambas vistas
+  -- (nivel_stock ya viene aquí para que esta migración se pueda volver a correr después de la 078).
   execute format($v$
     create or replace view public.vista_inventario_actual with (security_invoker = true) as
     select
@@ -104,7 +105,12 @@ begin
       greatest(sum(m.cantidad), 0) as saldo,
       %s
       max(m.created_at) as ultimo_movimiento,
-      fn_umbral_producto(m.codigo_producto) as umbral_stock
+      fn_umbral_producto(m.codigo_producto) as umbral_stock,
+      case
+        when greatest(sum(m.cantidad), 0) <= least(2, fn_umbral_producto(m.codigo_producto)) then 'critico'
+        when greatest(sum(m.cantidad), 0) <= fn_umbral_producto(m.codigo_producto) then 'bajo'
+        else 'ok'
+      end as nivel_stock
     from public.movimientos_inventario m
     join public.productos p on p.codigo_producto = m.codigo_producto
     where m.estado = 'aplicado' and p.categoria is not null and not p.oculto
@@ -122,7 +128,12 @@ begin
       greatest(sum(m.cantidad), 0) as saldo,
       %s
       max(m.created_at) as ultimo_movimiento,
-      fn_umbral_producto(m.codigo_producto) as umbral_stock
+      fn_umbral_producto(m.codigo_producto) as umbral_stock,
+      case
+        when greatest(sum(m.cantidad), 0) <= least(2, fn_umbral_producto(m.codigo_producto)) then 'critico'
+        when greatest(sum(m.cantidad), 0) <= fn_umbral_producto(m.codigo_producto) then 'bajo'
+        else 'ok'
+      end as nivel_stock
     from public.movimientos_inventario m
     join public.productos p on p.codigo_producto = m.codigo_producto
     where m.estado = 'aplicado' and p.categoria is not null and not p.oculto
