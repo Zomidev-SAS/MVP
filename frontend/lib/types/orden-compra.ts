@@ -206,3 +206,23 @@ export interface OrdenLineaTiempo {
   recibidas: number
   eventos: EventoLineaTiempoOrden[]
 }
+
+export type AccionAuditoriaOc = 'reabrir' | 'editar_cerrada' | 'releer_documento' | 'correccion'
+
+export const ETIQUETA_ACCION_AUDITORIA: Record<AccionAuditoriaOc, string> = {
+  reabrir: 'Reabierta',
+  editar_cerrada: 'Modificada estando cerrada',
+  releer_documento: 'Líneas releídas del documento',
+  correccion: 'Corrección',
+}
+
+/** Una entrada del historial de cambios de una orden: quién, cuándo y qué. */
+export interface AuditoriaOrdenCompra {
+  id: number
+  accion: AccionAuditoriaOc
+  motivo: string | null
+  /** Líneas cortas con lo que cambió (producto agregado, cantidad cambiada, etc.). */
+  cambios: string[]
+  usuario_nombre: string
+  created_at: string
+}

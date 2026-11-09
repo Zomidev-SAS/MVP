@@ -233,7 +233,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
   const pendientes = filtradas.filter((o) => o.estado === 'en_curso')
   const otras = filtradas.filter((o) => o.estado !== 'en_curso')
 
-  async function cambiarEstado(orden: OrdenCompra, estado: EstadoOrdenCompra) {
+  async function cambiarEstado(orden: OrdenCompra, estado: EstadoOrdenCompra, motivo?: string) {
     // Las OC creadas a mano generan la factura de compra en Siigo, que exige el
     // número de la factura del proveedor: se pide antes de marcarlas listas.
     if (estado === 'listo' && orden.origen !== 'documento_siigo' && !orden.siigo_id) {
@@ -241,7 +241,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
       return
     }
     const id = orden.id
-    const res = await actualizarEstadoOrdenCompra(id, estado)
+    const res = await actualizarEstadoOrdenCompra(id, estado, motivo)
     if (res.ok) {
       if (estado === 'listo' && orden.origen === 'documento_siigo') {
         toast.success('Orden finalizada.')
@@ -482,7 +482,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
                 onEliminar={() => eliminar(orden)}
                 onFinalizar={() => finalizar(orden)}
                 onCancelar={() => cancelar(orden)}
-                onReabrir={() => cambiarEstado(orden, 'en_curso')}
+                onReabrir={(motivo) => cambiarEstado(orden, 'en_curso', motivo)}
                 onPdf={() => handlePdf(orden)}
                 onCsv={() => handleCsv(orden)}
                 onEnviarSiigo={(esReintento) => handleEnviarSiigo(orden, esReintento)}

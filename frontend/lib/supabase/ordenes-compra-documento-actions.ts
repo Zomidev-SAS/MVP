@@ -323,3 +323,106 @@ export async function corregirProveedoresOrdenesDocumento(): Promise<CorreccionP
 
   return { ok: true, corregidas, revisadas }
 }
+
+
+export type RelecturaResultado =
+  | { ok: true; agregadas: number; total: number }
+  | { ok: false; error: string }
+
+/**
+ * Vuelve a leer el PDF original de una OC cargada desde Siigo y agrega las líneas que
+ * el panel no tenía (por ejemplo, si se cargó con una versión anterior del lector que
+ * se saltaba filas). No borra ni cambia las líneas existentes ni sus recepciones.
+ */
+export async function releerLineasDocumento(ordenId: number): Promise<RelecturaResultado> {
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+  if (isDevBypassActive()) {
+    return { ok: false, error: 'No está disponible en modo demostración.' }
+  }
+
+  const supabase = await createClient()
+  const { data: orden } = await supabase
+    .from('ordenes_compra')
+    .select('id, origen, documento_path, proveedor_nit, proveedor_nombre')
+    .eq('id', ordenId)
+    .maybeSingle()
+  if (!orden || orden.origen !== 'documento_siigo' || !orden.documento_path) {
+    return { ok: false, error: 'Esta orden no se cargó desde un documento de Siigo.' }
+  }
+
+  const { data: archivo, error: errorBajada } = await supabase.storage
+    .from(BUCKET_DOCUMENTOS)
+    .download(orden.documento_path)
+  if (errorBajada || !archivo) {
+    console.error('Failed to download OC pdf:', errorBajada)
+    return { ok: false, error: 'No se pudo abrir el documento original.' }
+  }
+
+  let oc
+  try {
+    oc = await leerOcSiigoDesdePdf(new Uint8Array(await archivo.arrayBuffer()))
+  } catch (error) {
+    if (error instanceof ErrorLecturaOc) return { ok: false, error: error.message }
+    console.error('Failed to re-read OC pdf:', error)
+    return { ok: false, error: 'No se pudo leer el documento.' }
+  }
+
+  const { data: existentes } = await supabase
+    .from('orden_compra_items')
+    .select('id, descripcion, nombre_producto, orden_linea')
+    .eq('orden_id', ordenId)
+  const sinEmparejar = [...(existentes ?? [])]
+  const faltantes = oc.lineas.filter((l) => {
+    const clave = normalizar(l.descripcion)
+    const idx = sinEmparejar.findIndex((e) => normalizar(e.descripcion ?? e.nombre_producto ?? '') === clave)
+    if (idx >= 0) {
+      sinEmparejar.splice(idx, 1)
+      return false
+    }
+    return true
+  })
+
+  if (faltantes.length === 0) {
+    return { ok: true, agregadas: 0, total: oc.lineas.length }
+  }
+
+  const nombres = [...new Set(faltantes.flatMap((l) => [l.descripcion, normalizar(l.descripcion)]))]
+  const { data: catalogo } = await supabase
+    .from('productos')
+    .select('codigo_producto, nombre_producto')
+    .in('nombre_producto', nombres)
+  const porNombre = new Map<string, string>()
+  for (const p of catalogo ?? []) porNombre.set(normalizar(p.nombre_producto), p.codigo_producto)
+
+  const ultima = Math.max(0, ...(existentes ?? []).map((e) => Number(e.orden_linea ?? 0)))
+  const filas = faltantes.map((l, i) => ({
+    orden_id: ordenId,
+    codigo_producto: porNombre.get(normalizar(l.descripcion)) ?? CODIGO_SIN_CATALOGO,
+    nombre_producto: l.descripcion,
+    descripcion: l.descripcion,
+    cantidad: l.cantidad,
+    precio_unitario: l.precio_unitario,
+    orden_linea: ultima + i + 1,
+    proveedor_nit: orden.proveedor_nit,
+    proveedor_nombre: orden.proveedor_nombre,
+  }))
+
+  const { error: errorInsert } = await supabase.from('orden_compra_items').insert(filas)
+  if (errorInsert) {
+    console.error('Failed to insert missing OC lines:', errorInsert)
+    return { ok: false, error: 'No se pudieron agregar las líneas que faltaban.' }
+  }
+
+  await supabase.from('ordenes_compra').update({ updated_at: new Date().toISOString() }).eq('id', ordenId)
+  const { error: errorAuditoria } = await supabase.from('ordenes_compra_auditoria').insert({
+    orden_id: ordenId,
+    accion: 'releer_documento',
+    motivo: 'Se volvió a leer el PDF original',
+    detalle: { cambios: faltantes.map((l) => `Agregado ${l.descripcion}: ${l.cantidad}`) },
+    usuario_id: auth.user.id,
+  })
+  if (errorAuditoria) console.error('Failed to register OC audit entry:', errorAuditoria)
+
+  return { ok: true, agregadas: faltantes.length, total: oc.lineas.length }
+}
