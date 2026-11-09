@@ -7,6 +7,8 @@ export interface InventarioItem {
   valor_unitario: number | null
   valor_total: number | null
   ultimo_movimiento: string | null
+  /** Umbral de stock bajo que aplica al producto (propio, de su categoría o general). Antes de la migración 075 no viene. */
+  umbral_stock?: number | null
 }
 
 export interface InventarioFiltros {

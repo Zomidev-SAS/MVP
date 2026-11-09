@@ -28,8 +28,11 @@ const UMBRAL_CRITICO = 2
 type NivelStock = 'critico' | 'bajo' | 'ok'
 
 function nivelDeStock(item: InventarioItem, umbrales: UmbralesStock | null): NivelStock {
-  if (item.saldo <= UMBRAL_CRITICO) return 'critico'
-  const umbral = umbrales ? umbralDeCategoria(umbrales, item.categoria) : UMBRAL_CRITICO
+  // Umbral del producto (vista, migración 075) o, si no viene, el de su categoría / el general.
+  const umbral =
+    item.umbral_stock ?? (umbrales ? umbralDeCategoria(umbrales, item.categoria) : UMBRAL_CRITICO)
+  // El rojo nunca supera al umbral propio: con umbral 0 solo se pinta cuando el saldo llega a 0.
+  if (item.saldo <= Math.min(UMBRAL_CRITICO, umbral)) return 'critico'
   return item.saldo <= umbral ? 'bajo' : 'ok'
 }
 

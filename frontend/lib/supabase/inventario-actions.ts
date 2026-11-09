@@ -8,6 +8,8 @@ import type { InventarioFiltros, InventarioItem, InventarioPagina } from '@/lib/
 
 const INVENTARIO_SELECT =
   'codigo_producto, nombre_producto, unidad_medida, categoria, saldo, valor_unitario, valor_total, ultimo_movimiento'
+// La migración 075 agrega umbral_stock a las vistas. Si todavía no está aplicada se usa el select anterior.
+const INVENTARIO_SELECT_CON_UMBRAL = `${INVENTARIO_SELECT}, umbral_stock`
 
 export async function fetchInventario(
   filtros: InventarioFiltros,
@@ -20,31 +22,38 @@ export async function fetchInventario(
   const supabase = await createClient()
   const vista = filtros.bodega ? 'vista_inventario_por_bodega' : 'vista_inventario_actual'
 
-  let query = supabase.from(vista).select(INVENTARIO_SELECT, { count: 'exact' })
+  const consultar = (columnas: string) => {
+    let query = supabase.from(vista).select(columnas, { count: 'exact' })
 
-  if (filtros.bodega) query = query.eq('bodega', filtros.bodega)
-  if (filtros.categoria) query = query.ilike('categoria', `%${filtros.categoria}%`)
-  if (filtros.estado === 'activo') query = query.gt('saldo', 0)
-  else if (filtros.estado === 'agotado') query = query.lte('saldo', 0)
-  if (filtros.desde) query = query.gte('ultimo_movimiento', filtros.desde)
-  if (filtros.hasta) query = query.lte('ultimo_movimiento', filtros.hasta)
-  if (filtros.busqueda) {
-    query = query.or(
-      `codigo_producto.ilike.%${filtros.busqueda}%,nombre_producto.ilike.%${filtros.busqueda}%`
-    )
+    if (filtros.bodega) query = query.eq('bodega', filtros.bodega)
+    if (filtros.categoria) query = query.ilike('categoria', `%${filtros.categoria}%`)
+    if (filtros.estado === 'activo') query = query.gt('saldo', 0)
+    else if (filtros.estado === 'agotado') query = query.lte('saldo', 0)
+    if (filtros.desde) query = query.gte('ultimo_movimiento', filtros.desde)
+    if (filtros.hasta) query = query.lte('ultimo_movimiento', filtros.hasta)
+    if (filtros.busqueda) {
+      query = query.or(
+        `codigo_producto.ilike.%${filtros.busqueda}%,nombre_producto.ilike.%${filtros.busqueda}%`
+      )
+    }
+
+    const from = (pagina - 1) * INVENTARIO_PAGE_SIZE
+    const to = from + INVENTARIO_PAGE_SIZE - 1
+    return query.range(from, to)
   }
 
-  const from = (pagina - 1) * INVENTARIO_PAGE_SIZE
-  const to = from + INVENTARIO_PAGE_SIZE - 1
-
-  const { data, error, count } = await query.range(from, to)
+  let { data, error, count } = await consultar(INVENTARIO_SELECT_CON_UMBRAL)
+  if (error?.code === '42703') {
+    // Columna umbral_stock inexistente: la migración 075 aún no se aplicó.
+    ;({ data, error, count } = await consultar(INVENTARIO_SELECT))
+  }
 
   if (error) {
     console.error(`Failed to load ${vista}:`, error)
     return { filas: [], total: 0 }
   }
 
-  return { filas: (data ?? []) as InventarioItem[], total: count ?? 0 }
+  return { filas: (data ?? []) as unknown as InventarioItem[], total: count ?? 0 }
 }
 
 function fetchInventarioPreview(filtros: InventarioFiltros, pagina: number): InventarioPagina {
