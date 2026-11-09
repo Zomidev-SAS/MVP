@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CheckCircle2,
@@ -14,6 +14,8 @@ import {
   Pause,
   PenLine,
   Play,
+  Search,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { DatosPlantaCompras, OrdenFinalizadaPlanta, OrdenPlanta } from '@/lib/types/planta-compras'
@@ -25,36 +27,25 @@ const VISTAS = [
   { id: 'finalizadas', titulo: 'Órdenes finalizadas' },
 ] as const
 
-type ColorKpi = 'sky' | 'emerald' | 'amber' | 'violet'
-
-const FONDO_KPI: Record<ColorKpi, string> = {
-  sky: 'from-sky-500 to-blue-700',
-  emerald: 'from-emerald-500 to-teal-700',
-  amber: 'from-amber-400 to-orange-600',
-  violet: 'from-violet-500 to-fuchsia-700',
-}
-
 function Kpi({
   label,
   valor,
   detalle,
-  color,
   icono: Icono,
 }: {
   label: string
   valor: string | number
   detalle?: string
-  color: ColorKpi
   icono: typeof ClipboardList
 }) {
   return (
-    <div className={cn('rounded-xl bg-gradient-to-br p-4 text-white shadow-lg', FONDO_KPI[color])}>
+    <div className="rounded-xl border bg-card p-4 text-card-foreground shadow-sm">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-base font-medium text-white/90">{label}</p>
-        <Icono aria-hidden="true" className="h-5 w-5 text-white/80" />
+        <p className="text-base text-muted-foreground">{label}</p>
+        <Icono aria-hidden="true" className="h-5 w-5 text-primary" />
       </div>
       <p className="mt-1 text-4xl font-bold tabular-nums">{valor}</p>
-      {detalle && <p className="text-sm text-white/80">{detalle}</p>}
+      {detalle && <p className="text-sm text-muted-foreground">{detalle}</p>}
     </div>
   )
 }
@@ -70,22 +61,20 @@ function numero(n: number): string {
   return n.toLocaleString('es-CO', { maximumFractionDigits: 2 })
 }
 
-/** Rojo al empezar, ámbar a medias, verde al completar: el avance se lee por el color. */
-function colorAvance(porcentaje: number): string {
-  if (porcentaje >= 100) return 'bg-emerald-400'
-  if (porcentaje >= 34) return 'bg-amber-400'
-  return 'bg-rose-400'
+/** Para comparar nombres sin importar tildes ni mayúsculas. */
+function limpiar(texto: string): string {
+  return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 }
 
 function Avance({ recibidas, pedidas }: { recibidas: number; pedidas: number }) {
   const porcentaje = pedidas > 0 ? Math.min(100, Math.round((recibidas / pedidas) * 100)) : 0
   return (
     <div>
-      <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/15">
-        <div className={cn('h-full rounded-full', colorAvance(porcentaje))} style={{ width: `${porcentaje}%` }} />
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-primary" style={{ width: `${porcentaje}%` }} />
       </div>
-      <p className="mt-1 text-sm text-slate-200">
-        {numero(recibidas)} de {numero(pedidas)} · <span className="font-semibold">{porcentaje}%</span>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {numero(recibidas)} de {numero(pedidas)} · <span className="font-semibold text-foreground">{porcentaje}%</span>
       </p>
     </div>
   )
@@ -104,7 +93,7 @@ function TarjetaOrden({
 }) {
   const interactiva = Boolean(onToggle)
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-white/10 text-white shadow-md backdrop-blur">
+    <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
       <button
         type="button"
         disabled={!interactiva}
@@ -113,18 +102,18 @@ function TarjetaOrden({
         className={cn(
           'w-full p-3.5 text-left',
           lista && 'flex items-center gap-4',
-          interactiva && 'transition-colors hover:bg-white/10'
+          interactiva && 'transition-colors hover:bg-accent/40'
         )}
       >
         <div className={cn('flex items-start justify-between gap-3', lista ? 'min-w-0 flex-1' : '')}>
           <div className="min-w-0">
             <p className="truncate text-lg font-semibold">{orden.proveedor ?? 'Sin proveedor'}</p>
-            <p className="text-sm text-sky-200">{orden.numero ?? `OC ${orden.id}`}</p>
+            <p className="text-sm text-muted-foreground">{orden.numero ?? `OC ${orden.id}`}</p>
           </div>
           <div className="shrink-0 text-right text-sm">
-            <p className="text-slate-200">Entrega {fechaCorta(orden.fecha_vencimiento)}</p>
+            <p className="text-muted-foreground">Entrega {fechaCorta(orden.fecha_vencimiento)}</p>
             {orden.requiere_firma && (
-              <p className={cn('font-semibold', orden.firmada ? 'text-emerald-300' : 'text-amber-300')}>
+              <p className={cn('font-medium', orden.firmada ? 'text-foreground' : 'text-primary')}>
                 {orden.firmada ? 'Firmada' : 'Por firmar'}
               </p>
             )}
@@ -136,35 +125,37 @@ function TarjetaOrden({
         {interactiva && lista && (
           <ChevronDown
             aria-hidden="true"
-            className={cn('h-5 w-5 shrink-0 text-slate-300 transition-transform', expandida && 'rotate-180')}
+            className={cn('h-5 w-5 shrink-0 text-muted-foreground transition-transform', expandida && 'rotate-180')}
           />
         )}
       </button>
 
       {expandida && (
-        <div className="space-y-2 border-t border-white/10 px-3.5 py-3 text-base">
+        <div className="space-y-2 border-t px-3.5 py-3 text-base">
           {orden.titulo && <p className="font-semibold">{orden.titulo}</p>}
           {orden.observaciones?.trim() && (
-            <p className="whitespace-pre-wrap text-slate-200">{orden.observaciones}</p>
+            <p className="whitespace-pre-wrap text-muted-foreground">{orden.observaciones}</p>
           )}
           {orden.items.length === 0 ? (
-            <p className="text-slate-300">Sin líneas registradas.</p>
+            <p className="text-muted-foreground">Sin líneas registradas.</p>
           ) : (
             <ul className="space-y-2">
               {orden.items.map((item, idx) => (
-                <li key={`${item.codigo_producto}-${idx}`} className="rounded-lg bg-black/25 p-2.5">
+                <li key={`${item.codigo_producto}-${idx}`} className="rounded-lg bg-muted/60 p-2.5">
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-semibold">
-                      <span className="font-mono text-sm text-sky-200">{item.codigo_producto}</span>
+                      <span className="font-mono text-sm text-muted-foreground">{item.codigo_producto}</span>
                       {item.nombre_producto && <> · {item.nombre_producto}</>}
                     </p>
-                    <p className="shrink-0 tabular-nums text-amber-200">
+                    <p className="shrink-0 tabular-nums">
                       {numero(item.cantidad_recibida)} / {numero(item.cantidad)}
                     </p>
                   </div>
-                  <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-200">{item.descripcion}</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-sm">{item.descripcion}</p>
                   {item.observaciones?.trim() && (
-                    <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-300">Obs.: {item.observaciones}</p>
+                    <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">
+                      Obs.: {item.observaciones}
+                    </p>
                   )}
                 </li>
               ))}
@@ -179,23 +170,23 @@ function TarjetaOrden({
 function TarjetaFinalizada({ orden }: { orden: OrdenFinalizadaPlanta }) {
   const completa = orden.pedidas > 0 && orden.recibidas >= orden.pedidas
   return (
-    <div className="rounded-xl border border-emerald-300/30 bg-emerald-500/15 p-3.5 text-white shadow-md backdrop-blur">
+    <div className="rounded-xl border bg-card p-3.5 text-card-foreground shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-lg font-semibold">{orden.proveedor ?? 'Sin proveedor'}</p>
-          <p className="text-sm text-emerald-200">{orden.numero ?? `OC ${orden.id}`}</p>
+          <p className="text-sm text-muted-foreground">{orden.numero ?? `OC ${orden.id}`}</p>
         </div>
         <div className="shrink-0 text-right text-sm">
-          <p className="flex items-center justify-end gap-1 font-semibold text-emerald-300">
-            <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+          <p className="flex items-center justify-end gap-1 font-semibold">
+            <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-primary" />
             Finalizada
           </p>
-          <p className="text-slate-200">{fechaCorta(orden.finalizada_at)}</p>
+          <p className="text-muted-foreground">{fechaCorta(orden.finalizada_at)}</p>
         </div>
       </div>
-      <p className="mt-2 text-sm text-slate-200">
+      <p className="mt-2 text-sm text-muted-foreground">
         {orden.lineas} {orden.lineas === 1 ? 'línea' : 'líneas'} · {numero(orden.recibidas)} de {numero(orden.pedidas)} recibidas
-        {!completa && <span className="font-semibold text-amber-300"> · cerrada con faltantes</span>}
+        {!completa && <span className="font-semibold text-primary"> · cerrada con faltantes</span>}
       </p>
     </div>
   )
@@ -208,6 +199,9 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
   const [actividad, setActividad] = useState(0)
   const [modoOrdenes, setModoOrdenes] = useState<'mosaico' | 'lista'>('mosaico')
   const [abiertaId, setAbiertaId] = useState<number | null>(null)
+  // Filtro por proveedor: se elige de la lista (toque) o se escribe; ambos se combinan.
+  const [proveedor, setProveedor] = useState<string | null>(null)
+  const [busqueda, setBusqueda] = useState('')
 
   // Pantalla sin sesión: polling simple, igual que la TV del taller.
   useEffect(() => {
@@ -228,6 +222,8 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Escribiendo en el buscador no se navega con las flechas ni con la barra espaciadora.
+      if (e.target instanceof HTMLInputElement) return
       if (e.key === 'ArrowRight') ir(1)
       else if (e.key === 'ArrowLeft') ir(-1)
       else if (e.key === ' ') {
@@ -239,21 +235,108 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [ir])
 
+  const { kpis } = datos
+
+  // Proveedores con su número de órdenes (en curso y finalizadas), de la A a la Z.
+  const proveedores = useMemo(() => {
+    const cuenta = new Map<string, number>()
+    for (const o of [...datos.ordenes, ...datos.finalizadas]) {
+      if (!o.proveedor) continue
+      cuenta.set(o.proveedor, (cuenta.get(o.proveedor) ?? 0) + 1)
+    }
+    return [...cuenta.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es'))
+  }, [datos.ordenes, datos.finalizadas])
+
+  const consulta = limpiar(busqueda)
+  const coincide = useCallback(
+    (nombre: string | null) => {
+      if (proveedor && nombre !== proveedor) return false
+      if (consulta && !limpiar(nombre ?? '').includes(consulta)) return false
+      return true
+    },
+    [proveedor, consulta]
+  )
+  const ordenes = useMemo(() => datos.ordenes.filter((o) => coincide(o.proveedor)), [datos.ordenes, coincide])
+  const finalizadas = useMemo(
+    () => datos.finalizadas.filter((o) => coincide(o.proveedor)),
+    [datos.finalizadas, coincide]
+  )
+  const proveedoresVisibles = proveedores.filter(([nombre]) => !consulta || limpiar(nombre).includes(consulta))
+  const hayFiltro = proveedor !== null || consulta !== ''
+
   const vista = VISTAS[indice]
-  const { kpis, ordenes, finalizadas } = datos
   const botonNav =
-    'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20'
+    'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border bg-card text-foreground shadow-sm transition-colors hover:bg-accent'
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-5 text-white">
+    <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-background via-muted/50 to-muted p-5 text-foreground">
       <header className="flex items-center justify-between">
-        <h1 className="bg-gradient-to-r from-sky-300 via-emerald-300 to-amber-300 bg-clip-text text-3xl font-bold text-transparent">
-          {vista.titulo}
-        </h1>
-        <p className="text-base text-slate-300">
+        <h1 className="text-3xl font-bold">{vista.titulo}</h1>
+        <p className="text-base text-muted-foreground">
           {indice + 1} / {VISTAS.length}
         </p>
       </header>
+
+      {proveedores.length > 0 && (
+        <div
+          className="mt-3 flex items-start gap-3"
+          onPointerDown={() => setActividad((a) => a + 1)}
+          onKeyDown={() => setActividad((a) => a + 1)}
+        >
+          <div className="relative shrink-0">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar proveedor"
+              aria-label="Buscar proveedor"
+              className="h-8 w-52 rounded-full border bg-card pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+          <div className="flex max-h-[4.5rem] min-w-0 flex-1 flex-wrap gap-1.5 overflow-y-auto" role="group" aria-label="Filtrar por proveedor">
+            <button
+              type="button"
+              onClick={() => setProveedor(null)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-sm transition-colors',
+                proveedor === null ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-accent'
+              )}
+            >
+              Todos
+            </button>
+            {proveedoresVisibles.map(([nombre, total]) => (
+              <button
+                key={nombre}
+                type="button"
+                onClick={() => setProveedor((p) => (p === nombre ? null : nombre))}
+                className={cn(
+                  'max-w-[16rem] truncate rounded-full border px-3 py-1 text-sm transition-colors',
+                  proveedor === nombre ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-accent'
+                )}
+              >
+                {nombre} <span className="opacity-70">({total})</span>
+              </button>
+            ))}
+            {proveedoresVisibles.length === 0 && (
+              <span className="px-2 py-1 text-sm text-muted-foreground">Ningún proveedor coincide.</span>
+            )}
+          </div>
+          {hayFiltro && (
+            <button
+              type="button"
+              onClick={() => {
+                setProveedor(null)
+                setBusqueda('')
+              }}
+              className="flex shrink-0 items-center gap-1 rounded-full border bg-card px-3 py-1 text-sm hover:bg-accent"
+            >
+              <X aria-hidden="true" className="h-3.5 w-3.5" />
+              Quitar filtro
+            </button>
+          )}
+        </div>
+      )}
 
       <main className="flex min-h-0 flex-1 items-center gap-4 py-4">
         <button type="button" aria-label="Vista anterior" onClick={() => ir(-1)} className={botonNav}>
@@ -268,37 +351,38 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
           {vista.id === 'resumen' && (
             <div className="flex h-full flex-col justify-center gap-4">
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <Kpi label="En curso" valor={kpis.en_curso} color="sky" icono={ClipboardList} />
-                <Kpi
-                  label="Finalizadas"
-                  valor={kpis.finalizadas_30d}
-                  detalle="últimos 30 días"
-                  color="emerald"
-                  icono={CheckCircle2}
-                />
+                <Kpi label="En curso" valor={kpis.en_curso} icono={ClipboardList} />
+                <Kpi label="Finalizadas" valor={kpis.finalizadas_30d} detalle="últimos 30 días" icono={CheckCircle2} />
                 <Kpi
                   label="Entregas parciales"
                   valor={kpis.con_entregas_parciales}
                   detalle="órdenes con faltantes"
-                  color="amber"
                   icono={PackageOpen}
                 />
-                <Kpi label="Por firmar" valor={kpis.pendientes_firma} color="violet" icono={PenLine} />
+                <Kpi label="Por firmar" valor={kpis.pendientes_firma} icono={PenLine} />
               </div>
               <div className="grid gap-4 lg:grid-cols-2">
                 <section className="space-y-2">
-                  <h2 className="text-lg font-semibold text-sky-300">En curso</h2>
+                  <h2 className="text-lg font-semibold">En curso</h2>
                   {ordenes.slice(0, 3).map((o) => (
                     <TarjetaOrden key={o.id} orden={o} />
                   ))}
-                  {ordenes.length === 0 && <p className="text-base text-slate-300">No hay órdenes en curso.</p>}
+                  {ordenes.length === 0 && (
+                    <p className="text-base text-muted-foreground">
+                      {hayFiltro ? 'Este proveedor no tiene órdenes en curso.' : 'No hay órdenes en curso.'}
+                    </p>
+                  )}
                 </section>
                 <section className="space-y-2">
-                  <h2 className="text-lg font-semibold text-emerald-300">Finalizadas recientemente</h2>
+                  <h2 className="text-lg font-semibold">Finalizadas recientemente</h2>
                   {finalizadas.slice(0, 3).map((o) => (
                     <TarjetaFinalizada key={o.id} orden={o} />
                   ))}
-                  {finalizadas.length === 0 && <p className="text-base text-slate-300">Aún no hay órdenes finalizadas.</p>}
+                  {finalizadas.length === 0 && (
+                    <p className="text-base text-muted-foreground">
+                      {hayFiltro ? 'Este proveedor no tiene órdenes finalizadas.' : 'Aún no hay órdenes finalizadas.'}
+                    </p>
+                  )}
                 </section>
               </div>
             </div>
@@ -315,8 +399,8 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
                     type="button"
                     onClick={() => setModoOrdenes(id)}
                     className={cn(
-                      'flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1 text-sm transition-colors',
-                      modoOrdenes === id ? 'bg-sky-500 text-white' : 'bg-white/10 text-slate-200 hover:bg-white/20'
+                      'flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors',
+                      modoOrdenes === id ? 'bg-foreground text-background' : 'bg-card text-muted-foreground hover:bg-accent'
                     )}
                   >
                     <Icono aria-hidden="true" className="h-4 w-4" />
@@ -340,7 +424,9 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
                   />
                 ))}
                 {ordenes.length === 0 && (
-                  <p className="col-span-full text-center text-lg text-slate-300">No hay órdenes en curso.</p>
+                  <p className="col-span-full text-center text-lg text-muted-foreground">
+                    {hayFiltro ? 'Este proveedor no tiene órdenes en curso.' : 'No hay órdenes en curso.'}
+                  </p>
                 )}
               </div>
             </div>
@@ -352,7 +438,9 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
                   <TarjetaFinalizada key={o.id} orden={o} />
                 ))}
                 {finalizadas.length === 0 && (
-                  <p className="col-span-full text-center text-lg text-slate-300">Aún no hay órdenes finalizadas.</p>
+                  <p className="col-span-full text-center text-lg text-muted-foreground">
+                    {hayFiltro ? 'Este proveedor no tiene órdenes finalizadas.' : 'Aún no hay órdenes finalizadas.'}
+                  </p>
                 )}
               </div>
             </div>
@@ -369,7 +457,7 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
           type="button"
           aria-label={automatico ? 'Pausar rotación' : 'Reanudar rotación'}
           onClick={() => setAutomatico((a) => !a)}
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/20"
+          className="flex h-8 w-8 items-center justify-center rounded-full border bg-card hover:bg-accent"
         >
           {automatico ? <Pause aria-hidden="true" className="h-4 w-4" /> : <Play aria-hidden="true" className="h-4 w-4" />}
         </button>
@@ -379,8 +467,8 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
             type="button"
             onClick={() => setIndice(i)}
             className={cn(
-              'rounded-full border border-white/20 px-3 py-1 text-sm transition-colors',
-              i === indice ? 'bg-white text-slate-900' : 'bg-white/10 text-slate-200 hover:bg-white/20'
+              'rounded-full border px-3 py-1 text-sm transition-colors',
+              i === indice ? 'bg-foreground text-background' : 'bg-card text-muted-foreground hover:bg-accent'
             )}
           >
             {v.titulo}
