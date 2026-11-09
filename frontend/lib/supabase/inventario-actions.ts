@@ -10,6 +10,8 @@ const INVENTARIO_SELECT =
   'codigo_producto, nombre_producto, unidad_medida, categoria, saldo, valor_unitario, valor_total, ultimo_movimiento'
 // La migración 075 agrega umbral_stock a las vistas. Si todavía no está aplicada se usa el select anterior.
 const INVENTARIO_SELECT_CON_UMBRAL = `${INVENTARIO_SELECT}, umbral_stock`
+// La migración 078 agrega nivel_stock (critico / bajo / ok), que usan los filtros Críticos y Bajos.
+const INVENTARIO_SELECT_CON_NIVEL = `${INVENTARIO_SELECT_CON_UMBRAL}, nivel_stock`
 
 export async function fetchInventario(
   filtros: InventarioFiltros,
@@ -22,13 +24,20 @@ export async function fetchInventario(
   const supabase = await createClient()
   const vista = filtros.bodega ? 'vista_inventario_por_bodega' : 'vista_inventario_actual'
 
-  const consultar = (columnas: string) => {
+  const consultar = (columnas: string, conNivel: boolean) => {
     let query = supabase.from(vista).select(columnas, { count: 'exact' })
 
     if (filtros.bodega) query = query.eq('bodega', filtros.bodega)
     if (filtros.categoria) query = query.ilike('categoria', `%${filtros.categoria}%`)
     if (filtros.estado === 'activo') query = query.gt('saldo', 0)
     else if (filtros.estado === 'agotado') query = query.lte('saldo', 0)
+    else if (filtros.estado === 'critico' || filtros.estado === 'bajo') {
+      // Con la migración 078 se filtra por el nivel exacto de cada producto; sin ella, críticos
+      // se aproxima con saldo de 2 o menos y bajos no se puede calcular (queda vacío).
+      if (conNivel) query = query.eq('nivel_stock', filtros.estado)
+      else if (filtros.estado === 'critico') query = query.lte('saldo', 2)
+      else query = query.lt('saldo', 0)
+    }
     if (filtros.desde) query = query.gte('ultimo_movimiento', filtros.desde)
     if (filtros.hasta) query = query.lte('ultimo_movimiento', filtros.hasta)
     if (filtros.busqueda) {
@@ -42,10 +51,13 @@ export async function fetchInventario(
     return query.range(from, to)
   }
 
-  let { data, error, count } = await consultar(INVENTARIO_SELECT_CON_UMBRAL)
+  let { data, error, count } = await consultar(INVENTARIO_SELECT_CON_NIVEL, true)
   if (error?.code === '42703') {
-    // Columna umbral_stock inexistente: la migración 075 aún no se aplicó.
-    ;({ data, error, count } = await consultar(INVENTARIO_SELECT))
+    // Falta nivel_stock (migración 078) o también umbral_stock (migración 075): se usan las columnas anteriores.
+    ;({ data, error, count } = await consultar(INVENTARIO_SELECT_CON_UMBRAL, false))
+    if (error?.code === '42703') {
+      ;({ data, error, count } = await consultar(INVENTARIO_SELECT, false))
+    }
   }
 
   if (error) {
@@ -62,6 +74,8 @@ function fetchInventarioPreview(filtros: InventarioFiltros, pagina: number): Inv
     if (filtros.categoria && item.categoria !== filtros.categoria) return false
     if (filtros.estado === 'activo' && item.saldo <= 0) return false
     if (filtros.estado === 'agotado' && item.saldo > 0) return false
+    if (filtros.estado === 'critico' && item.saldo > 2) return false
+    if (filtros.estado === 'bajo' && !(item.saldo > 2 && item.saldo <= 5)) return false
     if (filtros.busqueda) {
       const b = filtros.busqueda.toLowerCase()
       const matches =

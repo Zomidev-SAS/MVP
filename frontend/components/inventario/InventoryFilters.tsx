@@ -76,6 +76,8 @@ export function InventoryFilters({
           <option value="todos">Todos</option>
           <option value="activo">Con stock</option>
           <option value="agotado">Sin stock</option>
+          <option value="critico">Críticos (rojo)</option>
+          <option value="bajo">Bajos (amarillo)</option>
         </select>
       </div>
 
