@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { CheckCircle2, Download, FileText, PackageCheck, Pencil, RotateCcw, Send, Trash2, XCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, Download, FileSearch, FileText, History, PackageCheck, Pencil, RotateCcw, Send, Trash2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,8 +14,16 @@ import { derivarEstadoSiigo } from '@/lib/supabase/orden-compra-siigo-status'
 import {
   actualizarFechaVencimientoOrden,
   actualizarObservacionesEntrega,
+  fetchAuditoriaOrden,
 } from '@/lib/supabase/ordenes-compra-actions'
-import { ETIQUETA_MEDIO_PAGO, resumenRecepcion, type OrdenCompra } from '@/lib/types/orden-compra'
+import { releerLineasDocumento } from '@/lib/supabase/ordenes-compra-documento-actions'
+import {
+  ETIQUETA_ACCION_AUDITORIA,
+  ETIQUETA_MEDIO_PAGO,
+  resumenRecepcion,
+  type AuditoriaOrdenCompra,
+  type OrdenCompra,
+} from '@/lib/types/orden-compra'
 
 function formatearFecha(valor: string | null | undefined): string {
   if (!valor) return '—'
@@ -35,7 +43,7 @@ interface OrdenDetalleProps {
   onEliminar: () => void
   onFinalizar: () => void
   onCancelar: () => void
-  onReabrir: () => void
+  onReabrir: (motivo: string) => void
   onPdf: () => void
   onCsv: () => void
   onEnviarSiigo: (esReintento: boolean) => void
@@ -60,6 +68,41 @@ export function OrdenDetalle({
   const siigo = derivarEstadoSiigo(orden)
   const enCurso = orden.estado === 'en_curso'
   const editable = puedeGestionar && enCurso
+
+  // Reabrir pide el motivo y queda en el historial con quién y cuándo.
+  const [reabriendo, setReabriendo] = useState(false)
+  const [motivoReapertura, setMotivoReapertura] = useState('')
+  const [releyendo, setReleyendo] = useState(false)
+  const [historial, setHistorial] = useState<AuditoriaOrdenCompra[]>([])
+
+  useEffect(() => {
+    let vigente = true
+    fetchAuditoriaOrden(orden.id)
+      .then((filas) => {
+        if (vigente) setHistorial(filas)
+      })
+      .catch((error) => console.error('Failed to load OC history:', error))
+    return () => {
+      vigente = false
+    }
+  }, [orden.id, orden.updated_at])
+
+  async function releerDocumento() {
+    setReleyendo(true)
+    try {
+      const res = await releerLineasDocumento(orden.id)
+      if (!res.ok) {
+        toast.error(res.error)
+      } else if (res.agregadas === 0) {
+        toast.success(`El documento tiene ${res.total} líneas y la orden ya las tiene todas.`)
+      } else {
+        toast.success(`Se agregaron ${res.agregadas} líneas que faltaban (el documento tiene ${res.total}).`)
+        onRecargar()
+      }
+    } finally {
+      setReleyendo(false)
+    }
+  }
 
   // Fecha de entrega esperada y nota de entregas: se editan aquí mismo.
   const [fecha, setFecha] = useState(orden.fecha_vencimiento ?? '')
@@ -235,6 +278,77 @@ export function OrdenDetalle({
         )}
       </div>
 
+      {puedeGestionar && reabriendo && (
+        <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 text-sm">
+          <p className="font-medium">¿Por qué se reabre la orden?</p>
+          <p className="text-xs text-muted-foreground">
+            Queda registrado con tu nombre y la hora. Si ya se envió la factura de compra a Siigo, no se anula sola.
+          </p>
+          <Input
+            value={motivoReapertura}
+            onChange={(e) => setMotivoReapertura(e.target.value)}
+            placeholder="Ej.: se cerró por equivocación"
+            aria-label="Motivo de la reapertura"
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={!motivoReapertura.trim()}
+              onClick={() => {
+                onReabrir(motivoReapertura.trim())
+                setReabriendo(false)
+                setMotivoReapertura('')
+              }}
+            >
+              Reabrir orden
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setReabriendo(false)}>
+              No reabrir
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {puedeGestionar && orden.estado === 'listo' && (
+        <p className="text-xs text-muted-foreground">
+          Esta orden está cerrada: puedes modificarla y cada cambio queda registrado con tu nombre y la hora.
+        </p>
+      )}
+
+      {historial.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+            <History aria-hidden className="h-4 w-4" />
+            Historial de cambios
+          </h3>
+          <ul className="space-y-1.5 text-sm">
+            {historial.map((h) => (
+              <li key={h.id} className="rounded-md bg-muted/40 px-3 py-2">
+                <span className="font-medium">{ETIQUETA_ACCION_AUDITORIA[h.accion]}</span> por{' '}
+                <span className="font-medium">{h.usuario_nombre}</span> ·{' '}
+                {new Date(h.created_at).toLocaleString('es-CO', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  timeZone: 'America/Bogota',
+                })}
+                {h.motivo && <span className="block text-muted-foreground">Motivo: {h.motivo}</span>}
+                {h.cambios.length > 0 && (
+                  <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
+                    {h.cambios.map((c, i) => (
+                      <li key={i}>{c}</li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Acciones */}
       {puedeGestionar && (
         <div className="flex flex-wrap items-center gap-2 border-t pt-3">
@@ -245,16 +359,22 @@ export function OrdenDetalle({
               {faltantes > 0 && <span className="ml-1 text-xs opacity-80">(faltan {faltantes.toLocaleString('es-CO')})</span>}
             </Button>
           )}
-          {enCurso && (
+          {(enCurso || orden.estado === 'listo') && (
             <Button type="button" size="sm" variant="outline" onClick={onEditar}>
               <Pencil className="mr-1 h-3.5 w-3.5" />
-              Editar / agregar productos
+              {enCurso ? 'Editar / agregar productos' : 'Editar orden cerrada'}
             </Button>
           )}
-          {!enCurso && (
-            <Button type="button" size="sm" variant="outline" onClick={onReabrir}>
+          {!enCurso && !reabriendo && (
+            <Button type="button" size="sm" variant="outline" onClick={() => setReabriendo(true)}>
               <RotateCcw className="mr-1 h-3.5 w-3.5" />
               Reabrir
+            </Button>
+          )}
+          {orden.origen === 'documento_siigo' && orden.documento_path && (
+            <Button type="button" size="sm" variant="ghost" disabled={releyendo} onClick={releerDocumento}>
+              <FileSearch className="mr-1 h-3.5 w-3.5" />
+              {releyendo ? 'Leyendo…' : 'Releer documento'}
             </Button>
           )}
           {!orden.documento_path && (

@@ -244,13 +244,15 @@ export async function fetchDetalleVehiculoPlanta(
 // ── Modo planta de compras (TV de compras, sin sesión) ──────────────────────
 
 const DATOS_PLANTA_COMPRAS_VACIOS: DatosPlantaCompras = {
-  kpis: { en_curso: 0, vencidas: 0, pendientes_firma: 0, con_entregas_parciales: 0 },
+  kpis: { en_curso: 0, finalizadas_30d: 0, pendientes_firma: 0, con_entregas_parciales: 0 },
   ordenes: [],
+  finalizadas: [],
 }
 
 interface RespuestaRpcPlantaCompras {
-  kpis: DatosPlantaCompras['kpis']
+  kpis: Partial<DatosPlantaCompras['kpis']>
   ordenes: DatosPlantaCompras['ordenes']
+  finalizadas?: DatosPlantaCompras['finalizadas']
 }
 
 /**
@@ -264,7 +266,11 @@ export async function fetchDatosPlantaCompras(token: string): Promise<DatosPlant
 
   if (isDevBypassActive()) {
     return {
-      kpis: { en_curso: 2, vencidas: 1, pendientes_firma: 1, con_entregas_parciales: 1 },
+      kpis: { en_curso: 2, finalizadas_30d: 2, pendientes_firma: 1, con_entregas_parciales: 1 },
+      finalizadas: [
+        { id: 10, numero: 'OC-1-3180', titulo: null, proveedor: 'FERREPLASTICOS', finalizada_at: '2026-11-06T15:30:00Z', pedidas: 60, recibidas: 60, lineas: 3 },
+        { id: 11, numero: 'OC-1-3177', titulo: null, proveedor: 'VITRACOAT', finalizada_at: '2026-11-04T13:10:00Z', pedidas: 24, recibidas: 24, lineas: 1 },
+      ],
       ordenes: [
         {
           id: 1, numero: 'OC-1-3195', proveedor: 'MATRICES TROQUELES Y MOLDES MATROMOL',
@@ -295,7 +301,7 @@ export async function fetchDatosPlantaCompras(token: string): Promise<DatosPlant
   return {
     kpis: {
       en_curso: Number(r.kpis?.en_curso ?? 0),
-      vencidas: Number(r.kpis?.vencidas ?? 0),
+      finalizadas_30d: Number(r.kpis?.finalizadas_30d ?? 0),
       pendientes_firma: Number(r.kpis?.pendientes_firma ?? 0),
       con_entregas_parciales: Number(r.kpis?.con_entregas_parciales ?? 0),
     },
@@ -308,6 +314,12 @@ export async function fetchDatosPlantaCompras(token: string): Promise<DatosPlant
         cantidad: Number(i.cantidad),
         cantidad_recibida: Number(i.cantidad_recibida ?? 0),
       })),
+    })),
+    finalizadas: (r.finalizadas ?? []).map((f) => ({
+      ...f,
+      pedidas: Number(f.pedidas),
+      recibidas: Number(f.recibidas),
+      lineas: Number(f.lineas),
     })),
   }
 }

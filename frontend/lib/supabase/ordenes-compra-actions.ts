@@ -14,6 +14,8 @@ import {
 } from '@/lib/dev/preview-ordenes-compra-data'
 import {
   guardarOrdenCompraPedidoSchema,
+  type AccionAuditoriaOc,
+  type AuditoriaOrdenCompra,
   type GuardarOrdenCompraPedidoInput,
   type OrdenCompra,
   type OrdenCompraItem,
@@ -335,6 +337,93 @@ export async function crearOrdenCompraPedido(
   return { ok: true, id: inserted.id }
 }
 
+type ClienteSupabase = Awaited<ReturnType<typeof createClient>>
+
+/** Deja constancia de quién hizo qué y cuándo con una orden (historial de cambios). */
+async function registrarAuditoriaOc(
+  supabase: ClienteSupabase,
+  ordenId: number,
+  usuarioId: string,
+  accion: AccionAuditoriaOc,
+  motivo: string | null,
+  cambios: string[] = [],
+  extra: Record<string, unknown> = {}
+): Promise<void> {
+  const { error } = await supabase.from('ordenes_compra_auditoria').insert({
+    orden_id: ordenId,
+    accion,
+    motivo: motivo?.trim() || null,
+    detalle: { cambios, ...extra },
+    usuario_id: usuarioId,
+  })
+  if (error) console.error('Failed to register OC audit entry:', error)
+}
+
+interface ItemResumen {
+  codigo_producto: string
+  descripcion: string | null
+  cantidad: number
+}
+
+function claveItem(i: ItemResumen): string {
+  return i.codigo_producto === 'SIN-CODIGO' ? `SC:${(i.descripcion ?? '').trim().toUpperCase()}` : i.codigo_producto
+}
+
+/** Compara los ítems antes y después de editar y lo cuenta en frases cortas. */
+function resumirCambiosItems(antes: ItemResumen[], despues: ItemResumen[]): string[] {
+  const a = new Map(antes.map((i) => [claveItem(i), i]))
+  const d = new Map(despues.map((i) => [claveItem(i), i]))
+  const nombre = (i: ItemResumen) => (i.descripcion?.trim() ? `${i.codigo_producto} (${i.descripcion.trim()})` : i.codigo_producto)
+  const cambios: string[] = []
+  for (const [k, i] of d) {
+    const previo = a.get(k)
+    if (!previo) cambios.push(`Agregado ${nombre(i)}: ${Number(i.cantidad)}`)
+    else if (Number(previo.cantidad) !== Number(i.cantidad)) {
+      cambios.push(`Cantidad de ${nombre(i)}: ${Number(previo.cantidad)} → ${Number(i.cantidad)}`)
+    }
+  }
+  for (const [k, i] of a) if (!d.has(k)) cambios.push(`Quitado ${nombre(i)}`)
+  return cambios.slice(0, 30)
+}
+
+/** Historial de cambios de una orden (quién, cuándo, motivo y qué cambió). */
+export async function fetchAuditoriaOrden(ordenId: number): Promise<AuditoriaOrdenCompra[]> {
+  if (isDevBypassActive()) return []
+  const user = await getSessionUser()
+  if (!user) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('ordenes_compra_auditoria')
+    .select('id, accion, motivo, detalle, usuario_id, created_at')
+    .eq('orden_id', ordenId)
+    .order('created_at', { ascending: false })
+  if (error) {
+    // Antes de aplicar la migración 076 la tabla no existe: se muestra sin historial.
+    if (error.code !== '42P01' && error.code !== 'PGRST205') console.error('Failed to load OC audit:', error)
+    return []
+  }
+  const filas = data ?? []
+  const ids = [...new Set(filas.map((f) => f.usuario_id as string))]
+  const nombres = new Map<string, string>()
+  if (ids.length > 0) {
+    const { data: perfiles } = await supabase.from('profiles').select('id, nombre').in('id', ids)
+    for (const p of perfiles ?? []) nombres.set(p.id as string, (p.nombre as string) || 'Usuario')
+  }
+  return filas.map((f) => ({
+    id: Number(f.id),
+    accion: f.accion as AccionAuditoriaOc,
+    motivo: (f.motivo as string | null) ?? null,
+    cambios: Array.isArray((f.detalle as { cambios?: unknown })?.cambios)
+      ? ((f.detalle as { cambios: string[] }).cambios)
+      : [],
+    usuario_nombre: nombres.get(f.usuario_id as string) ?? 'Usuario',
+    created_at: f.created_at as string,
+  }))
+}
+
+
+
 export async function actualizarOrdenCompraPedido(
   id: number,
   datos: GuardarOrdenCompraPedidoInput
@@ -370,6 +459,25 @@ export async function actualizarOrdenCompraPedido(
   const supabase = await createClient()
   const primero = parsed.data.items[0]
 
+  // En curso la edita quien la creó o compras/supervisor; cerrada o cancelada solo compras
+  // y supervisor, y queda registrado quién y cuándo (historial de cambios).
+  const { data: actualRow } = await supabase.from('ordenes_compra').select('estado').eq('id', id).maybeSingle()
+  const estadoActual = actualRow?.estado as EstadoOrdenCompra | undefined
+  if (!estadoActual) return { ok: false, error: 'No se encontró la orden.' }
+  const cerrada = estadoActual !== 'en_curso'
+  if (cerrada) {
+    const auth = await requireRole(['supervisor', 'compras'])
+    if (!auth.ok) return { ok: false, error: auth.error }
+  }
+  let itemsAntes: ItemResumen[] = []
+  if (cerrada) {
+    const { data: previosItems } = await supabase
+      .from('orden_compra_items')
+      .select('codigo_producto, descripcion, cantidad')
+      .eq('orden_id', id)
+    itemsAntes = (previosItems ?? []) as ItemResumen[]
+  }
+
   const { error } = await supabase
     .from('ordenes_compra')
     .update({
@@ -383,7 +491,7 @@ export async function actualizarOrdenCompraPedido(
       proveedor_email: primero.proveedor_email.trim() || null,
     })
     .eq('id', id)
-    .eq('estado', 'en_curso')
+    .eq('estado', estadoActual)
 
   if (error) {
     console.error('Failed to update orden_compra:', error)
@@ -412,6 +520,17 @@ export async function actualizarOrdenCompraPedido(
   }
 
   await registrarEventosRecepcion(supabase, id, parsed.data, previas, user.id)
+
+  if (cerrada) {
+    const despues = parsed.data.items.map((it) => ({
+      codigo_producto: it.codigo_producto,
+      descripcion: it.descripcion,
+      cantidad: Number(it.cantidad),
+    }))
+    await registrarAuditoriaOc(supabase, id, user.id, 'editar_cerrada', null, resumirCambiosItems(itemsAntes, despues), {
+      estado: estadoActual,
+    })
+  }
 
   return { ok: true, id }
 }
@@ -459,7 +578,8 @@ export async function marcarOcListoConSiigo(
 
 export async function actualizarEstadoOrdenCompra(
   id: number,
-  estado: EstadoOrdenCompra
+  estado: EstadoOrdenCompra,
+  motivo?: string
 ): Promise<OrdenCompraResultado> {
   if (estado === 'listo') {
     return marcarOcListoConSiigo(id)
@@ -476,13 +596,30 @@ export async function actualizarEstadoOrdenCompra(
   if (!user) return { ok: false, error: 'Sesión expirada.' }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data: previo } = await supabase.from('ordenes_compra').select('estado').eq('id', id).maybeSingle()
+  const estadoPrevio = previo?.estado as EstadoOrdenCompra | undefined
+
+  const reabre = estado === 'en_curso' && !!estadoPrevio && estadoPrevio !== 'en_curso'
+  if (reabre) {
+    const auth = await requireRole(['supervisor', 'compras'])
+    if (!auth.ok) return { ok: false, error: auth.error }
+    if (!motivo?.trim()) return { ok: false, error: 'Escribe el motivo para reabrir la orden.' }
+  }
+
+  const { data: filas, error } = await supabase
     .from('ordenes_compra')
     .update({ estado, updated_at: ahora, finalizada_at: null })
     .eq('id', id)
+    .select('id')
 
-  if (error) {
+  if (error || !filas || filas.length === 0) {
     return { ok: false, error: 'No se pudo actualizar el estado.' }
+  }
+
+  if (reabre) {
+    await registrarAuditoriaOc(supabase, id, user.id, 'reabrir', motivo ?? null, [], {
+      estado_anterior: estadoPrevio,
+    })
   }
 
   return { ok: true }
