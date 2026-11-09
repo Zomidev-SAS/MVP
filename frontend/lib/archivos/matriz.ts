@@ -99,6 +99,11 @@ export function puedeBorrar(rol: Role, carpeta: Carpeta): boolean {
   return puedeVer(rol, carpeta) && PUEDE_BORRAR.includes(rol)
 }
 
+/** Crear y renombrar carpetas o archivos: quien puede subir en esa carpeta. Borrar sigue siendo solo del supervisor. */
+export function puedeModificar(rol: Role, carpeta: Carpeta): boolean {
+  return puedeSubir(rol, carpeta)
+}
+
 export function carpetasVisibles(rol: Role): Carpeta[] {
   return CARPETAS.filter((c) => puedeVer(rol, c))
 }
