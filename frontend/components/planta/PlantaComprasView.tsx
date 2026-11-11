@@ -269,7 +269,7 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
     'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border bg-card text-foreground shadow-sm transition-colors hover:bg-accent'
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-background via-muted/50 to-muted p-5 text-foreground">
+    <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-background via-muted to-muted-foreground/30 p-5 text-foreground">
       <header className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">{vista.titulo}</h1>
         <p className="text-base text-muted-foreground">
