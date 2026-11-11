@@ -125,7 +125,7 @@ function textoEntrega(orden: OrdenCompra): { texto: string; clase: string } {
   return { texto: formatearVencimiento(orden.fecha_vencimiento), clase: '' }
 }
 
-const COLUMNAS = 7
+const COLUMNAS = 8
 
 // Franja de color a la izquierda de cada orden: amarillo en proceso, rojo finalizado.
 const BORDE_ESTADO: Record<EstadoOrdenCompra, string> = {
@@ -455,6 +455,9 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
               <span className={textoEntrega(orden).clase}>{textoEntrega(orden).texto}</span>
             </div>
           </TableCell>
+          <TableCell className="hidden md:table-cell text-sm">
+            {orden.fecha_cierre ? formatearVencimiento(orden.fecha_cierre) : <span className="text-muted-foreground">—</span>}
+          </TableCell>
           <TableCell className="hidden lg:table-cell text-xs">
             {orden.documento_path ? (
               orden.firmada_at ? (
@@ -502,6 +505,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
       <TableHead className="hidden md:table-cell">Avance</TableHead>
       <TableHead className="hidden lg:table-cell">Siigo</TableHead>
       <TableHead className="hidden md:table-cell">Entrega</TableHead>
+      <TableHead className="hidden md:table-cell">Cierre</TableHead>
       <TableHead className="hidden lg:table-cell">Firma</TableHead>
     </TableRow>
   )

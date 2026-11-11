@@ -181,7 +181,7 @@ function TarjetaFinalizada({ orden }: { orden: OrdenFinalizadaPlanta }) {
             <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-primary" />
             Finalizada
           </p>
-          <p className="text-muted-foreground">{fechaCorta(orden.finalizada_at)}</p>
+          <p className="text-muted-foreground">{fechaCorta(orden.fecha_cierre ?? orden.finalizada_at)}</p>
         </div>
       </div>
       <p className="mt-2 text-sm text-muted-foreground">

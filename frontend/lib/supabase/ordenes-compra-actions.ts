@@ -29,8 +29,13 @@ import {
   tituloOrdenDisplay,
 } from '@/lib/types/orden-compra'
 
-const SELECT_ORDEN =
+const SELECT_ORDEN_BASE =
   'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, medio_pago, creado_por, descargada_siigo_at, finalizada_at, siigo_id, siigo_estado, siigo_referencia, numero_oc, factura_proveedor_prefijo, factura_proveedor_numero, origen, documento_path, documento_firmado_path, firmada_at, firmada_por, total_pagar, created_at, updated_at'
+
+// La migración 079 agrega fecha_cierre: si todavía no está aplicada se usa el select anterior.
+const SELECT_ORDEN = `${SELECT_ORDEN_BASE}, fecha_cierre`
+
+type FilasOrdenes = { data: Record<string, unknown>[] | null; error: { code?: string } | null }
 
 const SELECT_ITEM =
   'id, orden_id, codigo_producto, nombre_producto, cantidad, precio_unitario, cantidad_recibida, cantidad_recibida_at, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
@@ -89,10 +94,16 @@ export async function fetchOrdenesCompra(): Promise<OrdenCompra[]> {
   if (!user) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let { data, error } = (await supabase
     .from('ordenes_compra')
     .select(SELECT_ORDEN)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false })) as FilasOrdenes
+  if (error?.code === '42703') {
+    ;({ data, error } = (await supabase
+      .from('ordenes_compra')
+      .select(SELECT_ORDEN_BASE)
+      .order('created_at', { ascending: false })) as FilasOrdenes)
+  }
 
   if (error) {
     console.error('Failed to load ordenes_compra:', error)
@@ -117,7 +128,10 @@ export async function fetchOrdenCompraById(id: number): Promise<OrdenCompra | nu
   if (!user) return null
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('ordenes_compra').select(SELECT_ORDEN).eq('id', id).single()
+  let { data, error } = await supabase.from('ordenes_compra').select(SELECT_ORDEN).eq('id', id).single()
+  if (error?.code === '42703') {
+    ;({ data, error } = await supabase.from('ordenes_compra').select(SELECT_ORDEN_BASE).eq('id', id).single())
+  }
 
   if (error || !data) return null
 
@@ -139,12 +153,20 @@ export async function fetchOrdenesCompraPendientes(): Promise<OrdenCompra[]> {
   if (!user) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let { data, error } = (await supabase
     .from('ordenes_compra')
     .select(SELECT_ORDEN)
     .eq('estado', 'en_curso')
     .order('created_at', { ascending: false })
-    .limit(20)
+    .limit(20)) as FilasOrdenes
+  if (error?.code === '42703') {
+    ;({ data, error } = (await supabase
+      .from('ordenes_compra')
+      .select(SELECT_ORDEN_BASE)
+      .eq('estado', 'en_curso')
+      .order('created_at', { ascending: false })
+      .limit(20)) as FilasOrdenes)
+  }
 
   if (error) {
     console.error('Failed to load ordenes pendientes:', error)
@@ -1065,6 +1087,59 @@ export async function fetchLineaTiempoOrdenesCompra(limite = 8): Promise<OrdenLi
   })
 }
 
+
+/**
+ * Fecha de cierre de la orden: compras y supervisor la escriben o eligen (vacía la quita).
+ * Si la orden ya está cerrada, el cambio queda en el historial con quién y cuándo.
+ */
+export async function actualizarFechaCierreOrden(
+  id: number,
+  fecha: string | null
+): Promise<OrdenCompraResultado> {
+  const limpia = fecha?.trim() || null
+  if (limpia && !/^\d{4}-\d{2}-\d{2}$/.test(limpia)) {
+    return { ok: false, error: 'Fecha inválida.' }
+  }
+
+  if (isDevBypassActive()) {
+    devPreviewUpdateOrden(id, { fecha_cierre: limpia })
+    return { ok: true }
+  }
+
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+
+  const supabase = await createClient()
+  const { data: actual, error: errorLectura } = await supabase
+    .from('ordenes_compra')
+    .select('estado, fecha_cierre')
+    .eq('id', id)
+    .maybeSingle()
+  if (errorLectura?.code === '42703') {
+    return { ok: false, error: 'Falta aplicar la migración 079 en la base de datos.' }
+  }
+  if (!actual) return { ok: false, error: 'No se encontró la orden.' }
+
+  const anterior = (actual.fecha_cierre as string | null) ?? null
+  if (anterior === limpia) return { ok: true }
+
+  const { data, error } = await supabase
+    .from('ordenes_compra')
+    .update({ fecha_cierre: limpia, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id')
+  if (error || !data || data.length === 0) {
+    console.error('Failed to update fecha_cierre:', error)
+    return { ok: false, error: 'No se pudo guardar la fecha de cierre.' }
+  }
+
+  if (actual.estado !== 'en_curso') {
+    await registrarAuditoriaOc(supabase, id, auth.user.id, 'correccion', null, [
+      `Fecha de cierre: ${anterior ?? 'sin fecha'} → ${limpia ?? 'sin fecha'}`,
+    ])
+  }
+  return { ok: true }
+}
 
 /** Fecha de entrega esperada (vencimiento). Vacía la quita. */
 export async function actualizarFechaVencimientoOrden(
