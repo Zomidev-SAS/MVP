@@ -8,7 +8,7 @@ export function getDevPreviewFormulariosData(): FormularioListado[] {
     const esEntrada = !esParqueadero && i % 2 === 0
     const tipoFormulario = esParqueadero ? 'ubicacion' : esEntrada ? 'ingreso' : 'salida'
     // Igual que la app: ubicación de la lista + detalle opcional (el último simula texto libre antiguo).
-    const bodega = ['Principal', 'Bodega Cemi', 'Bodegas Nuevas', null][i % 4]
+    const bodega = ['Principal', 'Bodega Semi', 'Bodegas Nuevas', 'Parqueadero', 'En línea', null][Math.floor(i / 3) % 6]
     const ubicacion = esParqueadero
       ? bodega
         ? { bodegaParqueadero: bodega, ubicacionParqueadero: `${bodega} · Zona ${'ABC'[i % 3]}` }
