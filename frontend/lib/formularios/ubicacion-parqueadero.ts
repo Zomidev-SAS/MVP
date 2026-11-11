@@ -5,7 +5,13 @@ import { normalizarTextoBusqueda } from '@/lib/formularios/busqueda'
  * Ubicaciones que la app móvil (pestaña Parqueadero) ofrece en lista.
  * La app guarda la elegida en data.bodegaParqueadero.
  */
-export const UBICACIONES_PARQUEADERO = ['Principal', 'Bodega Cemi', 'Bodegas Nuevas'] as const
+export const UBICACIONES_PARQUEADERO = [
+  'Principal',
+  'Bodega Semi',
+  'Bodegas Nuevas',
+  'Parqueadero',
+  'En línea',
+] as const
 
 /** Valor del filtro para registros de parqueadero que no coinciden con la lista (texto libre antiguo). */
 export const UBICACION_SIN_CLASIFICAR = 'sin_clasificar'
@@ -14,21 +20,27 @@ function texto(valor: unknown): string | null {
   return typeof valor === 'string' && valor.trim() ? valor.trim() : null
 }
 
+/** Clasifica un texto por palabra clave; "cemi" se acepta por el nombre anterior de Bodega Semi. */
+function clasificar(valor: string | null): string | null {
+  const libre = normalizarTextoBusqueda(valor ?? '')
+  if (!libre) return null
+  if (libre.includes('semi') || libre.includes('cemi')) return 'Bodega Semi'
+  if (libre.includes('nueva')) return 'Bodegas Nuevas'
+  if (libre.includes('linea')) return 'En línea'
+  if (libre.includes('principal')) return 'Principal'
+  if (libre.includes('parqueadero')) return 'Parqueadero'
+  return null
+}
+
 /**
  * Ubicación de la lista para un formulario de parqueadero, o null si no aplica.
  * Los registros anteriores a la lista (texto libre) se clasifican por palabras clave.
  */
 export function ubicacionParqueaderoDe(fila: FormularioListado): string | null {
-  const guardada = texto(fila.rawData.bodegaParqueadero)
-  const coincide = UBICACIONES_PARQUEADERO.find((u) => u === guardada)
-  if (coincide) return coincide
-
-  const libre = normalizarTextoBusqueda(texto(fila.rawData.ubicacionParqueadero) ?? '')
-  if (!libre) return null
-  if (libre.includes('cemi')) return 'Bodega Cemi'
-  if (libre.includes('nueva')) return 'Bodegas Nuevas'
-  if (libre.includes('principal')) return 'Principal'
-  return null
+  return (
+    clasificar(texto(fila.rawData.bodegaParqueadero)) ??
+    clasificar(texto(fila.rawData.ubicacionParqueadero))
+  )
 }
 
 /** Texto completo de la ubicación (incluye el detalle), para mostrar en la tabla. */
