@@ -12,6 +12,7 @@ import { RecepcionLineas } from '@/components/compras/RecepcionLineas'
 import { SiigoStatusBadge } from '@/components/compras/SiigoStatusBadge'
 import { derivarEstadoSiigo } from '@/lib/supabase/orden-compra-siigo-status'
 import {
+  actualizarFechaCierreOrden,
   actualizarFechaVencimientoOrden,
   actualizarObservacionesEntrega,
   fetchAuditoriaOrden,
@@ -107,6 +108,8 @@ export function OrdenDetalle({
   // Fecha de entrega esperada y nota de entregas: se editan aquí mismo.
   const [fecha, setFecha] = useState(orden.fecha_vencimiento ?? '')
   const [guardandoFecha, setGuardandoFecha] = useState(false)
+  const [cierre, setCierre] = useState(orden.fecha_cierre ?? '')
+  const [guardandoCierre, setGuardandoCierre] = useState(false)
   const [editandoTexto, setEditandoTexto] = useState(false)
   const [texto, setTexto] = useState(orden.observaciones_entrega ?? '')
 
@@ -122,6 +125,21 @@ export function OrdenDetalle({
       }
     } finally {
       setGuardandoFecha(false)
+    }
+  }
+
+  async function guardarCierre() {
+    setGuardandoCierre(true)
+    try {
+      const res = await actualizarFechaCierreOrden(orden.id, cierre || null)
+      if (res.ok) {
+        toast.success(cierre ? 'Fecha de cierre guardada.' : 'Fecha de cierre quitada.')
+        onRecargar()
+      } else {
+        toast.error(res.error)
+      }
+    } finally {
+      setGuardandoCierre(false)
     }
   }
 
@@ -222,6 +240,35 @@ export function OrdenDetalle({
               </div>
             ) : (
               <p>{formatearFecha(orden.fecha_vencimiento)}</p>
+            )}
+          </div>
+
+          {/* Fecha de cierre: se escribe o se elige; compras y supervisor pueden cambiarla siempre */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor={`cierre-${orden.id}`}>
+              Fecha de cierre
+            </label>
+            {puedeGestionar ? (
+              <div className="flex gap-1">
+                <Input
+                  id={`cierre-${orden.id}`}
+                  type="date"
+                  value={cierre}
+                  onChange={(e) => setCierre(e.target.value)}
+                  className="h-8 max-w-[11rem]"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8"
+                  disabled={guardandoCierre || cierre === (orden.fecha_cierre ?? '')}
+                  onClick={guardarCierre}
+                >
+                  {guardandoCierre ? '…' : 'Guardar'}
+                </Button>
+              </div>
+            ) : (
+              <p>{formatearFecha(orden.fecha_cierre)}</p>
             )}
           </div>
 

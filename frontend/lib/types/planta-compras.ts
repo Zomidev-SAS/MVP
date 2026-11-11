@@ -30,6 +30,8 @@ export interface OrdenFinalizadaPlanta {
   titulo: string | null
   proveedor: string | null
   finalizada_at: string
+  /** Fecha de cierre escrita o elegida en la orden (migración 079). */
+  fecha_cierre?: string | null
   pedidas: number
   recibidas: number
   lineas: number

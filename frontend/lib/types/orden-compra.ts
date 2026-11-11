@@ -84,6 +84,8 @@ export interface OrdenCompra {
   creado_por: string
   descargada_siigo_at: string | null
   finalizada_at: string | null
+  /** Fecha de cierre de la orden (editable); se llena sola al finalizarla. Migración 079. */
+  fecha_cierre?: string | null
   siigo_id: string | null
   siigo_estado: 'pendiente' | 'enviando' | 'sincronizada' | 'error' | null
   siigo_referencia: string | null
