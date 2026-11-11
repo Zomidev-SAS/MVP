@@ -167,27 +167,72 @@ function TarjetaOrden({
   )
 }
 
-function TarjetaFinalizada({ orden }: { orden: OrdenFinalizadaPlanta }) {
-  const completa = orden.pedidas > 0 && orden.recibidas >= orden.pedidas
+function SelectorModo({
+  modo,
+  onChange,
+}: {
+  modo: 'mosaico' | 'lista'
+  onChange: (modo: 'mosaico' | 'lista') => void
+}) {
   return (
-    <div className="rounded-xl border bg-card p-3.5 text-card-foreground shadow-sm">
-      <div className="flex items-start justify-between gap-3">
+    <div className="flex justify-end gap-2">
+      {([
+        ['mosaico', LayoutGrid, 'Mosaico'],
+        ['lista', List, 'Lista'],
+      ] as const).map(([id, Icono, texto]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onChange(id)}
+          className={cn(
+            'flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors',
+            modo === id ? 'bg-foreground text-background' : 'bg-card text-muted-foreground hover:bg-accent'
+          )}
+        >
+          <Icono aria-hidden="true" className="h-4 w-4" />
+          {texto}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function TarjetaFinalizada({ orden, lista }: { orden: OrdenFinalizadaPlanta; lista?: boolean }) {
+  const completa = orden.pedidas > 0 && orden.recibidas >= orden.pedidas
+  const fecha = fechaCorta(orden.fecha_cierre ?? orden.finalizada_at)
+  const detalle = (
+    <>
+      {orden.lineas} {orden.lineas === 1 ? 'línea' : 'líneas'} · {numero(orden.recibidas)} de {numero(orden.pedidas)} recibidas
+      {!completa && <span className="font-semibold text-primary"> · cerrada con faltantes</span>}
+    </>
+  )
+  return (
+    <div className={cn('rounded-xl border bg-card p-3.5 text-card-foreground shadow-sm', lista && 'flex items-center gap-4')}>
+      <div className={cn('flex items-start justify-between gap-3', lista && 'min-w-0 flex-1')}>
         <div className="min-w-0">
           <p className="truncate text-lg font-semibold">{orden.proveedor ?? 'Sin proveedor'}</p>
           <p className="text-sm text-muted-foreground">{orden.numero ?? `OC ${orden.id}`}</p>
         </div>
-        <div className="shrink-0 text-right text-sm">
+        {!lista && (
+          <div className="shrink-0 text-right text-sm">
+            <p className="flex items-center justify-end gap-1 font-semibold">
+              <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-primary" />
+              Finalizada
+            </p>
+            <p className="text-muted-foreground">{fecha}</p>
+          </div>
+        )}
+      </div>
+      <p className={cn('text-sm text-muted-foreground', lista ? 'w-2/5 shrink-0' : 'mt-2')}>{detalle}</p>
+      {lista && (
+        <div className="w-28 shrink-0 text-right text-sm">
           <p className="flex items-center justify-end gap-1 font-semibold">
             <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-primary" />
             Finalizada
           </p>
-          <p className="text-muted-foreground">{fechaCorta(orden.fecha_cierre ?? orden.finalizada_at)}</p>
+          <p className="text-muted-foreground">{fecha}</p>
         </div>
-      </div>
-      <p className="mt-2 text-sm text-muted-foreground">
-        {orden.lineas} {orden.lineas === 1 ? 'línea' : 'líneas'} · {numero(orden.recibidas)} de {numero(orden.pedidas)} recibidas
-        {!completa && <span className="font-semibold text-primary"> · cerrada con faltantes</span>}
-      </p>
+      )}
     </div>
   )
 }
@@ -389,25 +434,7 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
           )}
           {vista.id === 'ordenes' && (
             <div className="mx-auto w-full max-w-7xl space-y-3">
-              <div className="flex justify-end gap-2">
-                {([
-                  ['mosaico', LayoutGrid, 'Mosaico'],
-                  ['lista', List, 'Lista'],
-                ] as const).map(([id, Icono, texto]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setModoOrdenes(id)}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors',
-                      modoOrdenes === id ? 'bg-foreground text-background' : 'bg-card text-muted-foreground hover:bg-accent'
-                    )}
-                  >
-                    <Icono aria-hidden="true" className="h-4 w-4" />
-                    {texto}
-                  </button>
-                ))}
-              </div>
+              <SelectorModo modo={modoOrdenes} onChange={setModoOrdenes} />
               <div
                 className={cn(
                   'grid grid-cols-1 items-start gap-3',
@@ -432,10 +459,16 @@ export function PlantaComprasView({ datos }: { datos: DatosPlantaCompras }) {
             </div>
           )}
           {vista.id === 'finalizadas' && (
-            <div className="mx-auto w-full max-w-7xl">
-              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className="mx-auto w-full max-w-7xl space-y-3">
+              <SelectorModo modo={modoOrdenes} onChange={setModoOrdenes} />
+              <div
+                className={cn(
+                  'grid grid-cols-1 items-start gap-3',
+                  modoOrdenes === 'mosaico' && 'lg:grid-cols-2 2xl:grid-cols-3'
+                )}
+              >
                 {finalizadas.map((o) => (
-                  <TarjetaFinalizada key={o.id} orden={o} />
+                  <TarjetaFinalizada key={o.id} orden={o} lista={modoOrdenes === 'lista'} />
                 ))}
                 {finalizadas.length === 0 && (
                   <p className="col-span-full text-center text-lg text-muted-foreground">
