@@ -1,5 +1,6 @@
 import { datosGeneralesDe, valorDbColumna } from '@/lib/formularios/db-columns'
 import type { FormularioListado } from '@/lib/types/formularios'
+import { MARCAS_VEHICULO, normalizarMarca } from '@/lib/formularios/marcas'
 
 export interface OpcionFiltro {
   value: string
@@ -8,7 +9,7 @@ export interface OpcionFiltro {
 }
 
 export function extraerOpcionesFiltro(filas: FormularioListado[]): OpcionFiltro[] {
-  const marcas = new Set<string>()
+  const marcas = new Set<string>(MARCAS_VEHICULO)
   const ciudades = new Set<string>()
   const empresas = new Set<string>()
   const tiposVehiculo = new Set<string>()
@@ -17,7 +18,7 @@ export function extraerOpcionesFiltro(filas: FormularioListado[]): OpcionFiltro[
     const db = fila.dbColumns
     const dg = datosGeneralesDe(fila.rawData)
 
-    agregarValor(marcas, valorDbColumna(db, 'dg_marca') ?? texto(dg?.marca))
+    agregarValor(marcas, normalizarMarca(valorDbColumna(db, 'dg_marca') ?? texto(dg?.marca)))
     agregarValor(ciudades, valorDbColumna(db, 'dg_ciudad') ?? texto(dg?.ciudad))
     agregarValor(empresas, valorDbColumna(db, 'dg_empresa') ?? texto(dg?.empresa))
     agregarValor(tiposVehiculo, valorDbColumna(db, 'dg_tipo') ?? texto(dg?.tipo))

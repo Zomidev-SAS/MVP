@@ -10,6 +10,7 @@ import { fetchFormularios } from '@/lib/supabase/formularios-actions'
 import { FORMULARIOS_PAGE_SIZE } from '@/lib/supabase/formularios-page-size'
 import type { OpcionFiltro } from '@/lib/formularios/opciones-filtro'
 import { textoUbicacionParqueadero } from '@/lib/formularios/ubicacion-parqueadero'
+import { normalizarMarca } from '@/lib/formularios/marcas'
 import {
   formatearFechaFormulario,
   vistaFormulario,
@@ -140,7 +141,7 @@ export function FormulariosTable() {
                       {vista.tipoLabel}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {vista.marca ?? ''}
+                      {normalizarMarca(vista.marca) ?? ''}
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-sm">
                       {vista.chasis}

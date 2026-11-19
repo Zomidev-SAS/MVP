@@ -1,6 +1,7 @@
 import { datosGeneralesDe, valorDbColumna } from '@/lib/formularios/db-columns'
 import type { FormularioListado } from '@/lib/types/formularios'
 import { vistaFormulario } from '@/lib/types/formularios'
+import { normalizarMarca } from '@/lib/formularios/marcas'
 
 const MAX_PROFUNDIDAD = 8
 
@@ -34,7 +35,7 @@ export function coincideFiltroLista(fila: FormularioListado, filtro: string): bo
   const vista = vistaFormulario(fila)
 
   const candidatos: Record<string, string | null | undefined> = {
-    marca: vista.marca ?? valorDbColumna(db, 'dg_marca') ?? texto(dg?.marca),
+    marca: normalizarMarca(vista.marca ?? valorDbColumna(db, 'dg_marca') ?? texto(dg?.marca)),
     ciudad: valorDbColumna(db, 'dg_ciudad') ?? texto(dg?.ciudad),
     empresa: valorDbColumna(db, 'dg_empresa') ?? texto(dg?.empresa),
     tipo_vehiculo: valorDbColumna(db, 'dg_tipo') ?? texto(dg?.tipo),
