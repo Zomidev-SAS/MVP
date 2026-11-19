@@ -9,7 +9,7 @@ export const MARCAS_VEHICULO = [
   'HYUNDAI',
   'RENAULT',
   'FORD',
-  'JAC SUNRAY',
+  'JAC',
   'JOYLONG',
 ] as const
 
@@ -21,6 +21,7 @@ export function normalizarMarca(marca: string | null | undefined): string | null
   if (m.startsWith('MERCEDES')) return 'MERCEDES BENZ'
   if (m === 'FOTON') return 'FOTÓN'
   if (m.replace(/\s+/g, '') === 'JOYLONG') return 'JOYLONG'
-  if (m === 'JAC' || m === 'JAC SUN RAY') return 'JAC SUNRAY'
+  // "JAC SUNRAY" se usó como marca antes de separar el modelo (SUNRAY va en Tipo).
+  if (m.startsWith('JAC')) return 'JAC'
   return original
 }
