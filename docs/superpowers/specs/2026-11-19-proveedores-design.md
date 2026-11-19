@@ -81,6 +81,6 @@ Solo se puntúan las OC **finalizadas** (`estado = 'listo'`) o históricas impor
 
 ## Supuestos a confirmar durante la implementación
 
-- Interpretamos el "desplegable" del diagrama como el menú Proveedores más filas desplegables en la lista; si se quería un submenú en el sidebar, se ajusta (el sidebar hoy no tiene submenús).
+- **Confirmado por el usuario:** "Proveedores" es una opción del menú lateral izquierdo y toda la sección vive dentro de ella (lista con filas desplegables, historial, reevaluación y evaluación de selección en pestañas). No se agregan submenús al menú lateral.
 - Los valores por defecto de las fórmulas (50 para Regular, 5 puntos por día de retraso, 25 por devolución) son propuestos y quedan editables salvo la escala de calidad.
 - El NIT se normaliza a solo dígitos; un mismo proveedor escrito con y sin dígito de verificación se vería como dos. Si pasa, se unifica a mano o con la importación.
