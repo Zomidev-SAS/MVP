@@ -16,6 +16,8 @@ Cerrar la parte de auditoría de compras que exige la norma: llevar un historial
 - **Porcentaje = promedio ponderado de las 4 divisiones** con pesos iguales por defecto (25 % cada una) y umbral de aprobación 85 % por defecto. Pesos, umbral y penalizaciones son **configurables** (porque "podría variar").
 - **No hay marca de "proveedor único"**: Alfibras era un ejemplo. Lo que se necesita es poder **filtrar por proveedor y ver su información**.
 - **"Poder ver el análisis"** (palabra del diagrama): la reevaluación y el desempeño muestran en pantalla el mismo análisis que contienen el CSV y el PDF.
+- **Selector de proveedor:** siempre que haya que elegir un proveedor (ir a su historial, candidatos de una evaluación de selección) se usa un **desplegable con todos los proveedores, buscable por nombre** (y por NIT). Los proveedores vienen de Siigo.
+- **Origen de los proveedores:** hoy el panel solo conoce los proveedores que ya aparecieron en alguna OC; la bajada nocturna de Siigo los revisa pero no guarda el listado completo. Para que el desplegable muestre **todos** los de Siigo, sistemas debe extender esa bajada para guardarlos en el catálogo (ver "Fuera de alcance"). Mientras eso no esté, el desplegable muestra los proveedores de las OC, los creados a mano y los importados por archivo.
 - La reunión pidió que el resultado salga también **por correo de forma automática**; eso es trabajo de backend (ver "Fuera de alcance"). El frontend entrega primero la descarga manual.
 
 ## Qué ya existe y se reutiliza
@@ -31,7 +33,7 @@ Migraciones desde la 080 (la última existente es la 079). Todas con RLS usando 
 
 | Tabla | Para qué | Campos clave |
 |---|---|---|
-| `proveedores` (080) | Catálogo de proveedores | `id`, `nit`, `nit_normalizado` (solo dígitos, único), `nombre`, `email`, `telefono`, `contacto`, `notas`, `activo`, `origen` (`manual`/`oc`/`importado`). Se siembra con los proveedores ya presentes en las OC y se mantiene sola con un trigger al crear líneas de OC. |
+| `proveedores` (080) | Catálogo de proveedores | `id`, `nit`, `nit_normalizado` (solo dígitos, único), `nombre`, `email`, `telefono`, `contacto`, `notas`, `activo`, `origen` (`manual`/`oc`/`importado`/`siigo`). Se siembra con los proveedores ya presentes en las OC y se mantiene sola con un trigger al crear líneas de OC; la bajada nocturna de Siigo (trabajo de backend) agrega y actualiza el resto con `origen = 'siigo'`. |
 | `proveedor_desempeno` (081) | Una fila por (OC, proveedor) o por OC histórica importada | `proveedor_id`, `orden_id` (nulo si es histórica), `numero_oc`, `fecha_oc`, `fecha_entrega_prometida`, `fecha_entrega_real`, `factura_remision`, `cantidad_pedida`, `cantidad_recibida` (todas como sobrescritura; si son nulas se derivan de la OC), `calidad`, `calidad_comentario`, `devoluciones`, `devoluciones_detalle`, `cantidad_observaciones`, `pagos_acordados`, `tiempo_observaciones`, `observaciones`, `actualizado_por`, `actualizado_por_nombre`. Un trigger la crea al crearse la línea de OC ("se genera la OC y se abre su desempeño"). |
 | `config_app` (081, columnas nuevas) | Parámetros de evaluación | `proveedor_umbral_aprobacion` (85), `proveedor_peso_calidad/devoluciones/cantidad/tiempo` (25 c/u), `proveedor_penalizacion_dia` (5), `proveedor_penalizacion_devolucion` (25). Solo el supervisor los edita. |
 | `proveedor_reevaluaciones` (082) | Reevaluación anual, una por proveedor y año | `proveedor_id`, `anio`, `porcentaje`, `umbral` (copia del vigente), `resultado` (`continuar`/`no_continuar`), `motivo`, `detalle jsonb` (copia de promedios por división, pesos y cantidad de OC, para que la constancia no cambie si luego cambia la configuración), `creado_por`, `creado_por_nombre`. `unique (proveedor_id, anio)`. |
@@ -53,7 +55,7 @@ Solo se puntúan las OC **finalizadas** (`estado = 'listo'`) o históricas impor
 ## Pantallas y rutas
 
 - `/proveedores` — pestañas **Proveedores** y **Evaluación de selección**.
-  - Proveedores: lista con búsqueda por nombre/NIT, filas desplegables con resumen (OC, % cumplimiento, última reevaluación), botón "Abrir historial", "Nuevo proveedor" e "Importar CSV".
+  - Proveedores: arriba, un **desplegable "Elegir proveedor"** con todos por nombre que lleva directo a su historial; debajo, lista con búsqueda por nombre/NIT, filas desplegables con resumen (OC, % cumplimiento, última reevaluación), botón "Abrir historial", "Nuevo proveedor" e "Importar CSV".
   - Evaluación de selección: lista de evaluaciones y botón para crear una.
 - `/proveedores/[id]` — ficha del proveedor con pestañas:
   - **Historial:** tabla con las columnas del Excel (OC, fecha de OC, proveedor, fecha de entrega, fecha real, diferencia en días, devoluciones, observaciones, factura/remisión) más calidad, cantidad y porcentaje. Cada fila abre el desempeño de esa OC con sus 4 divisiones. Botones de exportar CSV/PDF e "Importar historial".
@@ -75,6 +77,7 @@ Solo se puntúan las OC **finalizadas** (`estado = 'listo'`) o históricas impor
 ## Fuera de alcance (a cargo de backend / más adelante)
 
 - Aplicar las migraciones 080–083 (frontend las deja escritas en el repo; no se corre `supabase db push` desde aquí).
+- Extender la bajada nocturna de Siigo (`siigo-sync-catalogo`) para que guarde en `proveedores` **todos** los proveedores de Siigo (hoy solo compara nombres de los que ya están en OC). Ojo: el endpoint de Siigo que usa hoy (`/v1/customers`) devuelve terceros en general, no solo proveedores; hay que filtrar por tipo proveedor. Hace falta una primera corrida completa (`{ completo: true }`) para llenar el catálogo.
 - Envío automático por correo del resultado de la OC y recordatorio anual de reevaluación (Edge Function / `cola_correos` con adjuntos / `pg_cron`; lo coordina el usuario con Juan Pablo).
 - Archivos `.xlsx` reales.
 - Vincular el desempeño con la factura de Siigo.

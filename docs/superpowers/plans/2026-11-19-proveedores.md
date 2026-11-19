@@ -39,7 +39,7 @@
 
 **Páginas:** `app/(panel)/proveedores/page.tsx` + `loading.tsx`, `app/(panel)/proveedores/[id]/page.tsx` + `loading.tsx`, `app/(panel)/proveedores/seleccion/[id]/page.tsx` + `loading.tsx`.
 
-**Componentes (`frontend/components/proveedores/`):** `ProveedoresTabs.tsx`, `ProveedoresLista.tsx`, `ProveedorFormDialog.tsx`, `ImportarProveedoresDialog.tsx`, `ProveedorFicha.tsx`, `HistorialTabla.tsx`, `DesempenoDialog.tsx`, `ImportarHistorialDialog.tsx`, `ReevaluacionPanel.tsx`, `SeleccionLista.tsx`, `SeleccionEditor.tsx`, `AvisoMigracion.tsx`; y `components/configuracion/ProveedoresConfig.tsx`.
+**Componentes (`frontend/components/proveedores/`):** `SelectorProveedor.tsx` (desplegable buscable con todos los proveedores por nombre, reutilizable), `ProveedoresTabs.tsx`, `ProveedoresLista.tsx`, `ProveedorFormDialog.tsx`, `ImportarProveedoresDialog.tsx`, `ProveedorFicha.tsx`, `HistorialTabla.tsx`, `DesempenoDialog.tsx`, `ImportarHistorialDialog.tsx`, `ReevaluacionPanel.tsx`, `SeleccionLista.tsx`, `SeleccionEditor.tsx`, `AvisoMigracion.tsx`; y `components/configuracion/ProveedoresConfig.tsx`.
 
 **Modificados:** `lib/permissions/roles.ts`, `components/layout/Sidebar.tsx` (y `MobileSidebarSheet.tsx` si duplica la lógica de activo), `app/(panel)/configuracion/page.tsx`, `components/compras/OrdenDetalle.tsx` (un botón/enlace).
 
@@ -77,7 +77,7 @@ create table if not exists proveedores (
   contacto        text,
   notas           text,
   activo          boolean not null default true,
-  origen          text not null default 'manual' check (origen in ('manual', 'oc', 'importado')),
+  origen          text not null default 'manual' check (origen in ('manual', 'oc', 'importado', 'siigo')),
   creado_por      uuid references auth.users(id),
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
@@ -285,10 +285,13 @@ export function descargarCsv(nombreArchivo: string, contenido: string): void {
 
 ### Tarea 5: Página de lista y diálogos
 
-**Archivos:** crear `app/(panel)/proveedores/page.tsx`, `app/(panel)/proveedores/loading.tsx`, `components/proveedores/ProveedoresTabs.tsx`, `ProveedoresLista.tsx`, `ProveedorFormDialog.tsx`, `ImportarProveedoresDialog.tsx`, `AvisoMigracion.tsx`.
+**Archivos:** crear `app/(panel)/proveedores/page.tsx`, `app/(panel)/proveedores/loading.tsx`, `components/proveedores/ProveedoresTabs.tsx`, `SelectorProveedor.tsx`, `ProveedoresLista.tsx`, `ProveedorFormDialog.tsx`, `ImportarProveedoresDialog.tsx`, `AvisoMigracion.tsx`.
+
+**Interfaces — produce:** `SelectorProveedor({ proveedores, valor, onSeleccionar, placeholder?, excluirIds? }: { proveedores: ProveedorFila[]; valor: number | null; onSeleccionar: (proveedor: ProveedorFila) => void; placeholder?: string; excluirIds?: number[] })`. Desplegable con campo de búsqueda: muestra el **nombre** (y el NIT en gris), filtra por nombre o NIT sin tildes ni mayúsculas (el NIT ignorando puntos y guiones), lista solo proveedores activos y muestra "Sin coincidencias" cuando no hay. Se construye con `components/ui/popover.tsx` + `Input` (no hay un componente `Command`/combobox en `components/ui`; revisar la API de `popover.tsx` antes de usarlo porque es base-ui).
 
 - [ ] **Paso 1:** `page.tsx` (Server Component con `RoleGuard allowed={ROUTE_PERMISSIONS.proveedores}`, mismo esqueleto que `compras/page.tsx`): título "Proveedores", subtítulo breve, y `<ProveedoresTabs />`. `loading.tsx` con `LoadingSkeleton`.
 - [ ] **Paso 2:** `ProveedoresTabs` (cliente, `components/ui/tabs`): pestaña "Proveedores" (`ProveedoresLista`) y pestaña "Evaluación de selección" (en esta fase solo un estado vacío "Disponible en la fase 3"; se reemplaza en la Tarea 18).
+- [ ] **Paso 2b:** `SelectorProveedor` según la interfaz de arriba. En `ProveedoresTabs`, sobre la lista, un `SelectorProveedor` con la etiqueta "Elegir proveedor" que al seleccionar navega a `/proveedores/{id}` (`useRouter().push`). Los proveedores se cargan una sola vez con `fetchProveedores` y se comparten entre el selector y la lista.
 - [ ] **Paso 3:** `ProveedoresLista`: carga con `fetchProveedores` (estado de carga con skeleton, todo `setState` dentro de callbacks de promesa); buscador por nombre o NIT (sin tildes ni mayúsculas, ignorando puntos/guiones del NIT con `normalizarNit`); tarjeta-resumen con el conteo; cada fila es desplegable (nombre, NIT; al abrir: correo, teléfono, contacto, nº de OC, % cumplimiento) con los botones "Abrir historial" (`Link` a `/proveedores/{id}`), "Editar" y, solo `supervisor` (recibir `puedeEliminar` por prop desde la página), "Eliminar" con confirmación. Botones superiores "Nuevo proveedor" e "Importar CSV".
 - [ ] **Paso 4:** `ProveedorFormDialog`: `react-hook-form` + `zodResolver(guardarProveedorSchema)`, patrón de `EventoFormDialog.tsx`; crea o edita según reciba `proveedor`; `toast` de éxito/error; llama `onGuardado` para recargar.
 - [ ] **Paso 5:** `ImportarProveedoresDialog`: selector de archivo o arrastrar; lee el texto con `File.text()`, usa `leerCsvProveedores`, muestra vista previa (primeras 10 filas), cantidad válida y la lista de errores con su línea; botón "Importar N proveedores" llama `importarProveedores` y muestra creados/actualizados.
@@ -900,7 +903,7 @@ commit;
 **Archivos:** crear `app/(panel)/proveedores/seleccion/[id]/page.tsx` + `loading.tsx`, `components/proveedores/SeleccionLista.tsx`, `SeleccionEditor.tsx`, `lib/export/proveedor-seleccion.ts`; modificar `ProveedoresTabs.tsx`.
 
 - [ ] **Paso 1:** `SeleccionLista` en la pestaña "Evaluación de selección": lista de evaluaciones (título, estado, elegido, fecha, quién), botón "Nueva evaluación" que lleva al editor (`/proveedores/seleccion/nuevo`; el segmento `[id]` acepta el texto `nuevo`).
-- [ ] **Paso 2:** `SeleccionEditor`: título y necesidad; filas de candidatos (agregar/quitar): elegir un proveedor existente (buscador sobre `fetchProveedores`; al elegirlo precarga tiempo y calidad con `fetchReferenciaProveedor`) o escribir un nombre nuevo; precio, tiempo de entrega (días), calidad (desplegable) y observaciones. **Cuadro comparativo** en vivo con `compararCandidatos`: resalta con color el mejor valor de cada criterio, muestra el puntaje global, marca "Recomendado" y permite elegir el proveedor ganador; campo "Conclusión"; botón "Marcar como decidida".
+- [ ] **Paso 2:** `SeleccionEditor`: título y necesidad; filas de candidatos (agregar/quitar): elegir un proveedor existente con el `SelectorProveedor` (desplegable con todos por nombre; excluye los ya elegidos en otras filas con `excluirIds`; al elegirlo precarga tiempo y calidad con `fetchReferenciaProveedor`) o escribir un nombre nuevo; precio, tiempo de entrega (días), calidad (desplegable) y observaciones. **Cuadro comparativo** en vivo con `compararCandidatos`: resalta con color el mejor valor de cada criterio, muestra el puntaje global, marca "Recomendado" y permite elegir el proveedor ganador; campo "Conclusión"; botón "Marcar como decidida".
 - [ ] **Paso 3:** exportación: CSV (una fila por candidato con sus valores y puntajes + fila de conclusión) y PDF (título, necesidad, cuadro comparativo con el mejor de cada criterio resaltado, recomendado, elegido y conclusión).
 - [ ] **Paso 4:** verificación manual: crear una evaluación con un proveedor existente y uno nuevo, ver el cuadro y los resaltados, decidir, descargar CSV/PDF.
 - [ ] **Paso 5:** `npx tsc --noEmit` y `npm run lint`.
@@ -919,6 +922,7 @@ commit;
 ## Pendiente de backend (no lo hace el frontend)
 
 1. Aplicar las migraciones 080, 081, 082 y 083, en ese orden.
+1b. **Cargar todos los proveedores de Siigo en el catálogo:** extender la Edge Function `siigo-sync-catalogo` (`supabase/functions/siigo-sync-catalogo/index.ts`, bloque "Proveedores") para que, además de comparar nombres, haga `upsert` en `proveedores` por `nit_normalizado` de cada proveedor que devuelve `listarProveedoresSiigo` (`origen = 'siigo'`; actualizar `nombre` y `activo` si cambiaron; no pisar `email`/`telefono`/`contacto`/`notas` ya escritos a mano). El endpoint que usa hoy (`/v1/customers`) trae terceros en general, así que hay que **filtrar por tipo proveedor** (revisar el campo `type` de la respuesta de Siigo) para no llenar el desplegable con clientes. Hace falta una primera corrida completa (`{ completo: true }`). Hasta que esto esté, el desplegable muestra los proveedores de las OC, los creados a mano y los importados por archivo.
 2. Envío automático por correo del resultado de la OC y del recordatorio anual de reevaluación (Edge Function sobre `cola_correos` con adjuntos, migración 045, y `pg_cron`); lo coordina el usuario con Juan Pablo. Mientras tanto, el resultado se descarga a mano.
 3. Confirmar con compras cómo se escribe el NIT de un mismo proveedor (con o sin dígito de verificación), porque se compara solo por dígitos.
 
