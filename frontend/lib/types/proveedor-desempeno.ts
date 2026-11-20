@@ -67,3 +67,20 @@ export const configDesempenoSchema = z
   )
 
 export type ConfigDesempenoInput = ConfigDesempeno
+
+const fechaONula = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable()
+
+/** Una fila ya leída del cuadro de control (Excel/CSV) para guardar como historial. */
+export const filaHistorialImportadaSchema = z.object({
+  numero_oc: z.string().trim().min(1).max(60),
+  fecha_oc: fechaONula,
+  fecha_entrega_prometida: fechaONula,
+  fecha_entrega_real: fechaONula,
+  devoluciones: z.number().int().min(0),
+  observaciones: z.string().trim().max(2000).nullable(),
+  factura_remision: z.string().trim().max(120).nullable(),
+})
+
+export type ImportarHistorialResultado =
+  | { ok: true; creados: number; actualizados: number; vinculados: number }
+  | { ok: false; error: string }

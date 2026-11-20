@@ -2,9 +2,10 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { ClipboardList, Download } from 'lucide-react'
+import { ClipboardList, Download, Upload } from 'lucide-react'
 import { AvisoMigracion } from '@/components/proveedores/AvisoMigracion'
 import { DesempenoDialog } from '@/components/proveedores/DesempenoDialog'
+import { ImportarHistorialDialog } from '@/components/proveedores/ImportarHistorialDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -112,6 +113,7 @@ export function HistorialTabla({
     () => filas.find((f) => ordenInicial != null && f.orden_id === ordenInicial) ?? null
   )
   const [dialogoAbierto, setDialogoAbierto] = useState(seleccionada != null)
+  const [importarAbierto, setImportarAbierto] = useState(false)
 
   const anios = useMemo(
     () =>
@@ -145,14 +147,33 @@ export function HistorialTabla({
     return <AvisoMigracion migracion="080_proveedores.sql" />
   }
 
+  const dialogoImportar = (
+    <ImportarHistorialDialog
+      abierto={importarAbierto}
+      onOpenChange={setImportarAbierto}
+      proveedorId={proveedorId}
+      proveedorNombre={proveedor.nombre}
+      onImportado={() => router.refresh()}
+    />
+  )
+
   if (filas.length === 0) {
     return (
       <div className="rounded-md border">
         <EmptyState
           icon={ClipboardList}
           title="Este proveedor todavía no tiene órdenes de compra"
-          description={error ?? 'Aparecen aquí cuando se crean en Compras.'}
+          description={
+            error ?? 'Aparecen aquí cuando se crean en Compras, o puedes traer su historial desde el Excel de control.'
+          }
         />
+        <div className="flex justify-center pb-8">
+          <Button variant="outline" onClick={() => setImportarAbierto(true)}>
+            <Upload aria-hidden="true" />
+            Importar historial
+          </Button>
+        </div>
+        {dialogoImportar}
       </div>
     )
   }
@@ -230,7 +251,11 @@ export function HistorialTabla({
           </select>
         )}
 
-        <div className="flex gap-2 sm:ml-auto">
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
+          <Button variant="outline" size="sm" onClick={() => setImportarAbierto(true)}>
+            <Upload aria-hidden="true" />
+            Importar historial
+          </Button>
           <Button variant="outline" size="sm" onClick={() => descargarCsvDesempeno(proveedor, visibles)}>
             <Download aria-hidden="true" />
             CSV
@@ -353,6 +378,7 @@ export function HistorialTabla({
         config={config}
         onGuardado={() => router.refresh()}
       />
+      {dialogoImportar}
     </div>
   )
 }
