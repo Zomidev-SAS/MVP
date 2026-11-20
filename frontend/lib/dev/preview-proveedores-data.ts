@@ -1,5 +1,6 @@
 import type { OrdenParaHistorial } from '@/lib/proveedores/historial'
 import type { DesempenoRegistro } from '@/lib/types/proveedor-desempeno'
+import type { Reevaluacion } from '@/lib/types/proveedor-reevaluacion'
 import type { Proveedor, ProveedorFila } from '@/lib/types/proveedor'
 
 const FECHA = '2026-01-15T12:00:00.000Z'
@@ -210,4 +211,33 @@ export function getDevPreviewHistorial(): {
       }),
     ],
   }
+}
+
+/** Una reevaluación anterior de ejemplo (2025) para ver el historial de decisiones. */
+export function getDevPreviewReevaluaciones(proveedorId: number): Reevaluacion[] {
+  return [
+    {
+      id: 1,
+      proveedor_id: proveedorId,
+      anio: 2024,
+      porcentaje: 88.4,
+      umbral: 85,
+      resultado: 'continuar',
+      motivo: null,
+      detalle: {
+        total: 9,
+        calificadas: 9,
+        promedios: { calidad: 94.4, devoluciones: 91.7, cantidad: 97.2, tiempo: 70.6 },
+        conRetraso: 3,
+        devoluciones: 3,
+        diasRetrasoPromedio: 4.7,
+        pesos: { calidad: 25, devoluciones: 25, cantidad: 25, tiempo: 25 },
+        penalizacionDia: 5,
+        penalizacionDevolucion: 25,
+      },
+      creado_por_nombre: 'Vista Previa Dev',
+      created_at: '2024-12-18T15:00:00.000Z',
+      updated_at: '2024-12-18T15:00:00.000Z',
+    },
+  ]
 }

@@ -20,6 +20,7 @@ import {
   type ProveedorFila,
   type ProveedorResultado,
   type ProveedoresListado,
+  type UltimaReevaluacion,
 } from '@/lib/types/proveedor'
 
 const COLUMNAS_PROVEEDOR =
@@ -65,6 +66,28 @@ export async function fetchProveedores(): Promise<ProveedoresListado> {
     console.error('Failed to load historiales for proveedores list:', fallo)
   }
 
+  // Última reevaluación de cada proveedor; sin la migración 082 la columna queda vacía.
+  const ultimaPorProveedor = new Map<number, UltimaReevaluacion>()
+  const { data: reevaluaciones, error: errorReevaluaciones } = await supabase
+    .from('proveedor_reevaluaciones')
+    .select('proveedor_id, anio, resultado, porcentaje')
+    .order('anio', { ascending: false })
+  if (errorReevaluaciones) {
+    if (!esMigracionPendiente(errorReevaluaciones)) {
+      console.error('Failed to load reevaluaciones for list:', errorReevaluaciones)
+    }
+  } else {
+    for (const r of (reevaluaciones ?? []) as Array<UltimaReevaluacion & { proveedor_id: number }>) {
+      if (!ultimaPorProveedor.has(r.proveedor_id)) {
+        ultimaPorProveedor.set(r.proveedor_id, {
+          anio: r.anio,
+          resultado: r.resultado,
+          porcentaje: Number(r.porcentaje),
+        })
+      }
+    }
+  }
+
   const filas: ProveedorFila[] = proveedores.map((p) => {
     const historial = historiales.get(p.id) ?? []
     const globales = historial.map((f) => f.puntajes?.global ?? null)
@@ -73,8 +96,7 @@ export async function fetchProveedores(): Promise<ProveedoresListado> {
       total_ordenes: historial.length,
       ordenes_puntuadas: globales.filter((g) => g != null).length,
       porcentaje_promedio: promedio(globales),
-      // La reevaluación anual llega en la fase 3.
-      ultima_reevaluacion: null,
+      ultima_reevaluacion: ultimaPorProveedor.get(p.id) ?? null,
     }
   })
 
