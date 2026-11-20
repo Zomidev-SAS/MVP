@@ -32,6 +32,8 @@ async function ComprasContent({ searchParams }: ComprasPageProps) {
     (result.profile.rol === 'supervisor' || result.profile.rol === 'compras')
 
   const puedeFirmar = result.status === 'authenticated' && result.profile.rol === 'supervisor'
+  const puedeVerProveedores =
+    result.status === 'authenticated' && ROUTE_PERMISSIONS.proveedores.includes(result.profile.rol)
 
   const catalogoSiigo = puedeGestionarSiigo ? await fetchSiigoCatalogoEstado() : null
 
@@ -51,6 +53,7 @@ async function ComprasContent({ searchParams }: ComprasPageProps) {
         productoInicial={productoInicial}
         puedeGestionarSiigo={puedeGestionarSiigo}
         puedeFirmar={puedeFirmar}
+        puedeVerProveedores={puedeVerProveedores}
       />
       {catalogoSiigo && <SiigoCatalogoDiferencias estado={catalogoSiigo} />}
     </div>

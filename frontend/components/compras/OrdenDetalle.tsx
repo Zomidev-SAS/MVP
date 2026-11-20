@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { CheckCircle2, Download, FileSearch, FileText, History, PackageCheck, Pencil, RotateCcw, Send, Trash2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -38,6 +39,8 @@ interface OrdenDetalleProps {
   /** Compras y supervisor pueden modificar la orden; el resto solo la ve. */
   puedeGestionar: boolean
   puedeFirmar: boolean
+  /** Supervisor, comercial, compras y auditoría pueden abrir el desempeño del proveedor. */
+  puedeVerProveedores?: boolean
   enviandoSiigo: boolean
   onRecargar: () => void
   onEditar: () => void
@@ -55,6 +58,7 @@ export function OrdenDetalle({
   orden,
   puedeGestionar,
   puedeFirmar,
+  puedeVerProveedores = false,
   enviandoSiigo,
   onRecargar,
   onEditar,
@@ -192,6 +196,14 @@ export function OrdenDetalle({
             <dd>
               {proveedor ?? '—'}
               {nit && <span className="ml-1 font-mono text-xs text-muted-foreground">NIT {nit}</span>}
+              {puedeVerProveedores && nit && (
+                <Link
+                  href={`/proveedores/nit/${encodeURIComponent(nit)}?orden=${orden.id}`}
+                  className="ml-2 text-xs text-primary underline-offset-4 hover:underline"
+                >
+                  Ver desempeño
+                </Link>
+              )}
             </dd>
             {orden.numero_oc && (
               <>

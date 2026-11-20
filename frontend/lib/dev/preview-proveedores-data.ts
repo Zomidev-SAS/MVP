@@ -53,7 +53,7 @@ export function getDevPreviewProveedores(): ProveedorFila[] {
       ultima_reevaluacion: { anio: 2025, resultado: 'continuar', porcentaje: 87.5 },
     },
     {
-      ...proveedor(3, '900.412.557-3', 'ACCESORIOS TÉCNICOS LTA', {
+      ...proveedor(3, '900.123.456', 'ACCESORIOS TÉCNICOS LTA', {
         email: 'comercial@accesoriostecnicos.example.com',
       }),
       total_ordenes: 5,

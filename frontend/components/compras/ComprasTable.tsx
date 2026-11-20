@@ -146,9 +146,16 @@ interface ComprasTableProps {
   puedeGestionarSiigo: boolean
   /** El administrador (supervisor) puede firmar las OC cargadas desde Siigo. */
   puedeFirmar: boolean
+  /** Muestra el enlace al desempeño del proveedor en el detalle de cada orden. */
+  puedeVerProveedores?: boolean
 }
 
-export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar }: ComprasTableProps) {
+export function ComprasTable({
+  productoInicial,
+  puedeGestionarSiigo,
+  puedeFirmar,
+  puedeVerProveedores = false,
+}: ComprasTableProps) {
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
@@ -479,6 +486,7 @@ export function ComprasTable({ productoInicial, puedeGestionarSiigo, puedeFirmar
                 orden={orden}
                 puedeGestionar={puedeGestionarSiigo}
                 puedeFirmar={puedeFirmar}
+                puedeVerProveedores={puedeVerProveedores}
                 enviandoSiigo={enviandoSiigoId === orden.id}
                 onRecargar={recargar}
                 onEditar={() => abrirEditar(orden)}
