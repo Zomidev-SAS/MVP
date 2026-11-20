@@ -6,13 +6,11 @@ import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import { getDevPreviewHistorial, getDevPreviewProveedores } from '@/lib/dev/preview-proveedores-data'
 import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { esMigracionPendiente } from '@/lib/proveedores/errores'
-import {
-  construirFilasHistorial,
-  type FilaHistorial,
-  type OrdenParaHistorial,
-} from '@/lib/proveedores/historial'
+import { CONFIG_DESEMPENO_DEFAULT, promedio, type ConfigDesempeno } from '@/lib/proveedores/desempeno'
+import { construirFilasHistorial, type FilaHistorial } from '@/lib/proveedores/historial'
 import { normalizarNit } from '@/lib/proveedores/nit'
-import type { EstadoOrdenCompra } from '@/lib/types/orden-compra'
+import { leerConfigDesempeno } from '@/lib/supabase/proveedor-config'
+import { cargarHistoriales, ErrorHistorial } from '@/lib/supabase/proveedor-historial'
 import {
   MIGRACION_PENDIENTE,
   guardarProveedorSchema,
@@ -28,46 +26,12 @@ const COLUMNAS_PROVEEDOR =
   'id, nit, nit_normalizado, nombre, email, telefono, contacto, notas, activo, origen, created_at, updated_at'
 
 const MENSAJE_MIGRACION = 'Falta aplicar la migración 080 en Supabase.'
-const TAMANO_PAGINA = 1000
 const TAMANO_LOTE = 200
 const MAX_FILAS_IMPORTACION = 2000
-
-type Cliente = Awaited<ReturnType<typeof createClient>>
 
 function vacioANull(valor: string): string | null {
   const limpio = valor.trim()
   return limpio === '' ? null : limpio
-}
-
-/** Cuántas OC distintas tiene cada proveedor (por NIT normalizado), leyendo las líneas por páginas. */
-async function contarOrdenesPorNit(supabase: Cliente): Promise<Map<string, number>> {
-  const ordenesPorNit = new Map<string, Set<number>>()
-
-  for (let desde = 0; ; desde += TAMANO_PAGINA) {
-    const { data, error } = await supabase
-      .from('orden_compra_items')
-      .select('orden_id, proveedor_nit_normalizado')
-      .not('proveedor_nit_normalizado', 'is', null)
-      .order('id', { ascending: true })
-      .range(desde, desde + TAMANO_PAGINA - 1)
-
-    if (error) {
-      console.error('Failed to count ordenes por proveedor:', error)
-      break
-    }
-
-    const filas = (data ?? []) as { orden_id: number; proveedor_nit_normalizado: string | null }[]
-    for (const fila of filas) {
-      if (!fila.proveedor_nit_normalizado) continue
-      const ordenes = ordenesPorNit.get(fila.proveedor_nit_normalizado) ?? new Set<number>()
-      ordenes.add(fila.orden_id)
-      ordenesPorNit.set(fila.proveedor_nit_normalizado, ordenes)
-    }
-
-    if (filas.length < TAMANO_PAGINA) break
-  }
-
-  return new Map([...ordenesPorNit].map(([nit, ordenes]) => [nit, ordenes.size]))
 }
 
 export async function fetchProveedores(): Promise<ProveedoresListado> {
@@ -91,16 +55,28 @@ export async function fetchProveedores(): Promise<ProveedoresListado> {
   }
 
   const proveedores = (data ?? []) as Proveedor[]
-  const conteo = await contarOrdenesPorNit(supabase)
+  const config = await leerConfigDesempeno(supabase)
 
-  // El porcentaje y la reevaluación se completan en las fases 2 y 3.
-  const filas: ProveedorFila[] = proveedores.map((p) => ({
-    ...p,
-    total_ordenes: conteo.get(p.nit_normalizado) ?? 0,
-    ordenes_puntuadas: 0,
-    porcentaje_promedio: null,
-    ultima_reevaluacion: null,
-  }))
+  let historiales = new Map<number, FilaHistorial[]>()
+  try {
+    historiales = await cargarHistoriales(supabase, proveedores, config)
+  } catch (fallo) {
+    // La lista se muestra igual; solo faltarán los conteos y porcentajes.
+    console.error('Failed to load historiales for proveedores list:', fallo)
+  }
+
+  const filas: ProveedorFila[] = proveedores.map((p) => {
+    const historial = historiales.get(p.id) ?? []
+    const globales = historial.map((f) => f.puntajes?.global ?? null)
+    return {
+      ...p,
+      total_ordenes: historial.length,
+      ordenes_puntuadas: globales.filter((g) => g != null).length,
+      porcentaje_promedio: promedio(globales),
+      // La reevaluación anual llega en la fase 3.
+      ultima_reevaluacion: null,
+    }
+  })
 
   return { filas }
 }
@@ -345,145 +321,81 @@ export async function importarProveedores(
 }
 
 // ---------------------------------------------------------------------------
-// Historial de órdenes de un proveedor
+// Historial de órdenes de un proveedor (con su desempeño)
 // ---------------------------------------------------------------------------
-
-const TAMANO_CONSULTA_IN = 150
-
-const SELECT_ORDEN_HISTORIAL =
-  'id, numero_oc, fecha_pedido, fecha_vencimiento, estado, finalizada_at, factura_proveedor_prefijo, factura_proveedor_numero'
-
-type OrdenRow = {
-  id: number
-  numero_oc: string | null
-  fecha_pedido: string
-  fecha_vencimiento: string | null
-  estado: EstadoOrdenCompra
-  finalizada_at: string | null
-  factura_proveedor_prefijo: string | null
-  factura_proveedor_numero: string | null
-  fecha_cierre?: string | null
-}
-
-type FilasOrdenes = { data: OrdenRow[] | null; error: { code?: string } | null }
-
-type ItemRow = { id: number; orden_id: number; cantidad: number; cantidad_recibida: number | null }
-
-function enLotes<T>(lista: T[], tamano: number): T[][] {
-  const lotes: T[][] = []
-  for (let i = 0; i < lista.length; i += tamano) lotes.push(lista.slice(i, i + tamano))
-  return lotes
-}
 
 export async function fetchHistorialProveedor(
   proveedorId: number
-): Promise<{ filas: FilaHistorial[]; error?: string }> {
-  if (!Number.isInteger(proveedorId) || proveedorId <= 0) return { filas: [] }
+): Promise<{ filas: FilaHistorial[]; config: ConfigDesempeno; error?: string }> {
+  if (!Number.isInteger(proveedorId) || proveedorId <= 0) {
+    return { filas: [], config: CONFIG_DESEMPENO_DEFAULT }
+  }
 
   if (isDevBypassActive()) {
-    return { filas: getDevPreviewHistorial() }
+    const { ordenes, registros } = getDevPreviewHistorial()
+    return {
+      filas: construirFilasHistorial(ordenes, registros, CONFIG_DESEMPENO_DEFAULT),
+      config: CONFIG_DESEMPENO_DEFAULT,
+    }
   }
 
   const auth = await requireRole(ROUTE_PERMISSIONS.proveedores)
-  if (!auth.ok) return { filas: [], error: auth.error }
+  if (!auth.ok) return { filas: [], config: CONFIG_DESEMPENO_DEFAULT, error: auth.error }
 
   const supabase = await createClient()
+  const config = await leerConfigDesempeno(supabase)
 
-  const { data: proveedor, error: errorProveedor } = await supabase
+  const { data: proveedor, error } = await supabase
     .from('proveedores')
-    .select('nit_normalizado')
+    .select('id, nit_normalizado')
     .eq('id', proveedorId)
     .maybeSingle()
 
-  if (errorProveedor) {
-    if (esMigracionPendiente(errorProveedor)) return { filas: [], error: MIGRACION_PENDIENTE }
-    console.error('Failed to load proveedor for historial:', errorProveedor)
-    return { filas: [], error: 'No se pudo cargar el historial.' }
+  if (error) {
+    if (esMigracionPendiente(error)) return { filas: [], config, error: MIGRACION_PENDIENTE }
+    console.error('Failed to load proveedor for historial:', error)
+    return { filas: [], config, error: 'No se pudo cargar el historial.' }
   }
-  if (!proveedor) return { filas: [] }
-  const nit = (proveedor as { nit_normalizado: string }).nit_normalizado
+  if (!proveedor) return { filas: [], config }
 
-  // Líneas de OC de este proveedor (por páginas, el límite de Supabase es 1000 filas).
-  const items: ItemRow[] = []
-  for (let desde = 0; ; desde += TAMANO_PAGINA) {
-    const { data, error } = await supabase
-      .from('orden_compra_items')
-      .select('id, orden_id, cantidad, cantidad_recibida')
-      .eq('proveedor_nit_normalizado', nit)
-      .order('id', { ascending: true })
-      .range(desde, desde + TAMANO_PAGINA - 1)
-
-    if (error) {
-      if (esMigracionPendiente(error)) return { filas: [], error: MIGRACION_PENDIENTE }
-      console.error('Failed to load items for historial:', error)
-      return { filas: [], error: 'No se pudo cargar el historial.' }
+  try {
+    const historiales = await cargarHistoriales(
+      supabase,
+      [proveedor as { id: number; nit_normalizado: string }],
+      config
+    )
+    return { filas: historiales.get(proveedorId) ?? [], config }
+  } catch (fallo) {
+    if (fallo instanceof ErrorHistorial && fallo.migracionPendiente) {
+      return { filas: [], config, error: MIGRACION_PENDIENTE }
     }
-    const pagina = (data ?? []) as ItemRow[]
-    items.push(...pagina)
-    if (pagina.length < TAMANO_PAGINA) break
+    console.error('Failed to load historial:', fallo)
+    return { filas: [], config, error: 'No se pudo cargar el historial.' }
   }
+}
 
-  const ordenIds = [...new Set(items.map((i) => i.orden_id))]
-  if (ordenIds.length === 0) return { filas: [] }
+/** Id del proveedor por NIT (para enlazar desde una orden de compra). */
+export async function fetchProveedorIdPorNit(nit: string): Promise<number | null> {
+  const nitNormalizado = normalizarNit(nit)
+  if (!nitNormalizado) return null
 
-  const ordenes: OrdenRow[] = []
-  for (const lote of enLotes(ordenIds, TAMANO_CONSULTA_IN)) {
-    // fecha_cierre llega con la migración 079: si aún no existe se pide sin ella.
-    let respuesta = (await supabase
-      .from('ordenes_compra')
-      .select(`${SELECT_ORDEN_HISTORIAL}, fecha_cierre`)
-      .in('id', lote)) as unknown as FilasOrdenes
-    if (respuesta.error?.code === '42703') {
-      respuesta = (await supabase
-        .from('ordenes_compra')
-        .select(SELECT_ORDEN_HISTORIAL)
-        .in('id', lote)) as unknown as FilasOrdenes
-    }
-    if (respuesta.error) {
-      console.error('Failed to load ordenes for historial:', respuesta.error)
-      return { filas: [], error: 'No se pudo cargar el historial.' }
-    }
-    ordenes.push(...(respuesta.data ?? []))
+  if (isDevBypassActive()) {
+    return getDevPreviewProveedores().find((p) => p.nit_normalizado === nitNormalizado)?.id ?? null
   }
 
-  const idsItemsDelProveedor = new Set(items.map((i) => i.id))
-  const recepcionesPorOrden = new Map<number, string[]>()
-  for (const lote of enLotes(ordenIds, TAMANO_CONSULTA_IN)) {
-    const { data, error } = await supabase
-      .from('orden_compra_recepciones')
-      .select('orden_id, item_id, created_at')
-      .in('orden_id', lote)
-    if (error) {
-      // Sin entregas parciales la fecha real se toma de la fecha de cierre de la orden.
-      console.error('Failed to load recepciones for historial:', error)
-      continue
-    }
-    for (const r of (data ?? []) as { orden_id: number; item_id: number | null; created_at: string }[]) {
-      if (r.item_id == null || !idsItemsDelProveedor.has(r.item_id)) continue
-      const lista = recepcionesPorOrden.get(r.orden_id) ?? []
-      lista.push(r.created_at)
-      recepcionesPorOrden.set(r.orden_id, lista)
-    }
+  const auth = await requireRole(ROUTE_PERMISSIONS.proveedores)
+  if (!auth.ok) return null
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('proveedores')
+    .select('id')
+    .eq('nit_normalizado', nitNormalizado)
+    .maybeSingle()
+
+  if (error) {
+    if (!esMigracionPendiente(error)) console.error('Failed to find proveedor by NIT:', error)
+    return null
   }
-
-  const entradas: OrdenParaHistorial[] = ordenes.map((orden) => ({
-    id: orden.id,
-    numero_oc: orden.numero_oc,
-    fecha_pedido: orden.fecha_pedido,
-    fecha_vencimiento: orden.fecha_vencimiento,
-    fecha_cierre: orden.fecha_cierre ?? null,
-    finalizada_at: orden.finalizada_at,
-    estado: orden.estado,
-    factura_proveedor_prefijo: orden.factura_proveedor_prefijo,
-    factura_proveedor_numero: orden.factura_proveedor_numero,
-    items: items
-      .filter((i) => i.orden_id === orden.id)
-      .map((i) => ({
-        cantidad: Number(i.cantidad),
-        cantidad_recibida: i.cantidad_recibida == null ? null : Number(i.cantidad_recibida),
-      })),
-    recepciones: recepcionesPorOrden.get(orden.id) ?? [],
-  }))
-
-  return { filas: construirFilasHistorial(entradas) }
+  return (data as { id: number } | null)?.id ?? null
 }

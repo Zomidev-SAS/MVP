@@ -1,5 +1,5 @@
-import { diferenciaEnDias } from '@/lib/proveedores/fechas'
-import type { FilaHistorial } from '@/lib/proveedores/historial'
+import type { OrdenParaHistorial } from '@/lib/proveedores/historial'
+import type { DesempenoRegistro } from '@/lib/types/proveedor-desempeno'
 import type { Proveedor, ProveedorFila } from '@/lib/types/proveedor'
 
 const FECHA = '2026-01-15T12:00:00.000Z'
@@ -109,47 +109,105 @@ export function getDevPreviewProveedores(): ProveedorFila[] {
   ]
 }
 
-function filaHistorial(
+function orden(
+  id: number,
   numeroOc: string,
   fechaOc: string,
   prometida: string,
   real: string | null,
   factura: string | null,
-  extra: Partial<FilaHistorial> = {}
-): FilaHistorial {
+  extra: Partial<OrdenParaHistorial> = {}
+): OrdenParaHistorial {
+  const [prefijo, numero] = factura ? factura.split('-') : [null, null]
   return {
-    clave: `oc-${numeroOc}`,
-    orden_id: Number(numeroOc.split('-').at(-1)),
+    id,
     numero_oc: numeroOc,
-    fecha_oc: fechaOc,
+    fecha_pedido: fechaOc,
+    fecha_vencimiento: prometida,
+    fecha_cierre: real,
+    finalizada_at: real ? `${real}T17:00:00.000Z` : null,
     estado: 'listo',
-    fecha_entrega_prometida: prometida,
-    fecha_entrega_real: real,
-    diferencia_dias: diferenciaEnDias(prometida, real),
-    cantidad_pedida: 20,
-    cantidad_recibida: 20,
-    factura_remision: factura,
+    factura_proveedor_prefijo: prefijo,
+    factura_proveedor_numero: numero,
+    items: [{ cantidad: 20, cantidad_recibida: 20 }],
+    recepciones: [],
+    ...extra,
+  }
+}
+
+function registro(
+  id: number,
+  ordenId: number | null,
+  extra: Partial<DesempenoRegistro> = {}
+): DesempenoRegistro {
+  return {
+    id,
+    proveedor_id: 2,
+    orden_id: ordenId,
+    numero_oc: null,
+    fecha_oc: null,
+    fecha_entrega_prometida: null,
+    fecha_entrega_real: null,
+    factura_remision: null,
+    cantidad_pedida: null,
+    cantidad_recibida: null,
+    calidad: null,
+    calidad_comentario: null,
     devoluciones: 0,
+    devoluciones_detalle: null,
+    cantidad_observaciones: null,
+    pagos_acordados: null,
+    tiempo_observaciones: null,
+    observaciones: null,
+    actualizado_por_nombre: 'Vista Previa Dev',
+    updated_at: '2025-08-20T15:30:00.000Z',
     ...extra,
   }
 }
 
 /** Historial de ejemplo con el aspecto del cuadro de control de entregas de compras. */
-export function getDevPreviewHistorial(): FilaHistorial[] {
-  return [
-    filaHistorial('OC-1-3190', '2026-11-10', '2026-11-24', null, null, {
-      estado: 'en_curso',
-      cantidad_pedida: 40,
-      cantidad_recibida: 12,
-    }),
-    filaHistorial('OC-1-2868', '2025-08-18', '2025-08-19', '2025-08-19', 'FC-39982'),
-    filaHistorial('OC-1-2815', '2025-08-11', '2025-08-12', '2025-08-12', 'FC-39746'),
-    filaHistorial('OC-1-2798', '2025-08-04', '2025-08-05', '2025-08-08', 'FC-39529', {
-      cantidad_recibida: 18,
-      devoluciones: 2,
-    }),
-    filaHistorial('OC-1-2761', '2025-07-21', '2025-07-22', '2025-07-22', 'FC-39119'),
-    filaHistorial('OC-1-2745', '2025-07-14', '2025-07-15', '2025-07-15', 'FC-38873'),
-    filaHistorial('OC-1-2737', '2025-07-07', '2025-08-22', '2025-07-08', 'FC-38723'),
-  ]
+export function getDevPreviewHistorial(): {
+  ordenes: OrdenParaHistorial[]
+  registros: DesempenoRegistro[]
+} {
+  return {
+    ordenes: [
+      orden(3190, 'OC-1-3190', '2026-11-10', '2026-11-24', null, null, {
+        estado: 'en_curso',
+        fecha_cierre: null,
+        finalizada_at: null,
+        items: [{ cantidad: 40, cantidad_recibida: 12 }],
+      }),
+      orden(2868, 'OC-1-2868', '2025-08-18', '2025-08-19', '2025-08-19', 'FC-39982'),
+      orden(2815, 'OC-1-2815', '2025-08-11', '2025-08-12', '2025-08-12', 'FC-39746'),
+      orden(2798, 'OC-1-2798', '2025-08-04', '2025-08-05', '2025-08-08', 'FC-39529', {
+        items: [{ cantidad: 20, cantidad_recibida: 18 }],
+      }),
+      orden(2761, 'OC-1-2761', '2025-07-21', '2025-07-22', '2025-07-22', 'FC-39119'),
+      orden(2745, 'OC-1-2745', '2025-07-14', '2025-07-15', '2025-07-15', 'FC-38873'),
+      orden(2737, 'OC-1-2737', '2025-07-07', '2025-08-22', '2025-07-08', 'FC-38723'),
+    ],
+    registros: [
+      registro(1, 2868, { calidad: 'bien' }),
+      registro(2, 2815, { calidad: 'bien' }),
+      registro(3, 2798, {
+        calidad: 'regular',
+        calidad_comentario: 'Dos rollos con la fibra húmeda.',
+        devoluciones: 2,
+        devoluciones_detalle: 'Se devolvieron los dos rollos húmedos.',
+        tiempo_observaciones: 'Retraso en la transportadora.',
+        pagos_acordados: '2 pagos',
+      }),
+      registro(4, 2761, { calidad: 'bien' }),
+      registro(5, null, {
+        numero_oc: 'OC-1-2690',
+        fecha_oc: '2025-06-16',
+        fecha_entrega_prometida: '2025-06-20',
+        fecha_entrega_real: '2025-06-24',
+        factura_remision: 'FC-37810',
+        devoluciones: 1,
+        observaciones: 'Importada del cuadro de control de junio.',
+      }),
+    ],
+  }
 }
