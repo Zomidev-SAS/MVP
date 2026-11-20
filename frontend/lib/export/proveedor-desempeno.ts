@@ -15,18 +15,18 @@ const COLOR_MARCA: [number, number, number] = [196, 30, 46]
 const COLOR_PISTA: [number, number, number] = [232, 232, 232]
 const COLOR_TEXTO_SUAVE = 110
 
-function fechaDmy(fecha: string | null): string {
+export function fechaDmy(fecha: string | null): string {
   if (!fecha) return ''
   const [a, m, d] = fecha.split('-')
   return a && m && d ? `${d}/${m}/${a}` : fecha
 }
 
-function numeroCsv(valor: number | null | undefined): string {
+export function numeroCsv(valor: number | null | undefined): string {
   if (valor == null) return ''
   return valor.toLocaleString('es-CO', { maximumFractionDigits: 1, useGrouping: false })
 }
 
-function porcentajeTexto(valor: number | null | undefined): string {
+export function porcentajeTexto(valor: number | null | undefined): string {
   return valor == null ? 'N/A' : `${numeroCsv(valor)} %`
 }
 
@@ -34,7 +34,7 @@ function estadoTexto(estado: FilaHistorial['estado']): string {
   return estado === 'historico' ? 'Histórico' : ETIQUETA_ESTADO_OC[estado]
 }
 
-function slug(texto: string): string {
+export function slug(texto: string): string {
   return (
     texto
       .normalize('NFD')
@@ -47,12 +47,12 @@ function slug(texto: string): string {
   )
 }
 
-function hoy(): string {
+export function hoy(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
 }
 
 /** De la más antigua a la más reciente, como el cuadro de control de compras. */
-function cronologicas(filas: FilaHistorial[]): FilaHistorial[] {
+export function cronologicas(filas: FilaHistorial[]): FilaHistorial[] {
   return [...filas].sort((a, b) => (a.fecha_oc ?? '').localeCompare(b.fecha_oc ?? ''))
 }
 
@@ -60,7 +60,7 @@ function cronologicas(filas: FilaHistorial[]): FilaHistorial[] {
 // CSV
 // ---------------------------------------------------------------------------
 
-const COLUMNAS_CSV = [
+export const COLUMNAS_CSV = [
   'NÚMERO',
   'ORDEN DE COMPRA',
   'FECHA DE OC',
@@ -95,7 +95,7 @@ function observacionesDeFila(fila: FilaHistorial): string {
     .join(' | ')
 }
 
-function filaCsv(fila: FilaHistorial, indice: number, proveedor: ProveedorExportable) {
+export function filaCsv(fila: FilaHistorial, indice: number, proveedor: ProveedorExportable) {
   return [
     indice + 1,
     etiquetaOrden(fila),
@@ -191,7 +191,7 @@ export function analisisDesempeno(
   return lineas
 }
 
-function encabezado(doc: jsPDF, titulo: string, proveedor: ProveedorExportable, margen: number): number {
+export function encabezado(doc: jsPDF, titulo: string, proveedor: ProveedorExportable, margen: number): number {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(14)
   doc.text('PROCESO DE COMPRAS Y ALMACÉN', margen, 16)
@@ -209,7 +209,12 @@ function encabezado(doc: jsPDF, titulo: string, proveedor: ProveedorExportable, 
 }
 
 /** Barras de las cuatro divisiones, dibujadas con primitivas para no depender de imágenes. */
-function barrasDivisiones(doc: jsPDF, resumen: ResumenDesempeno, x: number, y: number): number {
+export function barrasDivisiones(
+  doc: jsPDF,
+  resumen: Pick<ResumenDesempeno, 'promedios'>,
+  x: number,
+  y: number
+): number {
   const divisiones: Array<[string, number | null]> = [
     ['Calidad', resumen.promedios.calidad],
     ['Devoluciones', resumen.promedios.devoluciones],
@@ -235,7 +240,7 @@ function barrasDivisiones(doc: jsPDF, resumen: ResumenDesempeno, x: number, y: n
   return y + divisiones.length * 7 + 4
 }
 
-function parrafos(doc: jsPDF, lineas: string[], x: number, y: number, ancho: number): number {
+export function parrafos(doc: jsPDF, lineas: string[], x: number, y: number, ancho: number): number {
   doc.setFontSize(9.5)
   let cursor = y
   for (const linea of lineas) {

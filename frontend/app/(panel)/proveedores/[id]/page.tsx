@@ -2,9 +2,10 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { RoleGuard } from '@/components/shared/RoleGuard'
-import { HistorialTabla } from '@/components/proveedores/HistorialTabla'
+import { ProveedorFicha } from '@/components/proveedores/ProveedorFicha'
 import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { fetchHistorialProveedor, fetchProveedorById } from '@/lib/supabase/proveedores-actions'
+import { fetchReevaluaciones } from '@/lib/supabase/proveedor-reevaluacion-actions'
 
 interface ProveedorPageProps {
   params: Promise<{ id: string }>
@@ -28,7 +29,10 @@ async function ProveedorContent({ params, searchParams }: ProveedorPageProps) {
   const proveedor = await fetchProveedorById(proveedorId)
   if (!proveedor) notFound()
 
-  const historial = await fetchHistorialProveedor(proveedorId)
+  const [historial, reevaluaciones] = await Promise.all([
+    fetchHistorialProveedor(proveedorId),
+    fetchReevaluaciones(proveedorId),
+  ])
   const datosContacto = [proveedor.contacto, proveedor.email, proveedor.telefono].filter(Boolean)
 
   return (
@@ -49,12 +53,14 @@ async function ProveedorContent({ params, searchParams }: ProveedorPageProps) {
         </p>
       </div>
 
-      <HistorialTabla
+      <ProveedorFicha
         filas={historial.filas}
-        error={historial.error}
+        errorHistorial={historial.error}
+        config={historial.config}
         proveedorId={proveedor.id}
         proveedor={{ nombre: proveedor.nombre, nit: proveedor.nit }}
-        config={historial.config}
+        reevaluaciones={reevaluaciones.reevaluaciones}
+        errorReevaluaciones={reevaluaciones.error}
         ordenInicial={ordenInicial}
       />
     </div>
