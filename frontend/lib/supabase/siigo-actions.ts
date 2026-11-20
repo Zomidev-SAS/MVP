@@ -6,12 +6,12 @@ import { getSessionUser } from '@/lib/supabase/get-session-user'
 import type { SiigoValidacionResultado } from '@/lib/types/siigo'
 
 export async function validarSiigoOrdenCompra(datos: {
-  codigo_producto: string
+  codigo_producto?: string
   proveedor_nit?: string
 }): Promise<SiigoValidacionResultado> {
-  const codigo = datos.codigo_producto?.trim()
-  if (!codigo) {
-    return { ok: false, error: 'Código de producto requerido.' }
+  const codigo = datos.codigo_producto?.trim() || ''
+  if (!codigo && !datos.proveedor_nit?.trim()) {
+    return { ok: false, error: 'Indica el código de producto o el NIT del proveedor.' }
   }
 
   if (isDevBypassActive()) {
@@ -19,7 +19,9 @@ export async function validarSiigoOrdenCompra(datos: {
     const nit = datos.proveedor_nit?.trim()
     return {
       ok: true,
-      producto: { encontrado: true, code: codigo, name: 'Producto demo Siigo', active: true },
+      producto: codigo
+        ? { encontrado: true, code: codigo, name: 'Producto demo Siigo', active: true }
+        : null,
       proveedor: nit
         ? { encontrado: true, identification: nit, name: 'Proveedor demo Siigo', active: true }
         : null,
@@ -34,7 +36,7 @@ export async function validarSiigoOrdenCompra(datos: {
   const supabase = await createClient()
   const { data, error } = await supabase.functions.invoke('siigo-validar', {
     body: {
-      codigo_producto: codigo,
+      codigo_producto: codigo || undefined,
       proveedor_nit: datos.proveedor_nit?.trim() || undefined,
     },
   })

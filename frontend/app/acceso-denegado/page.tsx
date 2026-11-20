@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 
 export default function AccesoDenegadoPage() {
   return (
@@ -8,7 +8,9 @@ export default function AccesoDenegadoPage() {
       <p className="text-muted-foreground">
         Tu rol no tiene permiso para ver esta sección.
       </p>
-      <Button render={<Link href="/">Volver al Dashboard</Link>} />
+      <Link href="/" className={buttonVariants()}>
+        Volver al Dashboard
+      </Link>
     </div>
   )
 }

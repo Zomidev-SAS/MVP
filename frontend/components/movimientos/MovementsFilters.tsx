@@ -2,22 +2,11 @@
 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useOpcionesFiltros } from '@/lib/hooks/use-opciones-filtros'
 import type { MovimientosFiltros } from '@/lib/types/movimientos'
 
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs'
-
-const BODEGAS_REALES = [
-  'Sin Asignar',
-  'ALMACEN NIVEL 1',
-  'ALMACEN NIVEL 2',
-  'ALMACEN NIVEL 3',
-  'METALMECANICA',
-  'PRODUCTO TERMINADO',
-  'MADERAS',
-  'DESCANSABRAZOS',
-  'AUDIO Y VIDEO',
-]
 
 export function MovementsFilters({
   filtros,
@@ -26,6 +15,8 @@ export function MovementsFilters({
   filtros: MovimientosFiltros
   onChange: (filtros: MovimientosFiltros) => void
 }) {
+  const { bodegas } = useOpcionesFiltros()
+
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
       <div className="space-y-1">
@@ -46,9 +37,9 @@ export function MovementsFilters({
           className={SELECT_CLASS}
         >
           <option value="">Todas</option>
-          {BODEGAS_REALES.map((bodega) => (
-            <option key={bodega} value={bodega}>
-              {bodega}
+          {bodegas.map((bodega) => (
+            <option key={bodega.id} value={bodega.nombre}>
+              {bodega.nombre}
             </option>
           ))}
         </select>

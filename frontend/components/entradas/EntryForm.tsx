@@ -16,21 +16,10 @@ import {
 } from '@/components/ui/form'
 import { entradaSchema, type EntradaInput } from '@/lib/types/entradas'
 import { crearEntrada } from '@/lib/supabase/entradas-actions'
+import { useOpcionesFiltros } from '@/lib/hooks/use-opciones-filtros'
 
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs'
-
-const BODEGAS_REALES = [
-  'Sin Asignar',
-  'ALMACEN NIVEL 1',
-  'ALMACEN NIVEL 2',
-  'ALMACEN NIVEL 3',
-  'METALMECANICA',
-  'PRODUCTO TERMINADO',
-  'MADERAS',
-  'DESCANSABRAZOS',
-  'AUDIO Y VIDEO',
-]
 
 const VALORES_INICIALES: EntradaInput = {
   codigo_producto: '',
@@ -41,6 +30,7 @@ const VALORES_INICIALES: EntradaInput = {
 }
 
 export function EntryForm() {
+  const { bodegas } = useOpcionesFiltros()
   const form = useForm({
     resolver: zodResolver(entradaSchema),
     defaultValues: VALORES_INICIALES,
@@ -81,9 +71,9 @@ export function EntryForm() {
               <FormControl>
                 <select {...field} className={SELECT_CLASS}>
                   <option value="">Selecciona una bodega</option>
-                  {BODEGAS_REALES.map((bodega) => (
-                    <option key={bodega} value={bodega}>
-                      {bodega}
+                  {bodegas.map((bodega) => (
+                    <option key={bodega.id} value={bodega.nombre}>
+                      {bodega.nombre}
                     </option>
                   ))}
                 </select>

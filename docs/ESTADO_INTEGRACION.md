@@ -56,7 +56,7 @@ Tu `.env.local` ya apunta a `https://zkaeptnijqntuefggfru.supabase.co`. Para que
 | Área | Notas |
 |------|-------|
 | Cloud data | Sin productos/movimientos cargados, inventario y dashboard quedan vacíos |
-| Trigger sync | Placeholder de service role en migración 015 — actualizar en cloud |
+| Trigger sync | Verificado en cloud (2026-10-18): usa la service_role del Vault y llega a `sync-inventario-vin` (200). Migración 055 alinea el repo con la función real. Solo genera `salida_vin` si `dg_chasis` coincide con un `codigo_producto` |
 | vehiculosapp | Confirmar que sigue enviando `chasis` como `codigo_producto` |
 | Auth producción | Signups, Site URL, sesión 8h (B10 del PDF backend) |
 | Deploy VPS | Sin empezar |

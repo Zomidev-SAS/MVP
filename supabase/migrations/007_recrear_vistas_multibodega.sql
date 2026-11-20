@@ -50,38 +50,68 @@ create table if not exists productos (
   categoria       text references categorias_inventario(nombre)
 );
 
--- Catálogo mínimo desde movimientos legacy (columna vin)
-insert into productos (codigo_producto, nombre_producto, unidad_medida, categoria)
-select distinct
-  trim(m.vin),
-  coalesce(nullif(trim(m.marca), ''), trim(m.vin)),
-  'unidad',
-  nullif(trim(m.categoria), '')
-from movimientos_inventario m
-where m.vin is not null and trim(m.vin) <> ''
-on conflict (codigo_producto) do nothing;
+-- Catálogo mínimo desde movimientos legacy (columna vin) — protegido: en
+-- local, 006 ya renombró vin -> codigo_producto antes de llegar aquí, así
+-- que esta columna no existe y este bloque simplemente no hace nada. En
+-- cloud, donde todavía puede no haberse renombrado en el momento en que
+-- esto corra, sí se ejecuta.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'movimientos_inventario' and column_name = 'vin'
+  ) then
+    insert into productos (codigo_producto, nombre_producto, unidad_medida, categoria)
+    select distinct
+      trim(m.vin),
+      coalesce(nullif(trim(m.marca), ''), trim(m.vin)),
+      'unidad',
+      nullif(trim(m.categoria), '')
+    from movimientos_inventario m
+    where m.vin is not null and trim(m.vin) <> ''
+    on conflict (codigo_producto) do nothing;
+  end if;
+end $$;
 
--- Catálogo desde vehiculosapp (columnas dg_chasis / dg_marca)
-insert into productos (codigo_producto, nombre_producto, unidad_medida, categoria)
-select distinct
-  trim(f.dg_chasis),
-  coalesce(nullif(trim(f.dg_marca), ''), trim(f.dg_chasis)),
-  'unidad',
-  'Productos CA'
-from formularios f
-where f.dg_chasis is not null and trim(f.dg_chasis) <> ''
-on conflict (codigo_producto) do nothing;
+-- Catálogo desde vehiculosapp (columnas dg_chasis / dg_marca) — protegido:
+-- el formularios local (000_stub_formularios.sql) no tiene estas columnas,
+-- solo existen en el formularios real de producción, así que en local este
+-- bloque no hace nada y en cloud sigue funcionando igual que hoy.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'formularios' and column_name = 'dg_chasis'
+  ) then
+    insert into productos (codigo_producto, nombre_producto, unidad_medida, categoria)
+    select distinct
+      trim(f.dg_chasis),
+      coalesce(nullif(trim(f.dg_marca), ''), trim(f.dg_chasis)),
+      'unidad',
+      'Productos CA'
+    from formularios f
+    where f.dg_chasis is not null and trim(f.dg_chasis) <> ''
+    on conflict (codigo_producto) do nothing;
+  end if;
+end $$;
 
--- Catálogo desde inventario_saldos legacy si existe
-insert into productos (codigo_producto, nombre_producto, unidad_medida, categoria)
-select distinct
-  trim(s.codigo),
-  coalesce(nullif(trim(s.nombre), ''), trim(s.codigo)),
-  coalesce(nullif(trim(s.unidad), ''), 'unidad'),
-  nullif(trim(s.categoria), '')
-from inventario_saldos s
-where s.codigo is not null and trim(s.codigo) <> ''
-on conflict (codigo_producto) do nothing;
+-- Catálogo desde inventario_saldos legacy si existe — protegido: esta tabla
+-- no existe en local (no la crea ninguna migración de este repo), solo
+-- podría existir en algún entorno legacy, así que si no está, no hace nada.
+do $$
+begin
+  if to_regclass('public.inventario_saldos') is not null then
+    insert into productos (codigo_producto, nombre_producto, unidad_medida, categoria)
+    select distinct
+      trim(s.codigo),
+      coalesce(nullif(trim(s.nombre), ''), trim(s.codigo)),
+      coalesce(nullif(trim(s.unidad), ''), 'unidad'),
+      nullif(trim(s.categoria), '')
+    from inventario_saldos s
+    where s.codigo is not null and trim(s.codigo) <> ''
+    on conflict (codigo_producto) do nothing;
+  end if;
+end $$;
 
 do $$
 begin

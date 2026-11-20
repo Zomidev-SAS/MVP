@@ -10,9 +10,15 @@ import {
   ClipboardList,
   Settings,
   ShoppingCart,
+  Workflow,
+  History,
+  Mail,
+  FolderOpen,
+  Truck,
   type LucideIcon,
 } from 'lucide-react'
 import { ALL_ROLES, type Role } from '@/lib/types/database'
+import { ROLES_CON_ARCHIVOS } from '@/lib/archivos/matriz'
 
 const ROLES_CON_DASHBOARD = ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[]
 
@@ -21,14 +27,20 @@ export type RouteKey =
   | 'visualizacion'
   | 'inventario'
   | 'compras'
+  | 'proveedores'
   | 'movimientos'
   | 'formularios'
+  | 'archivos'
   | 'entradas'
   | 'ajustes'
   | 'importar'
   | 'usuarios'
   | 'configuracion'
+  | 'automatizaciones'
+  | 'actividad'
+  | 'correos'
   | 'cuenta'
+  | 'notificaciones'
 
 export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   dashboard: ROLES_CON_DASHBOARD,
@@ -37,6 +49,9 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   // cualquier rol activo — no hay restricción de lectura por rol.
   inventario: ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[],
   compras: ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[],
+  // Proveedores: desempeño, reevaluación anual y evaluación de selección. Todos los roles
+  // de la sección ven y modifican (RLS 080–083); borrar solo supervisor.
+  proveedores: ['supervisor', 'comercial', 'compras', 'auditoria'] as const,
   // RLS real (mov_select_autenticados) permite leer a cualquier activo,
   // pero mantenemos la bitácora completa reservada a supervisor/auditoria
   // (el rol "ingenieria" que la usaba ya no existe en el schema real).
@@ -44,6 +59,8 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   // Lectura: formularios operativos (entrada/salida) — sin inventario ni costos.
   formularios: [...ALL_ROLES.filter((r) => r !== 'lectura'), 'lectura'] as readonly Role[],
   // Alineado a la policy real mov_insert_roles_autorizados.
+  // Matriz por carpeta en lib/archivos/matriz.ts; aquí solo se exige ver al menos una.
+  archivos: ROLES_CON_ARCHIVOS,
   entradas: ['supervisor', 'metalmecanica', 'produccion', 'instalacion', 'compras'] as const,
   // Alineado a la policy real ajustes_insert_roles.
   ajustes: ['supervisor', 'produccion', 'metalmecanica', 'instalacion', 'compras'] as const,
@@ -51,7 +68,13 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   importar: ['supervisor', 'compras'] as const,
   usuarios: ['supervisor'] as const,
   configuracion: ['supervisor'] as const,
+  automatizaciones: ['supervisor'] as const,
+  actividad: ['supervisor', 'auditoria'] as const,
+  correos: ['supervisor', 'auditoria'] as const,
   cuenta: ALL_ROLES,
+  // La campana de notificaciones es visible para cualquier rol en el header;
+  // el historial completo en /notificaciones debe estar igualmente abierto.
+  notificaciones: ALL_ROLES,
 }
 
 /** Roles que pueden ver valor_unitario/valor_total en cualquier pantalla — igual a la matriz real de las vistas de Supabase. */
@@ -70,31 +93,38 @@ export const NAV_ITEMS: {
   { key: 'visualizacion', label: 'Panel operativo', href: '/visualizacion', icon: LayoutGrid },
   { key: 'inventario', label: 'Inventario', href: '/inventario', icon: Package },
   { key: 'compras', label: 'Compras', href: '/compras', icon: ShoppingCart },
+  { key: 'proveedores', label: 'Proveedores', href: '/proveedores', icon: Truck },
   { key: 'movimientos', label: 'Movimientos', href: '/movimientos', icon: ArrowLeftRight },
   { key: 'formularios', label: 'Formularios', href: '/formularios', icon: ClipboardList },
+  { key: 'archivos', label: 'Archivos', href: '/archivos', icon: FolderOpen },
   { key: 'entradas', label: 'Entradas', href: '/entradas', icon: FilePlus },
   { key: 'ajustes', label: 'Ajustes', href: '/ajustes', icon: SlidersHorizontal },
   { key: 'importar', label: 'Importar CSV', href: '/importar', icon: Upload },
   { key: 'usuarios', label: 'Usuarios', href: '/usuarios', icon: Users },
   { key: 'configuracion', label: 'Configuración', href: '/configuracion', icon: Settings },
+  { key: 'automatizaciones', label: 'Automatizaciones', href: '/automatizaciones', icon: Workflow },
+  { key: 'actividad', label: 'Actividad', href: '/actividad', icon: History },
+  { key: 'correos', label: 'Correos', href: '/correos', icon: Mail },
 ]
 
 /** Agrupa NAV_ITEMS en las dos secciones visuales del sidebar. */
 export const NAV_GROUPS: { label: string; keys: RouteKey[] }[] = [
   {
     label: 'Módulos de planta',
-    keys: ['dashboard', 'visualizacion', 'inventario', 'compras', 'movimientos', 'formularios', 'entradas'],
+    keys: ['dashboard', 'visualizacion', 'inventario', 'compras', 'proveedores', 'movimientos', 'formularios', 'archivos', 'entradas'],
   },
   {
     label: 'Sistema y control',
-    keys: ['ajustes', 'importar', 'usuarios', 'configuracion'],
+    keys: ['ajustes', 'importar', 'usuarios', 'configuracion', 'automatizaciones', 'actividad', 'correos'],
   },
 ]
 
 /** Resuelve un pathname exacto a su RouteKey, o null si no es una ruta controlada por ROUTE_PERMISSIONS (ej. /login, /acceso-denegado). */
 export function getRouteKeyForPath(pathname: string): RouteKey | null {
   if (pathname === '/cuenta') return 'cuenta'
+  if (pathname === '/notificaciones') return 'notificaciones'
   if (pathname === '/visualizacion') return 'visualizacion'
+  if (pathname === '/proveedores' || pathname.startsWith('/proveedores/')) return 'proveedores'
   const item = NAV_ITEMS.find((i) => i.href === pathname)
   return item ? item.key : null
 }

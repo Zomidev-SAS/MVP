@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Table,
@@ -19,17 +20,28 @@ import {
 } from '@/lib/supabase/usuarios-actions'
 import type { UsuarioListado } from '@/lib/types/usuarios'
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function esEmailValido(email: string | null | undefined): boolean {
+  return !!email && EMAIL_REGEX.test(email.trim())
+}
+
 export function UsersTable() {
   const [usuarios, setUsuarios] = useState<UsuarioListado[]>([])
   const [loading, setLoading] = useState(true)
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
   const [procesando, setProcesando] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUsuarios()
-      .then(setUsuarios)
+      .then((data) => {
+        setUsuarios(data)
+        setErrorCarga(null)
+      })
       .catch((error) => {
         console.error('Failed to fetch usuarios:', error)
         setUsuarios([])
+        setErrorCarga(error instanceof Error ? error.message : 'No se pudieron cargar los usuarios.')
       })
       .finally(() => setLoading(false))
   }, [])
@@ -74,8 +86,11 @@ export function UsersTable() {
       <TableBody>
         {usuarios.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={5} className="text-center text-muted-foreground">
-              {loading ? 'Cargando...' : 'Sin usuarios.'}
+            <TableCell
+              colSpan={5}
+              className={errorCarga ? 'text-center text-destructive' : 'text-center text-muted-foreground'}
+            >
+              {loading ? 'Cargando...' : errorCarga ?? 'Sin usuarios.'}
             </TableCell>
           </TableRow>
         ) : (
@@ -85,7 +100,14 @@ export function UsersTable() {
                 {usuario.nombre?.trim() || '—'}
               </TableCell>
               <TableCell className="text-muted-foreground">
-                {usuario.email?.trim() || '—'}
+                {esEmailValido(usuario.email) ? (
+                  usuario.email!.trim()
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {usuario.email?.trim() || '—'}
+                  </span>
+                )}
               </TableCell>
               <TableCell>
                 <select

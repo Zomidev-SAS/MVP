@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { fetchConfiguracion, actualizarConfiguracion } from '@/lib/supabase/configuracion-actions'
+import { UmbralesCategoria } from '@/components/configuracion/UmbralesCategoria'
 import type { Configuracion } from '@/lib/types/configuracion'
 
 export function ConfiguracionForm() {
@@ -40,6 +41,7 @@ export function ConfiguracionForm() {
   }
 
   return (
+    <div className="max-w-2xl space-y-8">
     <form onSubmit={handleSubmit} className="max-w-md space-y-6">
       <div className="flex items-center justify-between rounded-md border p-4">
         <div>
@@ -57,7 +59,7 @@ export function ConfiguracionForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="umbral">Umbral de stock bajo</Label>
+        <Label htmlFor="umbral">Umbral general de stock bajo</Label>
         <Input
           id="umbral"
           type="number"
@@ -66,7 +68,7 @@ export function ConfiguracionForm() {
           onChange={(e) => setConfig({ ...config, umbral_stock_bajo: Number(e.target.value) })}
         />
         <p className="text-xs text-muted-foreground">
-          Cantidad igual o menor a esta se marca como stock bajo en el Dashboard e Inventario.
+          Aplica a las categorías que no tengan umbral propio (más abajo). Cantidad igual o menor a esta se marca como stock bajo en el Dashboard e Inventario.
         </p>
       </div>
 
@@ -74,5 +76,8 @@ export function ConfiguracionForm() {
         {guardando ? 'Guardando...' : 'Guardar'}
       </Button>
     </form>
+
+    <UmbralesCategoria umbralGeneral={config.umbral_stock_bajo} />
+    </div>
   )
 }

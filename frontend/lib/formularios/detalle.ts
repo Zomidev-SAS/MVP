@@ -79,6 +79,8 @@ export function construirDetalleFormulario(row: FormularioListado): DetalleFormu
     secciones.push({ titulo: 'Firmas', filas: firmasFilas })
   }
 
+  secciones.push(...seccionesAdicionales(raw))
+
   const fotosCount = contarFotos(raw, db)
   if (fotosCount > 0) {
     secciones.push({
@@ -247,4 +249,116 @@ function fechaTexto(valor: unknown): string | null {
   if (typeof valor !== 'string') return null
   const t = valor.trim()
   return t ? t : null
+}
+
+// Claves ya mostradas por las secciones fijas o que solo contienen imágenes.
+const CLAVES_OMITIDAS = new Set([
+  'tipoformulario',
+  'firmas',
+  'fotos',
+  'foto',
+  'imagenes',
+  'imagen',
+  'images',
+  'image',
+  'signature',
+  'firma',
+])
+const CLAVES_DG_MOSTRADAS = new Set([
+  ...DATOS_VEHICULO.map((d) => d.clave.toLowerCase()),
+  'chasis',
+  'fechaingreso',
+  'fechasalida',
+])
+
+function esImagen(clave: string, valor: string): boolean {
+  const k = clave.toLowerCase()
+  if (/(foto|imagen|image|firma|signature|logo)/.test(k)) return true
+  if (valor.startsWith('data:')) return true
+  if (/^https?:\/\//.test(valor) && /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(valor)) return true
+  return valor.length > 400 && /^[A-Za-z0-9+/=\s]+$/.test(valor)
+}
+
+function humanizar(clave: string): string {
+  const t = clave
+    .replace(/_/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim()
+    .toLowerCase()
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+function aplanar(
+  valor: unknown,
+  clave: string,
+  prefijo: string,
+  filas: CampoDetalleFormulario[],
+  profundidad = 0
+): void {
+  if (valor === null || valor === undefined || valor === '') return
+  const etiqueta = prefijo ? `${prefijo} · ${humanizar(clave)}` : humanizar(clave)
+
+  if (typeof valor === 'boolean') {
+    filas.push({ clave: `extra-${etiqueta}-${filas.length}`, etiqueta, valor: valor ? 'Sí' : 'No' })
+    return
+  }
+  if (typeof valor === 'number') {
+    if (!Number.isNaN(valor)) {
+      filas.push({ clave: `extra-${etiqueta}-${filas.length}`, etiqueta, valor: String(valor) })
+    }
+    return
+  }
+  if (typeof valor === 'string') {
+    const t = valor.trim()
+    if (!t || esImagen(clave, t)) return
+    const v = clave.toLowerCase().includes('fecha') ? (formatearFechaDetalle(t) ?? t) : t
+    filas.push({ clave: `extra-${etiqueta}-${filas.length}`, etiqueta, valor: v })
+    return
+  }
+  if (profundidad >= 3) return
+  if (Array.isArray(valor)) {
+    if (/(foto|imagen|image|firma)/i.test(clave)) return
+    valor.forEach((item, i) => {
+      aplanar(item, `${humanizar(clave)} ${i + 1}`, prefijo, filas, profundidad + 1)
+    })
+    return
+  }
+  if (typeof valor === 'object') {
+    for (const [k, v] of Object.entries(valor as Record<string, unknown>)) {
+      aplanar(v, k, etiqueta, filas, profundidad + 1)
+    }
+  }
+}
+
+function seccionesAdicionales(raw: Record<string, unknown>): SeccionDetalleFormulario[] {
+  const secciones: SeccionDetalleFormulario[] = []
+  const sueltos: CampoDetalleFormulario[] = []
+
+  for (const [clave, valor] of Object.entries(raw)) {
+    if (CLAVES_OMITIDAS.has(clave.toLowerCase())) continue
+
+    if (clave === 'datosGenerales') {
+      if (!valor || typeof valor !== 'object' || Array.isArray(valor)) continue
+      const filas: CampoDetalleFormulario[] = []
+      for (const [k, v] of Object.entries(valor as Record<string, unknown>)) {
+        if (CLAVES_DG_MOSTRADAS.has(k.toLowerCase())) continue
+        aplanar(v, k, '', filas)
+      }
+      if (filas.length > 0) secciones.push({ titulo: 'Otros datos generales', filas })
+      continue
+    }
+
+    if (valor && typeof valor === 'object' && !Array.isArray(valor)) {
+      const filas: CampoDetalleFormulario[] = []
+      for (const [k, v] of Object.entries(valor as Record<string, unknown>)) {
+        aplanar(v, k, '', filas)
+      }
+      if (filas.length > 0) secciones.push({ titulo: humanizar(clave), filas })
+    } else {
+      aplanar(valor, clave, '', sueltos)
+    }
+  }
+
+  if (sueltos.length > 0) secciones.push({ titulo: 'Información adicional', filas: sueltos })
+  return secciones
 }

@@ -1,13 +1,24 @@
+supabase/functions/.env
+supabase/functions/**/.env
+.env
+.env.local
+node_modules/
 .DS_Store
 .idea/
 *.local
 
 # Datos locales (Excel de inventario, PDFs de referencia, etc.) — no subir a git
-archivos/
-Archivos/
+/archivos/
+/Archivos/
 ArchivosAle/
 OC/
 
 # Supabase local
 supabase/.branches
 supabase/.temp
+
+# Descargas del browser tool integrado (verificación en VS Code)
+tmp/
+
+# Grafo graphify (local)
+graphify-out/

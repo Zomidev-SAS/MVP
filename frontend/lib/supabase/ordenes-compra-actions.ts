@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getSessionUser } from '@/lib/supabase/get-session-user'
+import { requireRole } from '@/lib/auth/require-role'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
 import {
   devPreviewDeleteOrden,
@@ -13,18 +14,31 @@ import {
 } from '@/lib/dev/preview-ordenes-compra-data'
 import {
   guardarOrdenCompraPedidoSchema,
+  type AccionAuditoriaOc,
+  type AuditoriaOrdenCompra,
   type GuardarOrdenCompraPedidoInput,
   type OrdenCompra,
   type OrdenCompraItem,
   type OrdenCompraResultado,
   type EstadoOrdenCompra,
+  type EventoLineaTiempoOrden,
+  type OrdenLineaTiempo,
+  type ProductoSugerido,
+  type ProveedorSugerido,
+  type UltimaCompraProducto,
+  tituloOrdenDisplay,
 } from '@/lib/types/orden-compra'
 
-const SELECT_ORDEN =
-  'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, creado_por, descargada_siigo_at, finalizada_at, siigo_referencia, created_at, updated_at'
+const SELECT_ORDEN_BASE =
+  'id, titulo, fecha_pedido, fecha_vencimiento, estado, observaciones, observaciones_entrega, medio_pago, creado_por, descargada_siigo_at, finalizada_at, siigo_id, siigo_estado, siigo_referencia, numero_oc, factura_proveedor_prefijo, factura_proveedor_numero, origen, documento_path, documento_firmado_path, firmada_at, firmada_por, total_pagar, created_at, updated_at'
+
+// La migración 079 agrega fecha_cierre: si todavía no está aplicada se usa el select anterior.
+const SELECT_ORDEN = `${SELECT_ORDEN_BASE}, fecha_cierre`
+
+type FilasOrdenes = { data: Record<string, unknown>[] | null; error: { code?: string } | null }
 
 const SELECT_ITEM =
-  'id, orden_id, codigo_producto, nombre_producto, cantidad, cantidad_recibida, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
+  'id, orden_id, codigo_producto, nombre_producto, cantidad, precio_unitario, cantidad_recibida, cantidad_recibida_at, descripcion, proveedor_nit, proveedor_nombre, proveedor_email, observaciones, orden_linea'
 
 type OrdenRow = Omit<OrdenCompra, 'items' | 'codigo_producto' | 'nombre_producto' | 'cantidad' | 'descripcion' | 'proveedor_nit' | 'proveedor_nombre'>
 
@@ -32,6 +46,9 @@ function enriquecerOrden(orden: OrdenRow, items: OrdenCompraItem[]): OrdenCompra
   const primero = items[0]
   return {
     ...orden,
+    siigo_id: orden.siigo_id ?? null,
+    siigo_estado: orden.siigo_estado ?? null,
+    medio_pago: orden.medio_pago ?? null,
     items,
     codigo_producto: primero?.codigo_producto ?? null,
     nombre_producto: primero?.nombre_producto ?? null,
@@ -77,10 +94,16 @@ export async function fetchOrdenesCompra(): Promise<OrdenCompra[]> {
   if (!user) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let { data, error } = (await supabase
     .from('ordenes_compra')
     .select(SELECT_ORDEN)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false })) as FilasOrdenes
+  if (error?.code === '42703') {
+    ;({ data, error } = (await supabase
+      .from('ordenes_compra')
+      .select(SELECT_ORDEN_BASE)
+      .order('created_at', { ascending: false })) as FilasOrdenes)
+  }
 
   if (error) {
     console.error('Failed to load ordenes_compra:', error)
@@ -105,7 +128,10 @@ export async function fetchOrdenCompraById(id: number): Promise<OrdenCompra | nu
   if (!user) return null
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('ordenes_compra').select(SELECT_ORDEN).eq('id', id).single()
+  let { data, error } = await supabase.from('ordenes_compra').select(SELECT_ORDEN).eq('id', id).single()
+  if (error?.code === '42703') {
+    ;({ data, error } = await supabase.from('ordenes_compra').select(SELECT_ORDEN_BASE).eq('id', id).single())
+  }
 
   if (error || !data) return null
 
@@ -127,12 +153,20 @@ export async function fetchOrdenesCompraPendientes(): Promise<OrdenCompra[]> {
   if (!user) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let { data, error } = (await supabase
     .from('ordenes_compra')
     .select(SELECT_ORDEN)
     .eq('estado', 'en_curso')
     .order('created_at', { ascending: false })
-    .limit(20)
+    .limit(20)) as FilasOrdenes
+  if (error?.code === '42703') {
+    ;({ data, error } = (await supabase
+      .from('ordenes_compra')
+      .select(SELECT_ORDEN_BASE)
+      .eq('estado', 'en_curso')
+      .order('created_at', { ascending: false })
+      .limit(20)) as FilasOrdenes)
+  }
 
   if (error) {
     console.error('Failed to load ordenes pendientes:', error)
@@ -171,23 +205,47 @@ export async function fetchOrdenesCompraPendientesCount(): Promise<number> {
 
 function mapPedidoHeader(datos: GuardarOrdenCompraPedidoInput, userId: string) {
   return {
-    titulo: datos.titulo.trim(),
+    titulo: datos.titulo.trim() || null,
     fecha_pedido: datos.fecha_pedido,
     fecha_vencimiento: datos.fecha_vencimiento?.trim() || null,
     observaciones: datos.observaciones.trim() || null,
     observaciones_entrega: datos.observaciones_entrega.trim() || null,
+    medio_pago: datos.medio_pago ?? null,
     creado_por: userId,
     updated_at: new Date().toISOString(),
   }
 }
 
-function mapItemsInsert(ordenId: number, datos: GuardarOrdenCompraPedidoInput) {
+type RecepcionPrevia = { cantidad_recibida: number | null; cantidad_recibida_at: string | null }
+
+/**
+ * La fecha de recepción solo cambia cuando cambia la cantidad recibida: al
+ * reemplazar las líneas al editar se conserva la fecha de las que no cambiaron.
+ */
+function fechaRecepcion(
+  nueva: number | null | undefined,
+  previa: RecepcionPrevia | undefined
+): string | null {
+  if (nueva == null) return null
+  if (previa && Number(previa.cantidad_recibida) === Number(nueva) && previa.cantidad_recibida_at) {
+    return previa.cantidad_recibida_at
+  }
+  return new Date().toISOString()
+}
+
+function mapItemsInsert(
+  ordenId: number,
+  datos: GuardarOrdenCompraPedidoInput,
+  previas?: Map<number, RecepcionPrevia>
+) {
   return datos.items.map((item, idx) => ({
     orden_id: ordenId,
     codigo_producto: item.codigo_producto,
     nombre_producto: item.nombre_producto.trim() || null,
     cantidad: item.cantidad,
+    precio_unitario: item.precio_unitario,
     cantidad_recibida: item.cantidad_recibida ?? null,
+    cantidad_recibida_at: fechaRecepcion(item.cantidad_recibida, previas?.get(idx + 1)),
     descripcion: item.descripcion,
     proveedor_nit: item.proveedor_nit.trim() || null,
     proveedor_nombre: item.proveedor_nombre.trim() || null,
@@ -195,6 +253,39 @@ function mapItemsInsert(ordenId: number, datos: GuardarOrdenCompraPedidoInput) {
     observaciones: item.observaciones.trim() || null,
     orden_linea: idx + 1,
   }))
+}
+
+/**
+ * Si al guardar la OC subió la cantidad recibida de una línea, deja un evento
+ * por la diferencia para la línea de tiempo (entregas parciales).
+ */
+async function registrarEventosRecepcion(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ordenId: number,
+  datos: GuardarOrdenCompraPedidoInput,
+  previas: Map<number, RecepcionPrevia> | undefined,
+  userId: string
+) {
+  const eventos = datos.items.flatMap((item, idx) => {
+    const nueva = Number(item.cantidad_recibida ?? 0)
+    const anterior = Number(previas?.get(idx + 1)?.cantidad_recibida ?? 0)
+    const delta = nueva - anterior
+    if (!(delta > 0)) return []
+    return [
+      {
+        orden_id: ordenId,
+        codigo_producto: item.codigo_producto,
+        cantidad: delta,
+        acumulada: nueva,
+        pedida: item.cantidad,
+        creado_por: userId,
+      },
+    ]
+  })
+  if (eventos.length === 0) return
+
+  const { error } = await supabase.from('orden_compra_recepciones').insert(eventos)
+  if (error) console.error('Failed to insert orden_compra_recepciones:', error)
 }
 
 export async function crearOrdenCompraPedido(
@@ -212,6 +303,8 @@ export async function crearOrdenCompraPedido(
       estado: 'en_curso',
       descargada_siigo_at: null,
       finalizada_at: null,
+      siigo_id: null,
+      siigo_estado: null,
       siigo_referencia: null,
       items: parsed.data.items.map((item, idx) => ({
         ...item,
@@ -261,8 +354,97 @@ export async function crearOrdenCompraPedido(
     return { ok: false, error: 'No se pudieron guardar los ítems de la orden.' }
   }
 
+  await registrarEventosRecepcion(supabase, inserted.id, parsed.data, undefined, user.id)
+
   return { ok: true, id: inserted.id }
 }
+
+type ClienteSupabase = Awaited<ReturnType<typeof createClient>>
+
+/** Deja constancia de quién hizo qué y cuándo con una orden (historial de cambios). */
+async function registrarAuditoriaOc(
+  supabase: ClienteSupabase,
+  ordenId: number,
+  usuarioId: string,
+  accion: AccionAuditoriaOc,
+  motivo: string | null,
+  cambios: string[] = [],
+  extra: Record<string, unknown> = {}
+): Promise<void> {
+  const { error } = await supabase.from('ordenes_compra_auditoria').insert({
+    orden_id: ordenId,
+    accion,
+    motivo: motivo?.trim() || null,
+    detalle: { cambios, ...extra },
+    usuario_id: usuarioId,
+  })
+  if (error) console.error('Failed to register OC audit entry:', error)
+}
+
+interface ItemResumen {
+  codigo_producto: string
+  descripcion: string | null
+  cantidad: number
+}
+
+function claveItem(i: ItemResumen): string {
+  return i.codigo_producto === 'SIN-CODIGO' ? `SC:${(i.descripcion ?? '').trim().toUpperCase()}` : i.codigo_producto
+}
+
+/** Compara los ítems antes y después de editar y lo cuenta en frases cortas. */
+function resumirCambiosItems(antes: ItemResumen[], despues: ItemResumen[]): string[] {
+  const a = new Map(antes.map((i) => [claveItem(i), i]))
+  const d = new Map(despues.map((i) => [claveItem(i), i]))
+  const nombre = (i: ItemResumen) => (i.descripcion?.trim() ? `${i.codigo_producto} (${i.descripcion.trim()})` : i.codigo_producto)
+  const cambios: string[] = []
+  for (const [k, i] of d) {
+    const previo = a.get(k)
+    if (!previo) cambios.push(`Agregado ${nombre(i)}: ${Number(i.cantidad)}`)
+    else if (Number(previo.cantidad) !== Number(i.cantidad)) {
+      cambios.push(`Cantidad de ${nombre(i)}: ${Number(previo.cantidad)} → ${Number(i.cantidad)}`)
+    }
+  }
+  for (const [k, i] of a) if (!d.has(k)) cambios.push(`Quitado ${nombre(i)}`)
+  return cambios.slice(0, 30)
+}
+
+/** Historial de cambios de una orden (quién, cuándo, motivo y qué cambió). */
+export async function fetchAuditoriaOrden(ordenId: number): Promise<AuditoriaOrdenCompra[]> {
+  if (isDevBypassActive()) return []
+  const user = await getSessionUser()
+  if (!user) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('ordenes_compra_auditoria')
+    .select('id, accion, motivo, detalle, usuario_id, created_at')
+    .eq('orden_id', ordenId)
+    .order('created_at', { ascending: false })
+  if (error) {
+    // Antes de aplicar la migración 076 la tabla no existe: se muestra sin historial.
+    if (error.code !== '42P01' && error.code !== 'PGRST205') console.error('Failed to load OC audit:', error)
+    return []
+  }
+  const filas = data ?? []
+  const ids = [...new Set(filas.map((f) => f.usuario_id as string))]
+  const nombres = new Map<string, string>()
+  if (ids.length > 0) {
+    const { data: perfiles } = await supabase.from('profiles').select('id, nombre').in('id', ids)
+    for (const p of perfiles ?? []) nombres.set(p.id as string, (p.nombre as string) || 'Usuario')
+  }
+  return filas.map((f) => ({
+    id: Number(f.id),
+    accion: f.accion as AccionAuditoriaOc,
+    motivo: (f.motivo as string | null) ?? null,
+    cambios: Array.isArray((f.detalle as { cambios?: unknown })?.cambios)
+      ? ((f.detalle as { cambios: string[] }).cambios)
+      : [],
+    usuario_nombre: nombres.get(f.usuario_id as string) ?? 'Usuario',
+    created_at: f.created_at as string,
+  }))
+}
+
+
 
 export async function actualizarOrdenCompraPedido(
   id: number,
@@ -299,6 +481,25 @@ export async function actualizarOrdenCompraPedido(
   const supabase = await createClient()
   const primero = parsed.data.items[0]
 
+  // En curso la edita quien la creó o compras/supervisor; cerrada o cancelada solo compras
+  // y supervisor, y queda registrado quién y cuándo (historial de cambios).
+  const { data: actualRow } = await supabase.from('ordenes_compra').select('estado').eq('id', id).maybeSingle()
+  const estadoActual = actualRow?.estado as EstadoOrdenCompra | undefined
+  if (!estadoActual) return { ok: false, error: 'No se encontró la orden.' }
+  const cerrada = estadoActual !== 'en_curso'
+  if (cerrada) {
+    const auth = await requireRole(['supervisor', 'compras'])
+    if (!auth.ok) return { ok: false, error: auth.error }
+  }
+  let itemsAntes: ItemResumen[] = []
+  if (cerrada) {
+    const { data: previosItems } = await supabase
+      .from('orden_compra_items')
+      .select('codigo_producto, descripcion, cantidad')
+      .eq('orden_id', id)
+    itemsAntes = (previosItems ?? []) as ItemResumen[]
+  }
+
   const { error } = await supabase
     .from('ordenes_compra')
     .update({
@@ -312,37 +513,104 @@ export async function actualizarOrdenCompraPedido(
       proveedor_email: primero.proveedor_email.trim() || null,
     })
     .eq('id', id)
-    .eq('estado', 'en_curso')
+    .eq('estado', estadoActual)
 
   if (error) {
     console.error('Failed to update orden_compra:', error)
     return { ok: false, error: 'No se pudo actualizar la orden.' }
   }
 
+  const { data: previasRows } = await supabase
+    .from('orden_compra_items')
+    .select('orden_linea, cantidad_recibida, cantidad_recibida_at')
+    .eq('orden_id', id)
+  const previas = new Map<number, RecepcionPrevia>(
+    (previasRows ?? []).map((r) => [
+      Number(r.orden_linea),
+      { cantidad_recibida: r.cantidad_recibida, cantidad_recibida_at: r.cantidad_recibida_at },
+    ])
+  )
+
   await supabase.from('orden_compra_items').delete().eq('orden_id', id)
   const { error: itemsError } = await supabase
     .from('orden_compra_items')
-    .insert(mapItemsInsert(id, parsed.data))
+    .insert(mapItemsInsert(id, parsed.data, previas))
 
   if (itemsError) {
     console.error('Failed to update orden_compra_items:', itemsError)
     return { ok: false, error: 'No se pudieron actualizar los ítems.' }
   }
 
+  await registrarEventosRecepcion(supabase, id, parsed.data, previas, user.id)
+
+  if (cerrada) {
+    const despues = parsed.data.items.map((it) => ({
+      codigo_producto: it.codigo_producto,
+      descripcion: it.descripcion,
+      cantidad: Number(it.cantidad),
+    }))
+    await registrarAuditoriaOc(supabase, id, user.id, 'editar_cerrada', null, resumirCambiosItems(itemsAntes, despues), {
+      estado: estadoActual,
+    })
+  }
+
   return { ok: true, id }
 }
 
-export async function actualizarEstadoOrdenCompra(
+/**
+ * Marca la OC como 'listo' Y dispara el envío automático a Siigo (FC).
+ * Requiere rol compras o supervisor (validado en el RPC del backend).
+ * En dev bypass solo actualiza el estado local sin llamar al backend.
+ */
+export interface FacturaProveedorInput {
+  prefijo?: string | null
+  numero?: string | null
+}
+
+export async function marcarOcListoConSiigo(
   id: number,
-  estado: EstadoOrdenCompra
+  medioPago?: 'credito' | 'contado' | null,
+  factura?: FacturaProveedorInput
 ): Promise<OrdenCompraResultado> {
   const ahora = new Date().toISOString()
 
   if (isDevBypassActive()) {
     devPreviewUpdateOrden(id, {
-      estado,
-      finalizada_at: estado === 'listo' ? ahora : null,
+      estado: 'listo',
+      finalizada_at: ahora,
+      medio_pago: medioPago ?? null,
     })
+    return { ok: true }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('rpc_marcar_oc_listo', {
+    p_orden_id: id,
+    p_medio_pago: medioPago ?? null,
+    p_factura_prefijo: factura?.prefijo?.trim() || null,
+    p_factura_numero: factura?.numero?.trim() || null,
+  })
+
+  if (error) return { ok: false, error: `No se pudo marcar como lista: ${error.message}` }
+  if (!(data as { ok?: boolean } | null)?.ok) {
+    return { ok: false, error: 'rpc_marcar_oc_listo no confirmó el cambio.' }
+  }
+  return { ok: true }
+}
+
+export async function actualizarEstadoOrdenCompra(
+  id: number,
+  estado: EstadoOrdenCompra,
+  motivo?: string
+): Promise<OrdenCompraResultado> {
+  if (estado === 'listo') {
+    return marcarOcListoConSiigo(id)
+  }
+
+  const ahora = new Date().toISOString()
+
+  if (isDevBypassActive()) {
+    devPreviewUpdateOrden(id, { estado, finalizada_at: null })
     return { ok: true }
   }
 
@@ -350,16 +618,30 @@ export async function actualizarEstadoOrdenCompra(
   if (!user) return { ok: false, error: 'Sesión expirada.' }
 
   const supabase = await createClient()
-  const patch: Record<string, string | null> = {
-    estado,
-    updated_at: ahora,
-    finalizada_at: estado === 'listo' ? ahora : null,
+  const { data: previo } = await supabase.from('ordenes_compra').select('estado').eq('id', id).maybeSingle()
+  const estadoPrevio = previo?.estado as EstadoOrdenCompra | undefined
+
+  const reabre = estado === 'en_curso' && !!estadoPrevio && estadoPrevio !== 'en_curso'
+  if (reabre) {
+    const auth = await requireRole(['supervisor', 'compras'])
+    if (!auth.ok) return { ok: false, error: auth.error }
+    if (!motivo?.trim()) return { ok: false, error: 'Escribe el motivo para reabrir la orden.' }
   }
 
-  const { error } = await supabase.from('ordenes_compra').update(patch).eq('id', id)
+  const { data: filas, error } = await supabase
+    .from('ordenes_compra')
+    .update({ estado, updated_at: ahora, finalizada_at: null })
+    .eq('id', id)
+    .select('id')
 
-  if (error) {
+  if (error || !filas || filas.length === 0) {
     return { ok: false, error: 'No se pudo actualizar el estado.' }
+  }
+
+  if (reabre) {
+    await registrarAuditoriaOc(supabase, id, user.id, 'reabrir', motivo ?? null, [], {
+      estado_anterior: estadoPrevio,
+    })
   }
 
   return { ok: true }
@@ -479,5 +761,468 @@ export async function actualizarOrdenCompra(): Promise<OrdenCompraResultado> {
 
 /** @deprecated */
 export async function enviarOrdenCompra(): Promise<OrdenCompraResultado> {
+  return { ok: true }
+}
+
+/**
+ * Aprueba la orden y dispara su envío a Siigo.
+ *
+ * El Server Action ID de esta función se expone al bundle del cliente
+ * porque la importa un Client Component (ComprasTable.tsx). La UI solo
+ * renderiza el botón "Enviar a Siigo"/"Reintentar" para compras/supervisor,
+ * pero eso es un gate de UI nada más — sin este chequeo, cualquier usuario
+ * autenticado podría invocar la acción directamente. Por eso `requireRole`
+ * se evalúa ANTES de `isDevBypassActive()` (el RPC igual vuelve a validar
+ * el rol del lado de backend).
+ *
+ * docs/CONTRATO_DATOS_SECCION2.md (sección 9): no existe Edge Function
+ * "siigo-enviar-orden". El punto de entrada real es `rpc_aprobar_oc_siigo`,
+ * que marca `siigo_estado = 'enviando'` y dispara la Edge Function
+ * `siigo-sync-oc` de forma asíncrona — el `ok: true` de esta función solo
+ * confirma que el envío SE INICIÓ, no que ya terminó. El resultado final
+ * llega por `siigo_estado`/`siigo_id` en la fila (Realtime o refetch).
+ * Es idempotente: si la orden ya tiene `siigo_id`, no la reenvía.
+ */
+export async function enviarOrdenASiigo(
+  ordenId: number,
+  factura?: FacturaProveedorInput
+): Promise<OrdenCompraResultado> {
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+  if (isDevBypassActive()) return { ok: true }
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('rpc_aprobar_oc_siigo', {
+    p_orden_id: ordenId,
+    p_factura_prefijo: factura?.prefijo?.trim() || null,
+    p_factura_numero: factura?.numero?.trim() || null,
+  })
+  if (error) return { ok: false, error: `No se pudo enviar a Siigo: ${error.message}` }
+  if (!(data as { ok?: boolean } | null)?.ok) {
+    return { ok: false, error: 'rpc_aprobar_oc_siigo no confirmó el envío.' }
+  }
+  return { ok: true }
+}
+
+export async function reintentarEnvioSiigo(
+  ordenId: number,
+  factura?: FacturaProveedorInput
+): Promise<OrdenCompraResultado> {
+  return enviarOrdenASiigo(ordenId, factura)
+}
+
+
+/**
+ * Parciales por número: suma lo que llegó ahora a la cantidad recibida de la
+ * línea y registra la fecha. Pedidas 100, llegan 50 → recibida 50, restan 50.
+ */
+export async function registrarRecepcionItem(
+  ordenId: number,
+  itemId: number,
+  cantidadLlegada: number
+): Promise<OrdenCompraResultado> {
+  if (!Number.isFinite(cantidadLlegada) || cantidadLlegada <= 0) {
+    return { ok: false, error: 'Indica una cantidad mayor a cero.' }
+  }
+
+  if (isDevBypassActive()) {
+    const orden = getDevPreviewOrdenById(ordenId)
+    const item = orden?.items.find((i) => i.id === itemId)
+    if (!orden || !item || orden.estado !== 'en_curso') {
+      return { ok: false, error: 'Esta orden ya no admite recepciones.' }
+    }
+    const total = Number(item.cantidad_recibida ?? 0) + cantidadLlegada
+    if (total > Number(item.cantidad)) {
+      return { ok: false, error: `Supera lo pedido (faltan ${Number(item.cantidad) - Number(item.cantidad_recibida ?? 0)}).` }
+    }
+    devPreviewUpdateOrden(ordenId, {
+      items: orden.items.map((i) =>
+        i.id === itemId
+          ? { ...i, cantidad_recibida: total, cantidad_recibida_at: new Date().toISOString() }
+          : i
+      ),
+    })
+    return { ok: true }
+  }
+
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sesión expirada.' }
+
+  const supabase = await createClient()
+  const { data: orden } = await supabase
+    .from('ordenes_compra')
+    .select('estado')
+    .eq('id', ordenId)
+    .maybeSingle()
+  if (!orden || orden.estado !== 'en_curso') {
+    return { ok: false, error: 'Esta orden ya no admite recepciones.' }
+  }
+
+  const { data: item } = await supabase
+    .from('orden_compra_items')
+    .select('cantidad, cantidad_recibida')
+    .eq('id', itemId)
+    .eq('orden_id', ordenId)
+    .maybeSingle()
+  if (!item) return { ok: false, error: 'No se encontró la línea.' }
+
+  const pedida = Number(item.cantidad)
+  const previa = Number(item.cantidad_recibida ?? 0)
+  const total = previa + cantidadLlegada
+  if (total > pedida) {
+    return { ok: false, error: `Supera lo pedido (faltan ${pedida - previa}).` }
+  }
+
+  const ahora = new Date().toISOString()
+  const { data: actualizadas, error } = await supabase
+    .from('orden_compra_items')
+    .update({ cantidad_recibida: total, cantidad_recibida_at: ahora })
+    .eq('id', itemId)
+    .select('id, codigo_producto')
+  if (error) {
+    console.error('Failed to register reception:', error)
+    return { ok: false, error: 'No se pudo registrar la recepción.' }
+  }
+  // RLS no devuelve error cuando no deja actualizar: simplemente no toca filas.
+  if (!actualizadas || actualizadas.length === 0) {
+    return { ok: false, error: 'No tienes permiso para registrar recepciones en esta orden.' }
+  }
+
+  const { error: eventoError } = await supabase.from('orden_compra_recepciones').insert({
+    orden_id: ordenId,
+    item_id: itemId,
+    codigo_producto: actualizadas[0].codigo_producto,
+    cantidad: cantidadLlegada,
+    acumulada: total,
+    pedida,
+    creado_por: user.id,
+  })
+  if (eventoError) console.error('Failed to insert orden_compra_recepciones:', eventoError)
+
+  await supabase.from('ordenes_compra').update({ updated_at: ahora }).eq('id', ordenId)
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
+// Autorrelleno del formulario de OC
+// ---------------------------------------------------------------------------
+
+/** Quita caracteres que rompen los filtros .or() de PostgREST y los comodines. */
+function limpiarBusqueda(q: string): string {
+  return q.replace(/[,()%*\\]/g, ' ').trim()
+}
+
+export async function buscarProductosOC(q: string): Promise<ProductoSugerido[]> {
+  const termino = limpiarBusqueda(q)
+  if (termino.length < 2) return []
+  if (isDevBypassActive()) return []
+
+  const user = await getSessionUser()
+  if (!user) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('productos')
+    .select('codigo_producto, nombre_producto, unidad_medida, categoria')
+    .or(`codigo_producto.ilike.%${termino}%,nombre_producto.ilike.%${termino}%`)
+    .order('codigo_producto', { ascending: true })
+    .limit(15)
+
+  if (error) {
+    console.error('Failed to search productos:', error)
+    return []
+  }
+  return (data ?? []) as ProductoSugerido[]
+}
+
+export async function obtenerUltimaCompraProducto(
+  codigo: string
+): Promise<UltimaCompraProducto | null> {
+  if (!codigo.trim() || isDevBypassActive()) return null
+
+  const user = await getSessionUser()
+  if (!user) return null
+
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('orden_compra_items')
+    .select('precio_unitario, proveedor_nit, proveedor_nombre, proveedor_email')
+    .eq('codigo_producto', codigo.trim())
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!data) return null
+  return {
+    precio_unitario: data.precio_unitario != null ? Number(data.precio_unitario) : null,
+    proveedor_nit: data.proveedor_nit,
+    proveedor_nombre: data.proveedor_nombre,
+    proveedor_email: data.proveedor_email,
+  }
+}
+
+/** Proveedores ya usados en órdenes anteriores, por NIT (prefijo) o por nombre. */
+export async function buscarProveedoresOC(q: string): Promise<ProveedorSugerido[]> {
+  const termino = limpiarBusqueda(q)
+  if (termino.length < 2) return []
+  if (isDevBypassActive()) return []
+
+  const user = await getSessionUser()
+  if (!user) return []
+
+  const esNumerico = /^[\d.\-\s]+$/.test(termino)
+  const soloDigitos = termino.replace(/\D/g, '')
+
+  const supabase = await createClient()
+  let consulta = supabase
+    .from('orden_compra_items')
+    .select('proveedor_nit, proveedor_nombre, proveedor_email')
+    .not('proveedor_nit', 'is', null)
+    .order('id', { ascending: false })
+    .limit(200)
+
+  consulta = esNumerico
+    ? consulta.ilike('proveedor_nit', `${soloDigitos}%`)
+    : consulta.ilike('proveedor_nombre', `%${termino}%`)
+
+  const { data, error } = await consulta
+  if (error) {
+    console.error('Failed to search proveedores:', error)
+    return []
+  }
+
+  // Más reciente primero; un solo registro por NIT.
+  const porNit = new Map<string, ProveedorSugerido>()
+  for (const r of data ?? []) {
+    const nit = (r.proveedor_nit ?? '').trim()
+    if (!nit || porNit.has(nit)) continue
+    porNit.set(nit, { nit, nombre: r.proveedor_nombre, email: r.proveedor_email })
+  }
+  return [...porNit.values()].slice(0, 8)
+}
+
+
+// ---------------------------------------------------------------------------
+// Línea de tiempo (dashboard)
+// ---------------------------------------------------------------------------
+
+function formatoCantidad(n: number): string {
+  return n.toLocaleString('es-CO', { maximumFractionDigits: 2 })
+}
+
+/**
+ * Órdenes recientes con sus hitos: inicio → entregas parciales → finalización.
+ * Las que siguen en curso van primero.
+ */
+export async function fetchLineaTiempoOrdenesCompra(limite = 8): Promise<OrdenLineaTiempo[]> {
+  const ordenes = await fetchOrdenesCompra()
+  if (ordenes.length === 0) return []
+
+  const seleccion = [...ordenes]
+    .sort((a, b) => {
+      const pesoA = a.estado === 'en_curso' ? 0 : 1
+      const pesoB = b.estado === 'en_curso' ? 0 : 1
+      if (pesoA !== pesoB) return pesoA - pesoB
+      return b.created_at.localeCompare(a.created_at)
+    })
+    .slice(0, limite)
+
+  const recepcionesPorOrden = new Map<number, EventoLineaTiempoOrden[]>()
+
+  if (isDevBypassActive()) {
+    for (const orden of seleccion) {
+      const eventos = orden.items
+        .filter((i) => Number(i.cantidad_recibida ?? 0) > 0)
+        .map((i) => ({
+          tipo: 'parcial' as const,
+          fecha: i.cantidad_recibida_at ?? orden.updated_at,
+          detalle: `${i.codigo_producto}: ${formatoCantidad(Number(i.cantidad_recibida))} de ${formatoCantidad(Number(i.cantidad))}`,
+        }))
+      recepcionesPorOrden.set(orden.id, eventos)
+    }
+  } else {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('orden_compra_recepciones')
+      .select('orden_id, codigo_producto, cantidad, acumulada, pedida, created_at')
+      .in('orden_id', seleccion.map((o) => o.id))
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('Failed to load orden_compra_recepciones:', error)
+    }
+    for (const r of data ?? []) {
+      const lista = recepcionesPorOrden.get(Number(r.orden_id)) ?? []
+      const acumulada = r.acumulada != null ? Number(r.acumulada) : null
+      const pedida = r.pedida != null ? Number(r.pedida) : null
+      lista.push({
+        tipo: 'parcial',
+        fecha: r.created_at,
+        detalle:
+          acumulada != null && pedida != null
+            ? `${r.codigo_producto}: +${formatoCantidad(Number(r.cantidad))} (${formatoCantidad(acumulada)} de ${formatoCantidad(pedida)})`
+            : `${r.codigo_producto}: +${formatoCantidad(Number(r.cantidad))}`,
+      })
+      recepcionesPorOrden.set(Number(r.orden_id), lista)
+    }
+  }
+
+  return seleccion.map((orden) => {
+    const eventos: EventoLineaTiempoOrden[] = [
+      { tipo: 'inicio', fecha: orden.fecha_pedido, detalle: 'Inicio de la orden' },
+      ...(recepcionesPorOrden.get(orden.id) ?? []),
+    ]
+    if (orden.estado === 'listo') {
+      eventos.push({ tipo: 'fin', fecha: orden.finalizada_at ?? orden.updated_at, detalle: 'Finalizada' })
+    } else if (orden.estado === 'cancelada') {
+      eventos.push({ tipo: 'cancelada', fecha: orden.updated_at, detalle: 'Cancelada' })
+    }
+    return {
+      id: orden.id,
+      titulo: tituloOrdenDisplay(orden),
+      estado: orden.estado,
+      pedidas: orden.items.reduce((acc, i) => acc + Number(i.cantidad || 0), 0),
+      recibidas: orden.items.reduce((acc, i) => acc + Number(i.cantidad_recibida ?? 0), 0),
+      eventos,
+    }
+  })
+}
+
+
+/**
+ * Fecha de cierre de la orden: compras y supervisor la escriben o eligen (vacía la quita).
+ * Si la orden ya está cerrada, el cambio queda en el historial con quién y cuándo.
+ */
+export async function actualizarFechaCierreOrden(
+  id: number,
+  fecha: string | null
+): Promise<OrdenCompraResultado> {
+  const limpia = fecha?.trim() || null
+  if (limpia && !/^\d{4}-\d{2}-\d{2}$/.test(limpia)) {
+    return { ok: false, error: 'Fecha inválida.' }
+  }
+
+  if (isDevBypassActive()) {
+    devPreviewUpdateOrden(id, { fecha_cierre: limpia })
+    return { ok: true }
+  }
+
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+
+  const supabase = await createClient()
+  const { data: actual, error: errorLectura } = await supabase
+    .from('ordenes_compra')
+    .select('estado, fecha_cierre')
+    .eq('id', id)
+    .maybeSingle()
+  if (errorLectura?.code === '42703') {
+    return { ok: false, error: 'Falta aplicar la migración 079 en la base de datos.' }
+  }
+  if (!actual) return { ok: false, error: 'No se encontró la orden.' }
+
+  const anterior = (actual.fecha_cierre as string | null) ?? null
+  if (anterior === limpia) return { ok: true }
+
+  const { data, error } = await supabase
+    .from('ordenes_compra')
+    .update({ fecha_cierre: limpia, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id')
+  if (error || !data || data.length === 0) {
+    console.error('Failed to update fecha_cierre:', error)
+    return { ok: false, error: 'No se pudo guardar la fecha de cierre.' }
+  }
+
+  if (actual.estado !== 'en_curso') {
+    await registrarAuditoriaOc(supabase, id, auth.user.id, 'correccion', null, [
+      `Fecha de cierre: ${anterior ?? 'sin fecha'} → ${limpia ?? 'sin fecha'}`,
+    ])
+  }
+  return { ok: true }
+}
+
+/** Fecha de entrega esperada (vencimiento). Vacía la quita. */
+export async function actualizarFechaVencimientoOrden(
+  id: number,
+  fecha: string | null
+): Promise<OrdenCompraResultado> {
+  const limpia = fecha?.trim() || null
+  if (limpia && !/^\d{4}-\d{2}-\d{2}$/.test(limpia)) {
+    return { ok: false, error: 'Fecha inválida.' }
+  }
+
+  if (isDevBypassActive()) {
+    devPreviewUpdateOrden(id, { fecha_vencimiento: limpia })
+    return { ok: true }
+  }
+
+  const user = await getSessionUser()
+  if (!user) return { ok: false, error: 'Sesión expirada.' }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('ordenes_compra')
+    .update({ fecha_vencimiento: limpia, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id')
+
+  if (error) {
+    console.error('Failed to update fecha_vencimiento:', error)
+    return { ok: false, error: 'No se pudo guardar la fecha.' }
+  }
+  // RLS no devuelve error cuando no deja actualizar: simplemente no toca filas.
+  if (!data || data.length === 0) {
+    return { ok: false, error: 'No tienes permiso para cambiar esta orden.' }
+  }
+  return { ok: true }
+}
+
+
+/**
+ * Las OC cargadas desde Siigo no traen código de producto: las líneas que no
+ * coincidieron con el catálogo quedan como SIN-CODIGO y aquí se les asigna uno.
+ */
+export async function asignarCodigoLineaOC(
+  ordenId: number,
+  itemId: number,
+  codigo: string
+): Promise<OrdenCompraResultado> {
+  const auth = await requireRole(['supervisor', 'compras'])
+  if (!auth.ok) return { ok: false, error: auth.error }
+
+  const cod = codigo.trim()
+  if (!cod) return { ok: false, error: 'Elige un producto del catálogo.' }
+  if (isDevBypassActive()) return { ok: true }
+
+  const supabase = await createClient()
+  const { data: producto } = await supabase
+    .from('productos')
+    .select('codigo_producto, nombre_producto')
+    .eq('codigo_producto', cod)
+    .maybeSingle()
+  if (!producto) return { ok: false, error: 'Ese código no existe en el catálogo del panel.' }
+
+  const { data, error } = await supabase
+    .from('orden_compra_items')
+    .update({ codigo_producto: producto.codigo_producto, nombre_producto: producto.nombre_producto })
+    .eq('id', itemId)
+    .eq('orden_id', ordenId)
+    .select('id, orden_linea')
+
+  if (error) {
+    console.error('Failed to assign product code:', error)
+    return { ok: false, error: 'No se pudo asignar el código.' }
+  }
+  if (!data || data.length === 0) {
+    return { ok: false, error: 'No tienes permiso para cambiar esta línea.' }
+  }
+
+  // La primera línea también vive en la cabecera (compatibilidad con notificaciones).
+  if (data[0].orden_linea === 1) {
+    await supabase
+      .from('ordenes_compra')
+      .update({ codigo_producto: producto.codigo_producto, nombre_producto: producto.nombre_producto })
+      .eq('id', ordenId)
+  }
   return { ok: true }
 }

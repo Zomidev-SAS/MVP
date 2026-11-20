@@ -41,9 +41,12 @@ async function cargarFormularios(): Promise<FormularioListado[]> {
   return normalizarFormularios(data)
 }
 
-export async function buscarVehiculosFormulario(termino: string): Promise<VehiculoSugerencia[]> {
+export async function buscarVehiculosFormulario(
+  termino: string,
+  limite = 40
+): Promise<VehiculoSugerencia[]> {
   const filas = await cargarFormularios()
-  return extraerSugerenciasVehiculo(filas, termino)
+  return extraerSugerenciasVehiculo(filas, termino, limite)
 }
 
 export async function fetchVehiculosRecientes(limite = 30): Promise<VehiculoSugerencia[]> {

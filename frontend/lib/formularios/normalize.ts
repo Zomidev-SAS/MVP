@@ -2,13 +2,15 @@ import { coincideBusquedaFormulario, coincideFiltroLista } from '@/lib/formulari
 import { extraerDbColumns } from '@/lib/formularios/db-columns'
 import { aplanarFilaFormulario } from '@/lib/formularios/flatten'
 import { ordenarFormulariosRecientes } from '@/lib/formularios/orden'
+import { coincideUbicacionFiltro } from '@/lib/formularios/ubicacion-parqueadero'
 import type { FormularioListado, FormulariosFiltros } from '@/lib/types/formularios'
 import { extraerFechaIngreso, extraerFechaSalida } from '@/lib/types/formularios'
 
 export const TIPO_DB_MATCH: Record<Exclude<FormulariosFiltros['tipo'], 'todos'>, string[]> = {
   entrada: ['entrada', 'entradas', 'ingreso', 'in'],
   salida: ['salida', 'salidas', 'salida_vin', 'egreso', 'out'],
-  parqueadero: ['parqueadero', 'parking'],
+  // En la base, los formularios de parqueadero se guardan con tipoFormulario = 'ubicacion'.
+  parqueadero: ['parqueadero', 'parking', 'ubicacion', 'ubicación'],
 }
 
 export function normalizarFormulario(row: Record<string, unknown>): FormularioListado {
@@ -42,6 +44,7 @@ export function filtrarYOrdenarFormularios(
       .filter((fila) => coincideTipoFiltro(fila, filtros.tipo))
       .filter((fila) => coincideBusquedaFormulario(fila, filtros.busqueda))
       .filter((fila) => coincideFiltroLista(fila, filtros.filtros))
+      .filter((fila) => coincideUbicacionFiltro(fila, filtros.ubicacion))
   )
 }
 

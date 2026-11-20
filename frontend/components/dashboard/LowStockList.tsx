@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import {
   Table,
   TableBody,
@@ -18,8 +19,11 @@ export interface ProductoBajoStock {
 export function LowStockList({ productos }: { productos: ProductoBajoStock[] }) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Productos con stock bajo</CardTitle>
+        <Link href="/inventario" className="text-sm text-primary hover:underline">
+          Ver inventario →
+        </Link>
       </CardHeader>
       <CardContent>
         <Table>

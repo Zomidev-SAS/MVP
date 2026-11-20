@@ -71,15 +71,19 @@ export function formatearFechaConHora(valor: unknown): string | null {
   const fecha = parsearFecha(valor)
   if (!fecha) return null
 
-  return fecha.toLocaleString('es-CO', {
-    timeZone: ZONA_BOGOTA,
-    weekday: 'short',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  // El espacio antes de "a. m."/"p. m." difiere entre el ICU de Node (SSR)
+  // y el de Chrome (hidratación) — se normaliza para que no haya mismatch.
+  return fecha
+    .toLocaleString('es-CO', {
+      timeZone: ZONA_BOGOTA,
+      weekday: 'short',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    .replace(/\s/g, ' ')
 }
 
 export function clasificarCampoFecha(clave: string, valor: unknown): 'fecha' | 'fecha_hora' | 'texto' {

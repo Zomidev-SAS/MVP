@@ -66,7 +66,12 @@ export function CuentaForm({
           </div>
           <div>
             <p className="text-muted-foreground">Correo</p>
-            <p className="font-medium">{email}</p>
+            <p className="font-medium">{email || '—'}</p>
+            {!email && (
+              <p className="text-xs text-destructive">
+                No tienes un correo registrado. Contacta a tu supervisor.
+              </p>
+            )}
           </div>
           <div>
             <p className="text-muted-foreground">Rol</p>

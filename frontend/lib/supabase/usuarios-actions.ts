@@ -19,16 +19,20 @@ export async function fetchUsuarios(): Promise<UsuarioListado[]> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
-    .from('vista_usuarios_panel')
+    .rpc('rpc_usuarios_panel')
     .select('id, nombre, email, rol, activo, created_at')
     .order('created_at', { ascending: true })
 
   if (error) {
-    console.error('Failed to load profiles:', error)
-    return []
+    // Falla explícito: antes se devolvía [] y la tabla mostraba "Sin usuarios"
+    // aunque el problema fuera de permisos (ej. la antigua vista_usuarios_panel con
+    // security_invoker=on; ahora es la RPC rpc_usuarios_panel, migración 058). UsersTable captura
+    // el error y lo muestra, en vez de confundirlo con una lista vacía.
+    console.error('Failed to load rpc_usuarios_panel:', error)
+    throw new Error(`No se pudieron cargar los usuarios: ${error.message}`)
   }
 
-  return data ?? []
+  return (data ?? []) as unknown as UsuarioListado[]
 }
 
 export async function actualizarRolUsuario(id: string, rol: Role): Promise<UsuarioResultado> {

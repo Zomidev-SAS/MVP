@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { FormulariosFilters } from '@/components/formularios/FormulariosFilters'
@@ -8,6 +9,7 @@ import { FormularioDetailDialog } from '@/components/formularios/FormularioDetai
 import { fetchFormularios } from '@/lib/supabase/formularios-actions'
 import { FORMULARIOS_PAGE_SIZE } from '@/lib/supabase/formularios-page-size'
 import type { OpcionFiltro } from '@/lib/formularios/opciones-filtro'
+import { textoUbicacionParqueadero } from '@/lib/formularios/ubicacion-parqueadero'
 import {
   formatearFechaFormulario,
   vistaFormulario,
@@ -19,6 +21,7 @@ const FILTROS_INICIALES: FormulariosFiltros = {
   busqueda: '',
   tipo: 'todos',
   filtros: 'todos',
+  ubicacion: 'todas',
 }
 
 const OPCIONES_FILTRO_INICIALES: OpcionFiltro[] = [
@@ -38,8 +41,8 @@ export function FormulariosTable() {
   const [opcionesFiltro, setOpcionesFiltro] = useState<OpcionFiltro[]>(OPCIONES_FILTRO_INICIALES)
 
   useEffect(() => {
+    setLoading(true)
     const timeout = setTimeout(() => {
-      setLoading(true)
       fetchFormularios(filtros, pagina)
         .then((resultado) => {
           setFilas(resultado.filas)
@@ -100,13 +103,19 @@ export function FormulariosTable() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-md border">
+      <div className="relative overflow-x-auto rounded-md border">
+        {loading && filas.length > 0 && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
+            <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
         <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
               <TableHead className="whitespace-nowrap">Tipo</TableHead>
               <TableHead className="whitespace-nowrap">Marca</TableHead>
               <TableHead className="whitespace-nowrap">Chasis</TableHead>
+              <TableHead className="whitespace-nowrap">Ubicación</TableHead>
               <TableHead className="whitespace-nowrap">Fecha ingreso</TableHead>
               <TableHead className="whitespace-nowrap">Fecha salida</TableHead>
             </TableRow>
@@ -114,7 +123,7 @@ export function FormulariosTable() {
           <TableBody>
             {filas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
                   {loading ? 'Cargando...' : 'Sin formularios.'}
                 </TableCell>
               </TableRow>
@@ -135,6 +144,9 @@ export function FormulariosTable() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-sm">
                       {vista.chasis}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">
+                      {textoUbicacionParqueadero(item) ?? ''}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {formatearFechaFormulario(vista.fechaIngreso)}
@@ -159,7 +171,7 @@ export function FormulariosTable() {
           type="button"
           variant="outline"
           onClick={() => setPagina((p) => Math.max(1, p - 1))}
-          disabled={pagina <= 1}
+          disabled={pagina <= 1 || loading}
         >
           Anterior
         </Button>
@@ -170,7 +182,7 @@ export function FormulariosTable() {
           type="button"
           variant="outline"
           onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-          disabled={pagina >= totalPaginas}
+          disabled={pagina >= totalPaginas || loading}
         >
           Siguiente
         </Button>

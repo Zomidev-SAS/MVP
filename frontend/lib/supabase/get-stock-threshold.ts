@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { isDevBypassActive } from '@/lib/dev/preview-bypass'
+import type { UmbralesStock } from '@/lib/stock/umbral'
 
 const DEFAULT_UMBRAL_STOCK_BAJO = 2
 
@@ -24,4 +25,24 @@ export async function getUmbralStockBajo(): Promise<number> {
   }
 
   return data.umbral_stock_bajo
+}
+
+/** Umbral general + el de cada categoría que tenga uno propio. */
+export async function getUmbralesStock(): Promise<UmbralesStock> {
+  const general = await getUmbralStockBajo()
+  if (isDevBypassActive()) {
+    return { general, porCategoria: { TORNILLERIA: 100 } }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('umbrales_categoria').select('categoria, umbral')
+  if (error) {
+    console.error('Failed to load umbrales_categoria:', error)
+    return { general, porCategoria: {} }
+  }
+
+  return {
+    general,
+    porCategoria: Object.fromEntries((data ?? []).map((u) => [u.categoria, u.umbral as number])),
+  }
 }
