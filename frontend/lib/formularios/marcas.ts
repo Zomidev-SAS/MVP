@@ -13,15 +13,26 @@ export const MARCAS_VEHICULO = [
   'JOYLONG',
 ] as const
 
-/** Unifica nombres antiguos o escritos distinto (p. ej. "MERCEDES" → "MERCEDES BENZ"). */
+function clave(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/[\s-]+/g, '')
+}
+
+const MARCA_POR_CLAVE = new Map<string, string>(MARCAS_VEHICULO.map((m) => [clave(m), m]))
+
+/**
+ * Unifica nombres antiguos o escritos distinto con el nombre de la lista de la app:
+ * "Mercedes", "MERCEDES" y "Mercedes-Benz" → MERCEDES BENZ; "Hyundai" → HYUNDAI; "Foton" → FOTÓN.
+ */
 export function normalizarMarca(marca: string | null | undefined): string | null {
   const original = (marca ?? '').trim()
   if (!original) return null
   const m = original.toUpperCase()
   if (m.startsWith('MERCEDES')) return 'MERCEDES BENZ'
-  if (m === 'FOTON') return 'FOTÓN'
-  if (m.replace(/\s+/g, '') === 'JOYLONG') return 'JOYLONG'
   // "JAC SUNRAY" se usó como marca antes de separar el modelo (SUNRAY va en Tipo).
   if (m.startsWith('JAC')) return 'JAC'
-  return original
+  return MARCA_POR_CLAVE.get(clave(original)) ?? original
 }

@@ -1,5 +1,6 @@
 import { datosGeneralesDe, valorDbColumna } from '@/lib/formularios/db-columns'
 import { formatearFechaConHora, formatearSoloFecha } from '@/lib/formularios/fechas'
+import { normalizarMarca } from '@/lib/formularios/marcas'
 import {
   labelTipoFormulario,
   type FormularioListado,
@@ -118,7 +119,8 @@ function filasDatosVehiculo(
   for (const { clave, etiqueta, db: dbClaves } of DATOS_VEHICULO) {
     const valorJson = formatearValor(datosGenerales[clave], clave)
     const valorDb = dbClaves ? valorDbColumna(db, ...dbClaves) : null
-    const valor = valorJson ?? valorDb
+    const crudo = valorJson ?? valorDb
+    const valor = clave === 'marca' ? normalizarMarca(crudo) : crudo
     if (valor) filas.push({ clave: `vehiculo-${clave}`, etiqueta, valor })
   }
 
