@@ -1,5 +1,6 @@
 import { datosGeneralesDe, valorDbColumna } from '@/lib/formularios/db-columns'
 import { formatearFechaCompacta } from '@/lib/formularios/fechas'
+import { normalizarMarca } from '@/lib/formularios/marcas'
 import type { OpcionFiltro } from '@/lib/formularios/opciones-filtro'
 
 export interface FormularioListado {
@@ -120,8 +121,10 @@ export function vistaFormulario(row: FormularioListado): FormularioVista {
     valorTexto(datosGenerales?.chasis) ??
     extraerChasis(row.data)
 
-  const marca =
+  // Mismo nombre para todos los registros ("Mercedes" y "Mercedes Benz" → MERCEDES BENZ).
+  const marca = normalizarMarca(
     valorDbColumna(db, 'dg_marca') ?? valorTexto(datosGenerales?.marca)
+  )
 
   return {
     tipo,
