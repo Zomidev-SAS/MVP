@@ -201,7 +201,7 @@ export function VehiculoTimelineCard({ rolActual, tokenPlanta }: VehiculoTimelin
             procesos: await fetchProcesosVehiculo(chasis),
           }
       setEventos(listaEventos)
-      setEtapas(construirEtapasVehiculo(listaEventos))
+      setEtapas(construirEtapasVehiculo(listaEventos, listaProcesos))
       setProcesos(listaProcesos)
     } catch (error) {
       console.error('Failed to load vehicle detail:', error)
@@ -340,14 +340,24 @@ export function VehiculoTimelineCard({ rolActual, tokenPlanta }: VehiculoTimelin
               </p>
             ) : (
               <div className="overflow-x-auto pb-1">
-                <div className="relative grid min-w-[880px] grid-cols-4 gap-5">
-                  <div aria-hidden="true" className="absolute left-[12.5%] right-[12.5%] top-7 h-0.5 bg-border" />
+                <div
+                  className="relative grid gap-5"
+                  style={{
+                    gridTemplateColumns: `repeat(${etapas.length}, minmax(0, 1fr))`,
+                    minWidth: `${etapas.length * 220}px`,
+                  }}
+                >
+                  <div
+                    aria-hidden="true"
+                    className="absolute top-7 h-0.5 bg-border"
+                    style={{ left: `${50 / etapas.length}%`, right: `${50 / etapas.length}%` }}
+                  />
                   {etapas.map((etapa) => {
                     const Icono = iconoPorEtapa(etapa.etapa)
-                    const esProceso = etapa.etapa === 'En proceso'
+                    const esProceso = etapa.id === 'proceso'
 
                     return (
-                      <div key={etapa.etapa} className="flex min-w-0 flex-col items-center">
+                      <div key={etapa.id} className="flex min-w-0 flex-col items-center">
                         <span
                           className={cn(
                             'relative z-10 flex h-14 w-14 items-center justify-center rounded-full border-2 bg-background',
@@ -368,6 +378,9 @@ export function VehiculoTimelineCard({ rolActual, tokenPlanta }: VehiculoTimelin
                         >
                           {etapa.etapa}
                         </span>
+                        {etapa.nota && (
+                          <span className="text-center text-xs text-muted-foreground">{etapa.nota}</span>
+                        )}
 
                         <div className="mt-3 w-full space-y-2">
                           {esProceso ? (
@@ -394,8 +407,10 @@ export function VehiculoTimelineCard({ rolActual, tokenPlanta }: VehiculoTimelin
                                 </Button>
                               )}
                             </>
-                          ) : etapa.evento ? (
-                            <DetalleEventoFormulario evento={etapa.evento} />
+                          ) : etapa.eventos.length > 0 ? (
+                            etapa.eventos.map((evento) => (
+                              <DetalleEventoFormulario key={evento.id} evento={evento} />
+                            ))
                           ) : etapa.completada ? (
                             <p className="text-center text-sm text-muted-foreground">
                               {textoEtapaSinFormulario(etapa.etapa)}
