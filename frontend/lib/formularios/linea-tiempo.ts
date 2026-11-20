@@ -30,10 +30,29 @@ export interface VehiculoSugerencia {
 export const ETAPAS_VEHICULO = ['Entrada', 'En proceso', 'Parqueadero', 'Salida'] as const
 export type EtapaVehiculoNombre = (typeof ETAPAS_VEHICULO)[number]
 
+export type IdEtapaVehiculo =
+  | 'entrada'
+  | 'parqueadero-antes'
+  | 'proceso'
+  | 'parqueadero-despues'
+  | 'salida'
+
 export interface EtapaVehiculo {
+  /** Único por columna: Parqueadero puede aparecer antes y después de En proceso. */
+  id: IdEtapaVehiculo
   etapa: EtapaVehiculoNombre
   completada: boolean
+  /** El más reciente de la etapa (compatibilidad). */
   evento: EventoLineaTiempo | null
+  /** Todos los registros de la etapa, del más antiguo al más reciente. */
+  eventos: EventoLineaTiempo[]
+  /** Aclaración cuando Parqueadero se repite ("antes del proceso" / "después del proceso"). */
+  nota?: string
+}
+
+/** Un proceso registrado por el taller; solo importa cuándo empezó. */
+export interface InicioProceso {
+  creadoEn: string | null
 }
 
 function ciudadDe(fila: FormularioListado): string | null {
@@ -71,32 +90,87 @@ export function construirEventosLineaTiempo(filas: FormularioListado[]): EventoL
     })
 }
 
+function milisegundos(fecha: string | null | undefined): number | null {
+  if (!fecha) return null
+  const t = new Date(fecha).getTime()
+  return Number.isNaN(t) ? null : t
+}
+
 /**
- * Mapea eventos reales a las etapas fijas del proceso, marcando las que aún no ocurrieron.
- * "En proceso" no tiene formulario propio — se marca completada apenas hay Entrada,
- * representando que el vehículo ya está en gestión activa.
- * "Parqueadero" también se marca completada si ya hay Salida, aunque no tenga su propio
- * formulario — si el vehículo ya salió, necesariamente pasó (o se saltó) esa etapa.
+ * Mapea eventos reales a las etapas del proceso, siguiendo el orden de las fechas.
+ * "En proceso" no tiene formulario propio: se marca completada apenas hay Entrada.
+ * Parqueadero puede ocurrir ANTES de que empiece el proceso (el vehículo llega y espera)
+ * y DESPUÉS (terminó y espera la salida): los registros anteriores al primer proceso van
+ * en una columna antes de "En proceso" y el resto en la columna posterior, así se ve si
+ * apenas llegó o ya salió. Sin procesos registrados: antes del proceso si aún no hay Salida
+ * (el vehículo acaba de llegar y espera), después si ya salió.
+ * "Parqueadero" (después) también se marca completada si ya hay Salida.
  */
-export function construirEtapasVehiculo(eventos: EventoLineaTiempo[]): EtapaVehiculo[] {
-  function ultimoEventoDe(nombre: EtapaVehiculoNombre): EventoLineaTiempo | null {
-    const coincidencias = eventos.filter((evento) => evento.tipoLabel === nombre)
-    return coincidencias.length > 0 ? coincidencias[coincidencias.length - 1] : null
+export function construirEtapasVehiculo(
+  eventos: EventoLineaTiempo[],
+  procesos: InicioProceso[] = []
+): EtapaVehiculo[] {
+  const deTipo = (nombre: EtapaVehiculoNombre) => eventos.filter((e) => e.tipoLabel === nombre)
+  const ultimo = (lista: EventoLineaTiempo[]) => (lista.length > 0 ? lista[lista.length - 1] : null)
+
+  const entradas = deTipo('Entrada')
+  const salidas = deTipo('Salida')
+  const parqueaderos = deTipo('Parqueadero')
+
+  const inicios = procesos.map((p) => milisegundos(p.creadoEn)).filter((t): t is number => t !== null)
+  const inicioProceso = inicios.length > 0 ? Math.min(...inicios) : null
+
+  const antes: EventoLineaTiempo[] = []
+  const despues: EventoLineaTiempo[] = []
+  for (const evento of parqueaderos) {
+    const t = milisegundos(evento.fecha)
+    if (inicioProceso !== null) {
+      if (t !== null && t < inicioProceso) antes.push(evento)
+      else despues.push(evento)
+    } else if (salidas.length === 0) {
+      // Sin procesos ni salida: el vehículo apenas llegó y espera en parqueadero.
+      antes.push(evento)
+    } else {
+      despues.push(evento)
+    }
   }
 
-  const eventoEntrada = ultimoEventoDe('Entrada')
-  const eventoSalida = ultimoEventoDe('Salida')
-
-  return ETAPAS_VEHICULO.map((etapa) => {
-    if (etapa === 'En proceso') {
-      return { etapa, completada: eventoEntrada !== null, evento: null }
-    }
-    const evento = ultimoEventoDe(etapa)
-    if (etapa === 'Parqueadero') {
-      return { etapa, completada: evento !== null || eventoSalida !== null, evento }
-    }
-    return { etapa, completada: evento !== null, evento }
+  const etapas: EtapaVehiculo[] = [
+    {
+      id: 'entrada',
+      etapa: 'Entrada',
+      completada: entradas.length > 0,
+      evento: ultimo(entradas),
+      eventos: entradas,
+    },
+  ]
+  if (antes.length > 0) {
+    etapas.push({
+      id: 'parqueadero-antes',
+      etapa: 'Parqueadero',
+      completada: true,
+      evento: ultimo(antes),
+      eventos: antes,
+      nota: 'antes del proceso',
+    })
+  }
+  etapas.push({ id: 'proceso', etapa: 'En proceso', completada: entradas.length > 0, evento: null, eventos: [] })
+  etapas.push({
+    id: 'parqueadero-despues',
+    etapa: 'Parqueadero',
+    completada: despues.length > 0 || salidas.length > 0,
+    evento: ultimo(despues),
+    eventos: despues,
+    nota: antes.length > 0 ? 'después del proceso' : undefined,
   })
+  etapas.push({
+    id: 'salida',
+    etapa: 'Salida',
+    completada: salidas.length > 0,
+    evento: ultimo(salidas),
+    eventos: salidas,
+  })
+  return etapas
 }
 
 /** Etapa más avanzada alcanzada dado el conjunto de tipoLabel vistos para un chasis. */
