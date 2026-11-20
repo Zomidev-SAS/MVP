@@ -1,3 +1,5 @@
+import { diferenciaEnDias } from '@/lib/proveedores/fechas'
+import type { FilaHistorial } from '@/lib/proveedores/historial'
 import type { Proveedor, ProveedorFila } from '@/lib/types/proveedor'
 
 const FECHA = '2026-01-15T12:00:00.000Z'
@@ -104,5 +106,50 @@ export function getDevPreviewProveedores(): ProveedorFila[] {
       porcentaje_promedio: null,
       ultima_reevaluacion: null,
     },
+  ]
+}
+
+function filaHistorial(
+  numeroOc: string,
+  fechaOc: string,
+  prometida: string,
+  real: string | null,
+  factura: string | null,
+  extra: Partial<FilaHistorial> = {}
+): FilaHistorial {
+  return {
+    clave: `oc-${numeroOc}`,
+    orden_id: Number(numeroOc.split('-').at(-1)),
+    numero_oc: numeroOc,
+    fecha_oc: fechaOc,
+    estado: 'listo',
+    fecha_entrega_prometida: prometida,
+    fecha_entrega_real: real,
+    diferencia_dias: diferenciaEnDias(prometida, real),
+    cantidad_pedida: 20,
+    cantidad_recibida: 20,
+    factura_remision: factura,
+    devoluciones: 0,
+    ...extra,
+  }
+}
+
+/** Historial de ejemplo con el aspecto del cuadro de control de entregas de compras. */
+export function getDevPreviewHistorial(): FilaHistorial[] {
+  return [
+    filaHistorial('OC-1-3190', '2026-11-10', '2026-11-24', null, null, {
+      estado: 'en_curso',
+      cantidad_pedida: 40,
+      cantidad_recibida: 12,
+    }),
+    filaHistorial('OC-1-2868', '2025-08-18', '2025-08-19', '2025-08-19', 'FC-39982'),
+    filaHistorial('OC-1-2815', '2025-08-11', '2025-08-12', '2025-08-12', 'FC-39746'),
+    filaHistorial('OC-1-2798', '2025-08-04', '2025-08-05', '2025-08-08', 'FC-39529', {
+      cantidad_recibida: 18,
+      devoluciones: 2,
+    }),
+    filaHistorial('OC-1-2761', '2025-07-21', '2025-07-22', '2025-07-22', 'FC-39119'),
+    filaHistorial('OC-1-2745', '2025-07-14', '2025-07-15', '2025-07-15', 'FC-38873'),
+    filaHistorial('OC-1-2737', '2025-07-07', '2025-08-22', '2025-07-08', 'FC-38723'),
   ]
 }
