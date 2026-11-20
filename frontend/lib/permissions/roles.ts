@@ -14,6 +14,7 @@ import {
   History,
   Mail,
   FolderOpen,
+  Truck,
   type LucideIcon,
 } from 'lucide-react'
 import { ALL_ROLES, type Role } from '@/lib/types/database'
@@ -26,6 +27,7 @@ export type RouteKey =
   | 'visualizacion'
   | 'inventario'
   | 'compras'
+  | 'proveedores'
   | 'movimientos'
   | 'formularios'
   | 'archivos'
@@ -47,6 +49,9 @@ export const ROUTE_PERMISSIONS: Record<RouteKey, readonly Role[]> = {
   // cualquier rol activo — no hay restricción de lectura por rol.
   inventario: ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[],
   compras: ALL_ROLES.filter((r) => r !== 'lectura') as readonly Role[],
+  // Proveedores: desempeño, reevaluación anual y evaluación de selección. Todos los roles
+  // de la sección ven y modifican (RLS 080–083); borrar solo supervisor.
+  proveedores: ['supervisor', 'comercial', 'compras', 'auditoria'] as const,
   // RLS real (mov_select_autenticados) permite leer a cualquier activo,
   // pero mantenemos la bitácora completa reservada a supervisor/auditoria
   // (el rol "ingenieria" que la usaba ya no existe en el schema real).
@@ -88,6 +93,7 @@ export const NAV_ITEMS: {
   { key: 'visualizacion', label: 'Panel operativo', href: '/visualizacion', icon: LayoutGrid },
   { key: 'inventario', label: 'Inventario', href: '/inventario', icon: Package },
   { key: 'compras', label: 'Compras', href: '/compras', icon: ShoppingCart },
+  { key: 'proveedores', label: 'Proveedores', href: '/proveedores', icon: Truck },
   { key: 'movimientos', label: 'Movimientos', href: '/movimientos', icon: ArrowLeftRight },
   { key: 'formularios', label: 'Formularios', href: '/formularios', icon: ClipboardList },
   { key: 'archivos', label: 'Archivos', href: '/archivos', icon: FolderOpen },
@@ -105,7 +111,7 @@ export const NAV_ITEMS: {
 export const NAV_GROUPS: { label: string; keys: RouteKey[] }[] = [
   {
     label: 'Módulos de planta',
-    keys: ['dashboard', 'visualizacion', 'inventario', 'compras', 'movimientos', 'formularios', 'archivos', 'entradas'],
+    keys: ['dashboard', 'visualizacion', 'inventario', 'compras', 'proveedores', 'movimientos', 'formularios', 'archivos', 'entradas'],
   },
   {
     label: 'Sistema y control',
@@ -118,6 +124,7 @@ export function getRouteKeyForPath(pathname: string): RouteKey | null {
   if (pathname === '/cuenta') return 'cuenta'
   if (pathname === '/notificaciones') return 'notificaciones'
   if (pathname === '/visualizacion') return 'visualizacion'
+  if (pathname === '/proveedores' || pathname.startsWith('/proveedores/')) return 'proveedores'
   const item = NAV_ITEMS.find((i) => i.href === pathname)
   return item ? item.key : null
 }
