@@ -1,6 +1,7 @@
 import type { OrdenParaHistorial } from '@/lib/proveedores/historial'
 import type { DesempenoRegistro } from '@/lib/types/proveedor-desempeno'
 import type { Reevaluacion } from '@/lib/types/proveedor-reevaluacion'
+import type { Seleccion } from '@/lib/types/proveedor-seleccion'
 import type { Proveedor, ProveedorFila } from '@/lib/types/proveedor'
 
 const FECHA = '2026-01-15T12:00:00.000Z'
@@ -238,6 +239,84 @@ export function getDevPreviewReevaluaciones(proveedorId: number): Reevaluacion[]
       creado_por_nombre: 'Vista Previa Dev',
       created_at: '2024-12-18T15:00:00.000Z',
       updated_at: '2024-12-18T15:00:00.000Z',
+    },
+  ]
+}
+
+/** Evaluaciones de selección de ejemplo: una decidida y una en borrador. */
+export function getDevPreviewSelecciones(): Seleccion[] {
+  return [
+    {
+      id: 1,
+      titulo: 'Fibra de vidrio para carrocerías 2026',
+      necesidad: 'Rollos de fibra de vidrio de 450 g/m² para la línea de furgones.',
+      estado: 'decidida',
+      proveedor_elegido_id: 2,
+      nombre_elegido: 'ALFIBRAS S.A.S.',
+      conclusion: 'Alfibras sigue siendo la mejor opción por tiempo y calidad aunque cuesta un poco más.',
+      creado_por_nombre: 'Vista Previa Dev',
+      created_at: '2026-10-02T15:00:00.000Z',
+      updated_at: '2026-10-05T15:00:00.000Z',
+      candidatos: [
+        {
+          id: 1,
+          proveedor_id: 2,
+          nombre: 'ALFIBRAS S.A.S.',
+          es_nuevo: false,
+          precio: 185000,
+          tiempo_entrega_dias: 2,
+          calidad: 'bien',
+          observaciones: 'Proveedor actual.',
+          orden: 1,
+        },
+        {
+          id: 2,
+          proveedor_id: null,
+          nombre: 'Fibras del Pacífico S.A.S.',
+          es_nuevo: true,
+          precio: 168000,
+          tiempo_entrega_dias: 8,
+          calidad: 'regular',
+          observaciones: 'Cotización por correo; sin historial con nosotros.',
+          orden: 2,
+        },
+      ],
+    },
+    {
+      id: 2,
+      titulo: 'Pintura electrostática',
+      necesidad: null,
+      estado: 'borrador',
+      proveedor_elegido_id: null,
+      nombre_elegido: null,
+      conclusion: null,
+      creado_por_nombre: 'Vista Previa Dev',
+      created_at: '2026-11-12T15:00:00.000Z',
+      updated_at: '2026-11-12T15:00:00.000Z',
+      candidatos: [
+        {
+          id: 3,
+          proveedor_id: 6,
+          nombre: 'PINTURAS Y RECUBRIMIENTOS DE COLOMBIA S.A.S.',
+          es_nuevo: false,
+          precio: null,
+          tiempo_entrega_dias: 4,
+          calidad: 'bien',
+          observaciones: null,
+          orden: 1,
+        },
+        {
+          id: 4,
+          proveedor_id: null,
+          nombre: 'Recubrimientos Andinos',
+          es_nuevo: true,
+          precio: null,
+          tiempo_entrega_dias: null,
+          calidad: null,
+          observaciones: null,
+          orden: 2,
+        },
+      ],
     },
   ]
 }
