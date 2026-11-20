@@ -30,3 +30,10 @@ export function formatearFechaCorta(fecha: string | null | undefined): string | 
     year: 'numeric',
   })
 }
+
+/** "18/08/2025": corto y de ancho fijo para tablas. */
+export function formatearFechaNumerica(fecha: string | null | undefined): string | null {
+  if (!fecha) return null
+  const [anio, mes, dia] = fecha.split('-')
+  return anio && mes && dia ? `${dia}/${mes}/${anio}` : null
+}
