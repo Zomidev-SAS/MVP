@@ -181,13 +181,13 @@ export function ProveedoresLista({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-md border">
-          <Table className="min-w-[560px]">
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Proveedor</TableHead>
-                <TableHead className="w-24 text-right">Órdenes</TableHead>
-                {hayCumplimiento && <TableHead className="w-36 text-right">Cumplimiento</TableHead>}
-                {hayReevaluacion && <TableHead className="w-44">Última reevaluación</TableHead>}
+                <TableHead className="w-20 text-right">Órdenes</TableHead>
+                {hayCumplimiento && <TableHead className="w-28 text-right">Cumplimiento</TableHead>}
+                {hayReevaluacion && <TableHead className="hidden w-44 md:table-cell">Última reevaluación</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -279,7 +279,7 @@ function ProveedorFilaTabla({
   return (
     <>
       <TableRow onClick={onAlternar} className="cursor-pointer">
-        <TableCell>
+        <TableCell className="whitespace-normal">
           <button
             type="button"
             aria-expanded={abierto}
@@ -298,7 +298,7 @@ function ProveedorFilaTabla({
               )}
             />
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{proveedor.nombre}</span>
+              <span className="block font-medium [overflow-wrap:anywhere]">{proveedor.nombre}</span>
               <span className="block text-xs tabular-nums text-muted-foreground">{proveedor.nit}</span>
             </span>
             {!proveedor.activo && <Badge variant="outline">Inactivo</Badge>}
@@ -329,7 +329,7 @@ function ProveedorFilaTabla({
         )}
 
         {hayReevaluacion && (
-          <TableCell>
+          <TableCell className="hidden md:table-cell">
             {reevaluacion ? (
               <span className="text-sm tabular-nums">
                 {reevaluacion.anio} ·{' '}
