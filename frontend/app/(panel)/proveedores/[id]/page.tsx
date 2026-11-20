@@ -6,16 +6,22 @@ import { HistorialTabla } from '@/components/proveedores/HistorialTabla'
 import { ROUTE_PERMISSIONS } from '@/lib/permissions/roles'
 import { fetchHistorialProveedor, fetchProveedorById } from '@/lib/supabase/proveedores-actions'
 
-export default function ProveedorPage({ params }: { params: Promise<{ id: string }> }) {
+interface ProveedorPageProps {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ orden?: string }>
+}
+
+export default function ProveedorPage({ params, searchParams }: ProveedorPageProps) {
   return (
     <RoleGuard allowed={ROUTE_PERMISSIONS.proveedores}>
-      <ProveedorContent params={params} />
+      <ProveedorContent params={params} searchParams={searchParams} />
     </RoleGuard>
   )
 }
 
-async function ProveedorContent({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+async function ProveedorContent({ params, searchParams }: ProveedorPageProps) {
+  const [{ id }, { orden }] = await Promise.all([params, searchParams])
+  const ordenInicial = orden && /^\d+$/.test(orden) ? Number(orden) : null
   const proveedorId = Number(id)
   if (!Number.isInteger(proveedorId) || proveedorId <= 0) notFound()
 
@@ -43,7 +49,14 @@ async function ProveedorContent({ params }: { params: Promise<{ id: string }> })
         </p>
       </div>
 
-      <HistorialTabla filas={historial.filas} error={historial.error} />
+      <HistorialTabla
+        filas={historial.filas}
+        error={historial.error}
+        proveedorId={proveedor.id}
+        proveedor={{ nombre: proveedor.nombre, nit: proveedor.nit }}
+        config={historial.config}
+        ordenInicial={ordenInicial}
+      />
     </div>
   )
 }

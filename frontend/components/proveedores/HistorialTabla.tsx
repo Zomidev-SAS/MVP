@@ -1,15 +1,30 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { ClipboardList } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
+import { ClipboardList, Download } from 'lucide-react'
 import { AvisoMigracion } from '@/components/proveedores/AvisoMigracion'
+import { DesempenoDialog } from '@/components/proveedores/DesempenoDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatearFechaCorta } from '@/lib/proveedores/fechas'
-import { formatearEntero } from '@/lib/proveedores/formato'
+import {
+  descargarCsvDesempeno,
+  descargarPdfDesempeno,
+  type ProveedorExportable,
+} from '@/lib/export/proveedor-desempeno'
+import { ETIQUETA_CALIDAD, type ConfigDesempeno } from '@/lib/proveedores/desempeno'
+import { formatearFechaNumerica } from '@/lib/proveedores/fechas'
+import {
+  CLASE_PUNTO_NIVEL,
+  formatearEntero,
+  formatearPorcentaje,
+  nivelCumplimiento,
+} from '@/lib/proveedores/formato'
 import { etiquetaOrden, type FilaHistorial } from '@/lib/proveedores/historial'
 import { normalizarTexto } from '@/lib/proveedores/nit'
+import { resumirDesempeno } from '@/lib/proveedores/resumen'
 import { MIGRACION_PENDIENTE } from '@/lib/types/proveedor'
 import { CLASE_ESTADO_OC, ETIQUETA_ESTADO_OC } from '@/lib/types/orden-compra'
 import { cn } from '@/lib/utils'
@@ -49,15 +64,54 @@ function Diferencia({ dias }: { dias: number | null }) {
   )
 }
 
+function Cumplimiento({ valor, umbral }: { valor: number | null; umbral: number }) {
+  if (valor == null) return <Guion />
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5 tabular-nums">
+      <span
+        aria-hidden="true"
+        className={cn('h-1.5 w-1.5 rounded-full', CLASE_PUNTO_NIVEL[nivelCumplimiento(valor, umbral)])}
+      />
+      {formatearPorcentaje(valor)}
+    </span>
+  )
+}
+
+function Cifra({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0 px-4 py-3">
+      <p className="text-xs text-muted-foreground">{etiqueta}</p>
+      <div className="text-xl font-semibold tabular-nums">{children}</div>
+    </div>
+  )
+}
+
 interface HistorialTablaProps {
   filas: FilaHistorial[]
   error?: string
+  proveedorId: number
+  proveedor: ProveedorExportable
+  config: ConfigDesempeno
+  /** Orden cuyo desempeño se abre al entrar (enlace desde Compras). */
+  ordenInicial?: number | null
 }
 
-export function HistorialTabla({ filas, error }: HistorialTablaProps) {
+export function HistorialTabla({
+  filas,
+  error,
+  proveedorId,
+  proveedor,
+  config,
+  ordenInicial,
+}: HistorialTablaProps) {
+  const router = useRouter()
   const [busqueda, setBusqueda] = useState('')
   const [estado, setEstado] = useState<FiltroEstado>('todos')
   const [anio, setAnio] = useState('todos')
+  const [seleccionada, setSeleccionada] = useState<FilaHistorial | null>(
+    () => filas.find((f) => ordenInicial != null && f.orden_id === ordenInicial) ?? null
+  )
+  const [dialogoAbierto, setDialogoAbierto] = useState(seleccionada != null)
 
   const anios = useMemo(
     () =>
@@ -80,8 +134,12 @@ export function HistorialTabla({ filas, error }: HistorialTablaProps) {
     })
   }, [filas, busqueda, estado, anio])
 
-  const finalizadas = filas.filter((f) => f.estado === 'listo' || f.estado === 'historico').length
-  const conRetraso = filas.filter((f) => (f.diferencia_dias ?? 0) > 0).length
+  const resumen = useMemo(() => resumirDesempeno(filas), [filas])
+
+  function abrir(fila: FilaHistorial) {
+    setSeleccionada(fila)
+    setDialogoAbierto(true)
+  }
 
   if (error === MIGRACION_PENDIENTE) {
     return <AvisoMigracion migracion="080_proveedores.sql" />
@@ -100,7 +158,42 @@ export function HistorialTabla({ filas, error }: HistorialTablaProps) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 divide-border rounded-md border sm:grid-cols-4 sm:divide-x">
+        <div className="col-span-2 min-w-0 border-b px-4 py-3 sm:col-span-1 sm:border-b-0">
+          <p className="text-xs text-muted-foreground">Cumplimiento promedio</p>
+          <p className="flex items-center gap-2 text-3xl font-semibold tabular-nums">
+            {resumen.porcentaje != null && (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'h-2.5 w-2.5 rounded-full',
+                  CLASE_PUNTO_NIVEL[nivelCumplimiento(resumen.porcentaje, config.umbral)]
+                )}
+              />
+            )}
+            {resumen.porcentaje == null ? '—' : formatearPorcentaje(resumen.porcentaje)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {resumen.porcentaje == null
+              ? 'Sin órdenes finalizadas para calificar'
+              : resumen.porcentaje >= config.umbral
+                ? `Aprueba (mínimo ${formatearPorcentaje(config.umbral)})`
+                : `No alcanza el ${formatearPorcentaje(config.umbral)}`}
+          </p>
+        </div>
+        <Cifra etiqueta="Órdenes calificadas">
+          {formatearEntero(resumen.calificadas)}
+          <span className="text-sm font-normal text-muted-foreground"> de {formatearEntero(resumen.total)}</span>
+        </Cifra>
+        <Cifra etiqueta="Entregas con retraso">
+          <span className={cn(resumen.conRetraso > 0 && 'text-[var(--warning)]')}>
+            {formatearEntero(resumen.conRetraso)}
+          </span>
+        </Cifra>
+        <Cifra etiqueta="Devoluciones">{formatearEntero(resumen.devoluciones)}</Cifra>
+      </div>
+
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Input
           value={busqueda}
@@ -137,23 +230,35 @@ export function HistorialTabla({ filas, error }: HistorialTablaProps) {
           </select>
         )}
 
-        <p className="text-sm tabular-nums text-muted-foreground sm:ml-auto" aria-live="polite">
-          {formatearEntero(filas.length)} órdenes · {formatearEntero(finalizadas)} finalizadas ·{' '}
-          {formatearEntero(conRetraso)} con retraso
-        </p>
+        <div className="flex gap-2 sm:ml-auto">
+          <Button variant="outline" size="sm" onClick={() => descargarCsvDesempeno(proveedor, visibles)}>
+            <Download aria-hidden="true" />
+            CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => descargarPdfDesempeno(proveedor, visibles, config)}
+          >
+            <Download aria-hidden="true" />
+            PDF
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-md border">
-        <Table className="min-w-[900px]">
+        <Table className="min-w-[940px]">
           <TableHeader>
             <TableRow>
               <TableHead>Orden de compra</TableHead>
               <TableHead>Fecha de OC</TableHead>
-              <TableHead>Entrega prometida</TableHead>
-              <TableHead>Entrega real</TableHead>
+              <TableHead title="Fecha de entrega prometida">Prometida</TableHead>
+              <TableHead title="Fecha real de entrega">Real</TableHead>
               <TableHead className="text-right">Diferencia</TableHead>
-              <TableHead className="text-right">Recibido / pedido</TableHead>
+              <TableHead className="text-right">Recibido</TableHead>
               <TableHead className="text-right">Devoluciones</TableHead>
+              <TableHead>Calidad</TableHead>
+              <TableHead className="text-right">Cumplimiento</TableHead>
               <TableHead>Factura o remisión</TableHead>
               <TableHead>Estado</TableHead>
             </TableRow>
@@ -161,22 +266,33 @@ export function HistorialTabla({ filas, error }: HistorialTablaProps) {
           <TableBody>
             {visibles.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={11} className="py-8 text-center text-muted-foreground">
                   Ninguna orden coincide con los filtros.
                 </TableCell>
               </TableRow>
             ) : (
               visibles.map((fila) => (
-                <TableRow key={fila.clave}>
-                  <TableCell className="whitespace-nowrap font-medium">{etiquetaOrden(fila)}</TableCell>
-                  <TableCell className="whitespace-nowrap tabular-nums">
-                    {formatearFechaCorta(fila.fecha_oc) ?? <Guion />}
+                <TableRow key={fila.clave} onClick={() => abrir(fila)} className="cursor-pointer">
+                  <TableCell className="whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        abrir(fila)
+                      }}
+                      className="rounded-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                      {etiquetaOrden(fila)}
+                    </button>
                   </TableCell>
                   <TableCell className="whitespace-nowrap tabular-nums">
-                    {formatearFechaCorta(fila.fecha_entrega_prometida) ?? <Guion />}
+                    {formatearFechaNumerica(fila.fecha_oc) ?? <Guion />}
                   </TableCell>
                   <TableCell className="whitespace-nowrap tabular-nums">
-                    {formatearFechaCorta(fila.fecha_entrega_real) ?? <Guion />}
+                    {formatearFechaNumerica(fila.fecha_entrega_prometida) ?? <Guion />}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap tabular-nums">
+                    {formatearFechaNumerica(fila.fecha_entrega_real) ?? <Guion />}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-right">
                     <Diferencia dias={fila.diferencia_dias} />
@@ -191,8 +307,18 @@ export function HistorialTabla({ filas, error }: HistorialTablaProps) {
                       </>
                     )}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatearEntero(fila.devoluciones)}
+                  <TableCell className="text-right tabular-nums">{formatearEntero(fila.devoluciones)}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {fila.calidad ? (
+                      <span className={cn(fila.calidad === 'mal' && 'text-destructive')}>
+                        {ETIQUETA_CALIDAD[fila.calidad]}
+                      </span>
+                    ) : (
+                      <Guion />
+                    )}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-right">
+                    <Cumplimiento valor={fila.puntajes?.global ?? null} umbral={config.umbral} />
                   </TableCell>
                   <TableCell className="whitespace-nowrap tabular-nums">
                     {fila.factura_remision ?? <Guion />}
@@ -217,6 +343,16 @@ export function HistorialTabla({ filas, error }: HistorialTablaProps) {
       <p className="text-xs text-muted-foreground md:hidden">
         Desliza horizontalmente para ver todas las columnas.
       </p>
+
+      <DesempenoDialog
+        abierto={dialogoAbierto}
+        onOpenChange={setDialogoAbierto}
+        fila={seleccionada}
+        proveedorId={proveedorId}
+        proveedor={proveedor}
+        config={config}
+        onGuardado={() => router.refresh()}
+      />
     </div>
   )
 }
