@@ -58,19 +58,26 @@ export async function subirOrdenCompraDocumento(formData: FormData): Promise<Sub
   try {
     oc = await leerOcSiigoDesdePdf(bytes)
   } catch (error) {
-    if (error instanceof ErrorLecturaOc) return { ok: false, error: error.message }
-    console.error('Failed to read OC pdf:', error)
+    if (error instanceof ErrorLecturaOc) {
+      // Queda en el registro del servidor para saber por qué se rechazó cada archivo.
+      console.warn(`OC upload rejected (${archivo.name}, ${archivo.size} bytes): ${error.message}`)
+      return { ok: false, error: error.message }
+    }
+    console.error(`Failed to read OC pdf (${archivo.name}, ${archivo.size} bytes):`, error)
     return { ok: false, error: 'No se pudo leer el documento.' }
   }
 
   const supabase = await createClient()
 
-  const { data: existente } = await supabase
+  // limit(1) en vez de maybeSingle(): si el número ya está repetido, maybeSingle falla y la
+  // orden se cargaba otra vez.
+  const { data: yaCargadas } = await supabase
     .from('ordenes_compra')
     .select('id')
     .eq('numero_oc', oc.numero_oc)
-    .maybeSingle()
-  if (existente) {
+    .limit(1)
+  if (yaCargadas && yaCargadas.length > 0) {
+    console.warn(`OC upload rejected (${archivo.name}): ${oc.numero_oc} ya está cargada`)
     return { ok: false, error: `La orden ${oc.numero_oc} ya está cargada en Compras.` }
   }
 
