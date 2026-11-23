@@ -303,26 +303,51 @@ export function ComprasTable({
     const archivo = e.target.files?.[0]
     e.target.value = ''
     if (!archivo) return
+
+    // Validaciones antes de enviar: así el aviso sale al instante y siempre se ve.
+    const esPdf = archivo.type === 'application/pdf' || archivo.name.toLowerCase().endsWith('.pdf')
+    if (!esPdf) {
+      toast.error(`“${archivo.name}” no es un PDF. Sube la orden de compra en PDF.`)
+      return
+    }
+    if (archivo.size === 0) {
+      toast.error(`“${archivo.name}” está vacío. Descarga la orden de Siigo otra vez.`)
+      return
+    }
+    if (archivo.size > 5 * 1024 * 1024) {
+      toast.error(`“${archivo.name}” pesa más de 5 MB. Descarga el PDF de Siigo, no una foto ni un escaneo.`)
+      return
+    }
+
     setSubiendoDocumento(true)
+    const aviso = toast.loading(`Leyendo “${archivo.name}”…`)
     try {
       const formData = new FormData()
       formData.set('archivo', archivo)
       const res = await subirOrdenCompraDocumento(formData)
       if (!res.ok) {
-        toast.error(res.error)
+        toast.error(res.error, { id: aviso })
         return
       }
-      toast.success(`Orden ${res.numero} cargada. Queda pendiente de firma.`)
+      toast.success(`Orden ${res.numero} cargada. Queda pendiente de firma.`, { id: aviso })
       if (res.sinCodigo.length > 0) {
         toast.warning(
           `Sin código en el catálogo (quedaron como SIN-CODIGO): ${res.sinCodigo.join(', ')}`
         )
       }
       recargar()
+    } catch (error) {
+      // Red caída, sesión vencida, servidor reiniciado o página desactualizada: antes no se decía nada.
+      console.error('Failed to upload OC document:', error)
+      toast.error(
+        'No se pudo subir la orden. Recarga la página (Ctrl+F5) e inténtalo de nuevo; si sigue igual, avisa a soporte.',
+        { id: aviso, duration: 12000 }
+      )
     } finally {
       setSubiendoDocumento(false)
     }
   }
+
 
   async function handleEliminar(id: number) {
     const res = await eliminarOrdenCompra(id)
